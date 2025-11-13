@@ -3,6 +3,7 @@ import subprocess
 from pathlib import Path
 
 # Required CLI config:
+PACKAGE_DIR = config["package_dir"]
 INPUT_JSON  = config["input"]
 OUTDIR      = config["output"]
 READS       = config["reads"]
@@ -19,7 +20,9 @@ rule all:
     input:
         [f"{OUTDIR}/counts/{sample}.json" for sample in SAMPLES],
         [f"{OUTDIR}/fastp/{sample}.html" for sample in SAMPLES],
-        [f"{OUTDIR}/singlem/{sample}.fraction" for sample in SAMPLES]
+        [f"{OUTDIR}/singlem/{sample}.fraction" for sample in SAMPLES],
+        [f"{OUTDIR}/nonpareil_markers/{sample}.tsv" for sample in SAMPLES],
+        [f"{OUTDIR}/nonpareil_reads/{sample}.tsv" for sample in SAMPLES]
 
 rule counts:
     input:
@@ -119,7 +122,9 @@ rule singlem:
         r1=f"{OUTDIR}/fastp/{{sample}}_1.fq",
         r2=f"{OUTDIR}/fastp/{{sample}}_2.fq"
     output:
-        f"{OUTDIR}/singlem/{{sample}}.profile"
+        r1=f"{OUTDIR}/singlem/{{sample}}/prefilter_forward/{{sample}}_1.fna",
+        r2=f"{OUTDIR}/singlem/{{sample}}/prefilter_reverse/{{sample}}_2.fna",
+        profile=f"{OUTDIR}/singlem/{{sample}}.profile"
     params:
         workdir = lambda wc: f"{OUTDIR}/singlem/{wc.sample}"
     threads: 1
@@ -132,7 +137,7 @@ rule singlem:
             -1 {input.r1} \
             -2 {input.r2} \
             --working-directory {params.workdir} \
-            -p {output}
+            -p {output.profile}
         """
 
 rule spf:
@@ -154,4 +159,104 @@ rule spf:
             -1 {input.r1} \
             -2 {input.r2} \
             -p {input.profile} > {output}
+        """
+
+rule merge_markers:
+    input: 
+        r1=f"{OUTDIR}/singlem/{{sample}}/prefilter_forward/{{sample}}_1.fna",
+        r2=f"{OUTDIR}/singlem/{{sample}}/prefilter_reverse/{{sample}}_2.fna"
+    output:
+        f"{OUTDIR}/singlem/{{sample}}.fna"
+    message: "Merging markers gene reads of {wildcards.sample}..."
+    shell:
+        """
+        cat {input.r1} {input.r2} > {output}
+        """
+
+rule nonpareil_markers:
+    input: 
+        f"{OUTDIR}/singlem/{{sample}}.fna"
+    output:
+        npa=f"{OUTDIR}/nonpareil_markers/{{sample}}.npa"
+        npc=f"{OUTDIR}/nonpareil_markers/{{sample}}.npc"
+        npl=f"{OUTDIR}/nonpareil_markers/{{sample}}.npl"
+        npo=f"{OUTDIR}/nonpareil_markers/{{sample}}.npo"
+    threads: 1
+    params:
+        workdir = lambda wc: f"{OUTDIR}/nonpareil_markers/{wc.sample}"
+    message: "Calculating marker gene redundancy of {wildcards.sample}..."
+    shell:
+        """
+        module load singlem/0.19.0
+        conda activate nonpareil    
+        nonpareil -s {input} -T kmer -f fasta -b {params.workdir}
+        """
+
+rule nonpareil_markers_out:
+    input: 
+        npo=f"{OUTDIR}/nonpareil_markers/{{sample}}.npo",
+        counts = f"{OUTDIR}/counts/{{sample}}.json"
+    output:
+        f"{OUTDIR}/nonpareil_markers/{{sample}}.tsv"
+    threads: 1
+    params:
+        subset=READS,
+        package_dir=PACKAGE_DIR
+    shell:
+        """
+        module load singlem/0.19.0
+        python {params.package_dir}/workflow/scripts/nonpareil_project.py {input.npo} \
+            --subset-reads {params.subset} \
+            --total-reads $(python -c "import json; print(json.load(open('{input.counts}'))['total_reads'])") \
+            -o {output}
+        """
+
+rule merge_reads:
+    input: 
+        r1=f"{OUTDIR}/fastp/{{sample}}_1.fq",
+        r2=f"{OUTDIR}/fastp/{{sample}}_2.fq",
+    output:
+        f"{OUTDIR}/fastp/{{sample}}.fq"
+    message: "Merging reads of {wildcards.sample}..."
+    shell:
+        """
+        cat {input.r1} {input.r2} > {output}
+        """
+
+rule nonpareil_reads:
+    input: 
+        f"{OUTDIR}/fastp/{{sample}}.fq"
+    output:
+        npa=f"{OUTDIR}/nonpareil_reads/{{sample}}.npa"
+        npc=f"{OUTDIR}/nonpareil_reads/{{sample}}.npc"
+        npl=f"{OUTDIR}/nonpareil_reads/{{sample}}.npl"
+        npo=f"{OUTDIR}/nonpareil_reads/{{sample}}.npo"
+    threads: 1
+    params:
+        workdir = lambda wc: f"{OUTDIR}/nonpareil_reads/{wc.sample}"
+    message: "Calculating marker gene redundancy of {wildcards.sample}..."
+    shell:
+        """
+        module load singlem/0.19.0
+        conda activate nonpareil    
+        nonpareil -s {input} -T kmer -f fastq -b {params.workdir}
+        """
+
+rule nonpareil_reads_out:
+    input: 
+        npo=f"{OUTDIR}/nonpareil_reads/{{sample}}.npo",
+        counts = f"{OUTDIR}/counts/{{sample}}.json"
+    output:
+        f"{OUTDIR}/nonpareil_reads/{{sample}}.tsv"
+    threads: 1
+    params:
+        subset=READS,
+        package_dir=PACKAGE_DIR
+    shell:
+        """
+        module load singlem/0.19.0
+        python {params.package_dir}/workflow/scripts/nonpareil_project.py {input.npo} \
+            --subset-reads {params.subset} \
+            --total-reads $(python -c "import json; print(json.load(open('{input.counts}'))['total_reads'])") \
+            -o {output}
         """
