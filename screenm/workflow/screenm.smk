@@ -175,7 +175,7 @@ rule merge_markers:
 
 rule nonpareil_markers:
     input: 
-        f"{OUTDIR}/singlem/{{sample}}.fna"
+        f"{OUTDIR}/nonpareil_markers/{{sample}}.fna"
     output:
         npa=f"{OUTDIR}/nonpareil_markers/{{sample}}.npa",
         npc=f"{OUTDIR}/nonpareil_markers/{{sample}}.npc",
@@ -225,7 +225,7 @@ rule merge_reads:
 
 rule nonpareil_reads:
     input: 
-        f"{OUTDIR}/fastp/{{sample}}.fq"
+        f"{OUTDIR}/nonpareil_reads/{{sample}}.fq"
     output:
         npa=f"{OUTDIR}/nonpareil_reads/{{sample}}.npa",
         npc=f"{OUTDIR}/nonpareil_reads/{{sample}}.npc",
