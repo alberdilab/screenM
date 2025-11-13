@@ -18,7 +18,8 @@ SAMPLES = sorted(SAMPLES_MAP.keys())
 rule all:
     input:
         [f"{OUTDIR}/counts/{sample}.json" for sample in SAMPLES],
-        [f"{OUTDIR}/fastp/{sample}.html" for sample in SAMPLES]
+        [f"{OUTDIR}/fastp/{sample}.html" for sample in SAMPLES],
+        [f"{OUTDIR}/singlem/{{sample}}.fraction" for sample in SAMPLES]
 
 rule counts:
     input:
@@ -26,39 +27,44 @@ rule counts:
         r2 = lambda wc: SAMPLES_MAP[wc.sample].get("reverse", "")
     output:
         json = f"{OUTDIR}/counts/{{sample}}.json"
-    threads: 2
+    threads: 1
     message:
-        "Counting reads for {wildcards.sample}..."
+        "Counting reads (R1 only) for {wildcards.sample}..."
     run:
-        import json, subprocess
+        import json, subprocess, shlex
         from pathlib import Path
 
-        def count_reads(fq_path: str) -> int:
-            if not fq_path or not Path(fq_path).exists():
+        def count_reads_fastq(path: str) -> int:
+            if not path or not Path(path).exists():
                 return 0
-            cmd = f"zcat {fq_path} | wc -l" if fq_path.endswith(".gz") else f"wc -l < {fq_path}"
+            cmd = f"zcat {shlex.quote(path)} | wc -l" if path.endswith(".gz") \
+                  else f"wc -l < {shlex.quote(path)}"
             lines = int(subprocess.check_output(cmd, shell=True, text=True).strip())
             return lines // 4
 
-        r1_reads = count_reads(input.r1)
-        r2_reads = count_reads(input.r2)
-        total = r1_reads + r2_reads
+        r1_reads = count_reads_fastq(input.r1)
+        has_r2 = bool(input.r2) and Path(input.r2).exists()
+        reverse_reads = r1_reads if has_r2 else 0
+        total_reads = r1_reads * 2 if has_r2 else r1_reads
 
         result = {
             "sample": wildcards.sample,
             "forward": input.r1,
             "reverse": input.r2,
             "forward_reads": r1_reads,
-            "reverse_reads": r2_reads,
-            "total_reads": total,
+            "reverse_reads": reverse_reads,
+            "total_reads": total_reads,
+            "paired_end": has_r2,
+            "note": "R2 reads inferred to equal R1"
         }
 
         Path(output.json).parent.mkdir(parents=True, exist_ok=True)
         with open(output.json, "w") as f:
             json.dump(result, f, indent=2)
 
-        print(f"[✓] {wildcards.sample}: {total:,} total reads → {output.json}")
-
+        print(f"[✓] {wildcards.sample}: R1={r1_reads:,} | "
+              f"R2={'inferred '+str(reverse_reads) if has_r2 else 'absent'} | "
+              f"total={total_reads:,} → {output.json}")
 
 rule seqtk:
     input: 
@@ -128,3 +134,26 @@ rule singlem:
             --working-directory {params.workdir} \
             -p {putput}
         """
+
+rule spf:
+    input: 
+        r1=f"{OUTDIR}/fastp/{{sample}}_1.fq",
+        r2=f"{OUTDIR}/fastp/{{sample}}_2.fq",
+        profile=f"{OUTDIR}/singlem/{{sample}}.profile"
+    output:
+        f"{OUTDIR}/singlem/{{sample}}.fraction"
+    params:
+        workdir = lambda wc: f"{OUTDIR}/singlem/{wc.sample}"
+    threads: 1
+    message: "Profiling {wildcards.sample} with SingleM..."
+    shell:
+        """
+        module load singlem/0.19.0
+        export SINGLEM_METAPACKAGE_PATH=/maps/datasets/globe_databases/singlem/5.4.0/S5.4.0.GTDB_r226.metapackage_20250331.smpkg.zb
+        singlem microbial_fraction \
+            -1 {input.r1} \
+            -2 {input.r2} \
+            -p {input.profile} > {output}
+        """
+
+        singlem microbial_fraction -1 reads/EHI01325_1.fq -2 reads/EHI01325_2.fq -p EHI01325.tsv > EHI01325_fraction.tsv
