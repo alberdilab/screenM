@@ -70,7 +70,7 @@ rule seqtk:
         """
         module load seqtk/1.4
         seqtk sample -s100 {input.r1} 1000000 > {output.r1}
-        seqtk sample -s100 {input.r2} 1000000 > {output.r12}
+        seqtk sample -s100 {input.r2} 1000000 > {output.r2}
         """
 
 rule fastp:
