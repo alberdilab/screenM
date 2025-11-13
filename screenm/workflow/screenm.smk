@@ -29,7 +29,7 @@ rule counts:
         json = f"{OUTDIR}/counts/{{sample}}.json"
     threads: 1
     message:
-        "Counting reads (R1 only) for {wildcards.sample}..."
+        "Counting reads for {wildcards.sample}..."
     run:
         import json, subprocess, shlex
         from pathlib import Path
@@ -132,7 +132,7 @@ rule singlem:
             -1 {input.r1} \
             -2 {input.r2} \
             --working-directory {params.workdir} \
-            -p {putput}
+            -p {output}
         """
 
 rule spf:
