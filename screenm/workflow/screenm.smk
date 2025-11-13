@@ -28,36 +28,32 @@ rule depth:
     threads: 2
     message: "Updating {input.json} with read counts..."
     run:
-        def count_reads(fq_path):
-            fq = str(fq_path)
-            if fq.endswith(".gz"):
-                cmd = f"zcat {fq} | wc -l"
-            else:
-                cmd = f"wc -l < {fq}"
+       tmp = Path(input[0]).with_suffix(".tmp.json")
+
+        def count_reads(fq):
+            cmd = f"zcat {fq} | wc -l" if fq.endswith(".gz") else f"wc -l < {fq}"
             res = subprocess.check_output(cmd, shell=True, text=True)
             return int(int(res.strip()) / 4)
 
-        with open(input.json) as f:
+        with open(input[0]) as f:
             samples = json.load(f)
 
-        for sample, info in samples.items():
+        for s, info in samples.items():
             total = 0
-            for direction in ["forward", "reverse"]:
-                fq = info.get(direction)
+            for d in ["forward", "reverse"]:
+                fq = info.get(d)
                 if fq and Path(fq).exists():
                     n = count_reads(fq)
-                    info[f"{direction}_reads"] = n
+                    info[f"{d}_reads"] = n
                     total += n
-                else:
-                    info[f"{direction}_reads"] = 0
             info["total_reads"] = total
 
-        # overwrite original
-        with open(output.json, "w") as f:
+        with tmp.open("w") as f:
             json.dump(samples, f, indent=2)
 
-        print(f"[✓] Updated {len(samples)} samples in {output.json}")
-
+        tmp.replace(input[0])
+        print(f"[✓] Overwrote {input[0]} safely")
+        
 rule seqtk:
     input: 
         r1 = lambda wc: SAMPLES_MAP[wc.sample]["forward"],
