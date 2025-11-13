@@ -15,26 +15,7 @@ SAMPLES = sorted(SAMPLES_MAP.keys())
 # Fan-out over all samples
 rule all:
     input:
-        [f"{OUTDIR}/fastp/{{sample}}.html" for s in SAMPLES]
-
-rule start:
-    input: 
-        r1 = lambda wc: SAMPLES_MAP[wc.sample]["forward"],
-        r2 = lambda wc: SAMPLES_MAP[wc.sample].get("reverse", "")
-    output: touch(f"{OUTDIR}/{{sample}}/started.ok")
-    message:
-        "Starting sample {wildcards.sample} with {len(input)} file(s): {input}"
-    shell:
-        r"""
-        mkdir -p {OUTDIR}/{wildcards.sample}
-        # >>> replace this block with your real first tool, e.g., fastp/fastqc/host-filtering <<<
-        # here we just record which files would be processed:
-        printf "sample\tfile\n" > {OUTDIR}/{wildcards.sample}/inputs.tsv
-        for f in {{" ".join(input)}}; do
-            printf "{wildcards.sample}\t%s\n" "$f" >> {OUTDIR}/{wildcards.sample}/inputs.tsv
-        done
-        touch {output}
-        """
+        [f"{OUTDIR}/fastp/{{sample}}.html" for sample in SAMPLES]
 
 rule fastp:
     input: 
