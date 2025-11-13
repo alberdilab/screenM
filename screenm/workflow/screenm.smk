@@ -177,9 +177,9 @@ rule nonpareil_markers:
     input: 
         f"{OUTDIR}/singlem/{{sample}}.fna"
     output:
-        npa=f"{OUTDIR}/nonpareil_markers/{{sample}}.npa"
-        npc=f"{OUTDIR}/nonpareil_markers/{{sample}}.npc"
-        npl=f"{OUTDIR}/nonpareil_markers/{{sample}}.npl"
+        npa=f"{OUTDIR}/nonpareil_markers/{{sample}}.npa",
+        npc=f"{OUTDIR}/nonpareil_markers/{{sample}}.npc",
+        npl=f"{OUTDIR}/nonpareil_markers/{{sample}}.npl",
         npo=f"{OUTDIR}/nonpareil_markers/{{sample}}.npo"
     threads: 1
     params:
@@ -214,7 +214,7 @@ rule nonpareil_markers_out:
 rule merge_reads:
     input: 
         r1=f"{OUTDIR}/fastp/{{sample}}_1.fq",
-        r2=f"{OUTDIR}/fastp/{{sample}}_2.fq",
+        r2=f"{OUTDIR}/fastp/{{sample}}_2.fq"
     output:
         f"{OUTDIR}/fastp/{{sample}}.fq"
     message: "Merging reads of {wildcards.sample}..."
@@ -227,9 +227,9 @@ rule nonpareil_reads:
     input: 
         f"{OUTDIR}/fastp/{{sample}}.fq"
     output:
-        npa=f"{OUTDIR}/nonpareil_reads/{{sample}}.npa"
-        npc=f"{OUTDIR}/nonpareil_reads/{{sample}}.npc"
-        npl=f"{OUTDIR}/nonpareil_reads/{{sample}}.npl"
+        npa=f"{OUTDIR}/nonpareil_reads/{{sample}}.npa",
+        npc=f"{OUTDIR}/nonpareil_reads/{{sample}}.npc",
+        npl=f"{OUTDIR}/nonpareil_reads/{{sample}}.npl",
         npo=f"{OUTDIR}/nonpareil_reads/{{sample}}.npo"
     threads: 1
     params:
