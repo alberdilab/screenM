@@ -12,14 +12,6 @@ with open(INPUT_JSON) as fh:
 
 SAMPLES = sorted(SAMPLES_MAP.keys())
 
-# Helper to fetch inputs from JSON for a given sample
-def reads(wc):
-    ent = SAMPLES_MAP[wc.sample]
-    d = {"r1": str(ent["forward"])}
-    if ent.get("reverse"):
-        d["r2"] = str(ent["reverse"])
-    return d
-
 # Fan-out over all samples
 rule all:
     input:
@@ -27,7 +19,9 @@ rule all:
         f"{OUTDIR}/manifest.tsv"
 
 rule start:
-    input: reads
+    input: 
+        r1 = lambda wc: SAMPLES_MAP[wc.sample]["forward"],
+        r2 = lambda wc: SAMPLES_MAP[wc.sample].get("reverse", "")
     output: touch(f"{OUTDIR}/{{sample}}/started.ok")
     message:
         "Starting sample {wildcards.sample} with {len(input)} file(s): {input}"
@@ -44,7 +38,9 @@ rule start:
         """
 
 rule fastp:
-    input: reads
+    input: 
+        r1 = lambda wc: SAMPLES_MAP[wc.sample]["forward"],
+        r2 = lambda wc: SAMPLES_MAP[wc.sample].get("reverse", "")
     output:
         r1=f"{OUTDIR}/fastp/{{sample}}_1.fq.gz",
         r2=f"{OUTDIR}/fastp/{{sample}}_2.fq.gz",
