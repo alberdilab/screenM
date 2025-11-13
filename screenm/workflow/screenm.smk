@@ -24,36 +24,37 @@ rule depth:
     input:
         json=INPUT_JSON
     output:
-        json=INPUT_JSON
+        f"{OUTDIR}/counts/{{sample}}.fq"
     threads: 2
     message: "Updating {input.json} with read counts..."
     run:
-       tmp = Path(input[0]).with_suffix(".tmp.json")
+            def count_reads(fq_path):
+                """Fast system-level read counter"""
+                if not fq_path or not Path(fq_path).exists():
+                    return 0
+                cmd = f"zcat {fq_path} | wc -l" if fq_path.endswith(".gz") else f"wc -l < {fq_path}"
+                res = subprocess.check_output(cmd, shell=True, text=True)
+                return int(int(res.strip()) / 4)
 
-        def count_reads(fq):
-            cmd = f"zcat {fq} | wc -l" if fq.endswith(".gz") else f"wc -l < {fq}"
-            res = subprocess.check_output(cmd, shell=True, text=True)
-            return int(int(res.strip()) / 4)
+            r1_reads = count_reads(input.r1)
+            r2_reads = count_reads(input.r2)
+            total = r1_reads + r2_reads
 
-        with open(input[0]) as f:
-            samples = json.load(f)
+            result = {
+                "sample": wildcards.sample,
+                "forward": input.r1,
+                "reverse": input.r2,
+                "forward_reads": r1_reads,
+                "reverse_reads": r2_reads,
+                "total_reads": total
+            }
 
-        for s, info in samples.items():
-            total = 0
-            for d in ["forward", "reverse"]:
-                fq = info.get(d)
-                if fq and Path(fq).exists():
-                    n = count_reads(fq)
-                    info[f"{d}_reads"] = n
-                    total += n
-            info["total_reads"] = total
+            Path(output[0]).parent.mkdir(parents=True, exist_ok=True)
+            with open(output[0], "w") as f:
+                json.dump(result, f, indent=2)
 
-        with tmp.open("w") as f:
-            json.dump(samples, f, indent=2)
+            print(f"[✓] {wildcards.sample}: {total:,} total reads")
 
-        tmp.replace(input[0])
-        print(f"[✓] Overwrote {input[0]} safely")
-        
 rule seqtk:
     input: 
         r1 = lambda wc: SAMPLES_MAP[wc.sample]["forward"],
