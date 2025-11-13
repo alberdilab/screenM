@@ -12,6 +12,7 @@ from pathlib import Path
 import pathlib
 from datetime import datetime
 from collections import defaultdict
+from screenm.utils import *
 
 #####
 # screenM installation path
@@ -43,7 +44,7 @@ END = "\033[1;92m"
 # Snakemake launcher
 ###
 
-def run_screenm_pipeline(output_dir, threads, input, read_length, seed):
+def run_screenm_pipeline(input, output, threads, seed):
     snakemake_command = [
         "/bin/bash", "-c",
         "snakemake "
@@ -52,7 +53,7 @@ def run_screenm_pipeline(output_dir, threads, input, read_length, seed):
         f"--cores {threads} "
         f"--quiet 2>/dev/null "
         f"--configfile {CONFIG_PATH} "
-        f"--config package_dir={PACKAGE_DIR} output_dir={output_dir} input={input} seed={seed}"
+        f"--config package_dir={PACKAGE_DIR} input={input} output={output}  seed={seed}"
     ]
     subprocess.run(snakemake_command, shell=False, check=True)
 
@@ -69,7 +70,6 @@ def main():
     parser.add_argument("-o", "--output", required=False, default=os.getcwd(), type=pathlib.Path, help="Working directory. Default is the directory from which screenM is called.")
     parser.add_argument("-s", "--seed", required=False, type=int, default=random.randint(0, 9999), help="Random seed for reproducibility. If not set, results will vary across runs.")   
     parser.add_argument("-t", "--threads", default=1, help="Number of threads to use (Default: 1)")   
-    parser.add_argument("--verbose", action="store_true", help="Print verbose output")   
 
     args = parser.parse_args()
 
@@ -81,6 +81,7 @@ def main():
     dir_to_files(input=args.input, output=args.output / DATA_JSON)
 
     run_screenm_pipeline(
+                args.output / DATA_JSON,
                 Path(args.output).resolve(), 
                 args.threads, 
                 args.seed)
