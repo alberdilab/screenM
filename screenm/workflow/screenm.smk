@@ -166,7 +166,7 @@ rule merge_markers:
         r1=f"{OUTDIR}/singlem/{{sample}}/prefilter_forward/{{sample}}_1.fna",
         r2=f"{OUTDIR}/singlem/{{sample}}/prefilter_reverse/{{sample}}_2.fna"
     output:
-        f"{OUTDIR}/singlem/{{sample}}.fna"
+        f"{OUTDIR}/nonpareil_markers/{{sample}}.fna"
     message: "Merging markers gene reads of {wildcards.sample}..."
     shell:
         """
@@ -216,7 +216,7 @@ rule merge_reads:
         r1=f"{OUTDIR}/fastp/{{sample}}_1.fq",
         r2=f"{OUTDIR}/fastp/{{sample}}_2.fq"
     output:
-        f"{OUTDIR}/fastp/{{sample}}.fq"
+        f"{OUTDIR}/nonpareil_reads/{{sample}}.fq"
     message: "Merging reads of {wildcards.sample}..."
     shell:
         """
