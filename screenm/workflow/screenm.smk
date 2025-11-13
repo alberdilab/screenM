@@ -15,9 +15,9 @@ SAMPLES = sorted(SAMPLES_MAP.keys())
 # Helper to fetch inputs from JSON for a given sample
 def reads(wc):
     ent = SAMPLES_MAP[wc.sample]
-    d = {"r1": ent["forward"]}
+    d = {"r1": str(ent["forward"])}
     if ent.get("reverse"):
-        d["r2"] = ent["reverse"]
+        d["r2"] = str(ent["reverse"])
     return d
 
 # Fan-out over all samples
