@@ -5,6 +5,7 @@ from pathlib import Path
 # Required CLI config:
 INPUT_JSON  = config["input"]
 OUTDIR      = config["output"]
+READS       = config["reads"]
 SEED        = config["seed"]
 
 # Load data keys and paths
@@ -65,12 +66,14 @@ rule seqtk:
         r1=f"{OUTDIR}/seqtk/{{sample}}_1.fq",
         r2=f"{OUTDIR}/seqtk/{{sample}}_2.fq"
     threads: 1
+    params:
+        reads=READS
     message: "Subsetting sample {wildcards.sample}..."
     shell:
         """
         module load seqtk/1.4
-        seqtk sample -s100 {input.r1} 1000000 > {output.r1}
-        seqtk sample -s100 {input.r2} 1000000 > {output.r2}
+        seqtk sample -s100 {input.r1} {params.reads} > {output.r1}
+        seqtk sample -s100 {input.r2} {params.reads} > {output.r2}
         """
 
 rule fastp:
