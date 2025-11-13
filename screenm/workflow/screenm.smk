@@ -19,7 +19,7 @@ rule all:
     input:
         [f"{OUTDIR}/counts/{sample}.json" for sample in SAMPLES],
         [f"{OUTDIR}/fastp/{sample}.html" for sample in SAMPLES],
-        [f"{OUTDIR}/singlem/{{sample}}.fraction" for sample in SAMPLES]
+        [f"{OUTDIR}/singlem/{sample}.fraction" for sample in SAMPLES]
 
 rule counts:
     input:
