@@ -78,7 +78,7 @@ def main():
     dir_to_files(input=args.input, output=DATA_JSON)
 
     run_screenm_pipeline(
-                args.output / DATA_JSON,
+                DATA_JSON,
                 Path(args.output).resolve(), 
                 args.threads, 
                 args.seed)
