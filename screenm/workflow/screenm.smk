@@ -45,10 +45,10 @@ rule start:
 rule fastp:
     input: read
     output:
-        r1=f"{OUTPUT_DIR}/preprocessing/fastp/{{sample}}_1.fq.gz",
-        r2=f"{OUTPUT_DIR}/preprocessing/fastp/{{sample}}_2.fq.gz",
-        html=f"{OUTPUT_DIR}/preprocessing/fastp/{{sample}}.html",
-        json=f"{OUTPUT_DIR}/preprocessing/fastp/{{sample}}.json"
+        r1=f"{OUTDIR}/preprocessing/fastp/{{sample}}_1.fq.gz",
+        r2=f"{OUTDIR}/preprocessing/fastp/{{sample}}_2.fq.gz",
+        html=f"{OUTDIR}/preprocessing/fastp/{{sample}}.html",
+        json=f"{OUTDIR}/preprocessing/fastp/{{sample}}.json"
     params:
         fastp_module={FASTP_MODULE}
     threads: 4
