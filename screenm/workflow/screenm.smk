@@ -13,11 +13,12 @@ with open(INPUT_JSON) as fh:
 SAMPLES = sorted(SAMPLES_MAP.keys())
 
 # Helper to fetch inputs from JSON for a given sample
-def read(wc):
+def reads(wc):
     ent = SAMPLES_MAP[wc.sample]
-    fwd = ent["forward"]
-    rev = ent.get("reverse")
-    return [fwd] if rev is None else [fwd, rev]
+    d = {"r1": ent["forward"]}
+    if ent.get("reverse"):
+        d["r2"] = ent["reverse"]
+    return d
 
 # Fan-out over all samples
 rule all:
@@ -26,7 +27,7 @@ rule all:
         f"{OUTDIR}/manifest.tsv"
 
 rule start:
-    input: read
+    input: reads
     output: touch(f"{OUTDIR}/{{sample}}/started.ok")
     message:
         "Starting sample {wildcards.sample} with {len(input)} file(s): {input}"
@@ -43,22 +44,19 @@ rule start:
         """
 
 rule fastp:
-    input: read
+    input: reads
     output:
-        r1=f"{OUTDIR}/preprocessing/fastp/{{sample}}_1.fq.gz",
-        r2=f"{OUTDIR}/preprocessing/fastp/{{sample}}_2.fq.gz",
-        html=f"{OUTDIR}/preprocessing/fastp/{{sample}}.html",
-        json=f"{OUTDIR}/preprocessing/fastp/{{sample}}.json"
+        r1=f"{OUTDIR}/fastp/{{sample}}_1.fq.gz",
+        r2=f"{OUTDIR}/fastp/{{sample}}_2.fq.gz",
+        html=f"{OUTDIR}/fastp/{{sample}}.html",
+        json=f"{OUTDIR}/fastp/{{sample}}.json"
     params:
         fastp_module={FASTP_MODULE}
     threads: 4
-    resources:
-        mem_mb=lambda wildcards, input, attempt: max(8*1024, int(input.size_mb * 5) * 2 ** (attempt - 1)),
-        runtime=lambda wildcards, input, attempt: max(15, int(input.size_mb / 1024 * 3) * 2 ** (attempt - 1))
     message: "Quality-filtering sample {wildcards.sample}..."
     shell:
         """
-        module load {params.fastp_module}
+        module load fastp/0.24.0
         fastp \
             --in1 {input.r1} --in2 {input.r2} \
             --out1 {output.r1} --out2 {output.r2} \
