@@ -3,7 +3,7 @@ from pathlib import Path
 
 # Required CLI config:
 INPUT_JSON  = config["input"]
-OUTDIR      = config["output_dir"]
+OUTDIR      = config["output"]
 SEED        = config["seed"]
 
 # Load data keys and paths

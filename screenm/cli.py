@@ -50,7 +50,7 @@ def run_screenm_pipeline(input, output, threads, seed):
         f"--cores {threads} "
         f"--quiet 2>/dev/null "
         f"--configfile {CONFIG_PATH} "
-        f"--config package_dir={PACKAGE_DIR} input={input} output={output}  seed={seed}"
+        f"--config package_dir={PACKAGE_DIR} input={input} output={output} seed={seed}"
     ]
     subprocess.run(snakemake_command, shell=False, check=True)
 
