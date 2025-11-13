@@ -17,7 +17,7 @@ SAMPLES = sorted(SAMPLES_MAP.keys())
 # Fan-out over all samples
 rule all:
     input:
-        f"{OUTDIR}/counts/{{sample}}.fq",
+        f"{OUTDIR}/counts/{sample}.fq",
         [f"{OUTDIR}/fastp/{sample}.html" for sample in SAMPLES]
 
 rule depth:
