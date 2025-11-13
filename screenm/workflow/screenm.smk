@@ -15,7 +15,7 @@ SAMPLES = sorted(SAMPLES_MAP.keys())
 # Fan-out over all samples
 rule all:
     input:
-        [f"{OUTDIR}/fastp/{{sample}}.html" for sample in SAMPLES]
+        [f"{OUTDIR}/fastp/{sample}.html" for sample in SAMPLES]
 
 rule fastp:
     input: 
