@@ -50,9 +50,7 @@ rule fastp:
         r2=f"{OUTDIR}/fastp/{{sample}}_2.fq.gz",
         html=f"{OUTDIR}/fastp/{{sample}}.html",
         json=f"{OUTDIR}/fastp/{{sample}}.json"
-    params:
-        fastp_module={FASTP_MODULE}
-    threads: 4
+    threads: 1
     message: "Quality-filtering sample {wildcards.sample}..."
     shell:
         """
