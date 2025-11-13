@@ -25,36 +25,40 @@ rule counts:
         r1 = lambda wc: SAMPLES_MAP[wc.sample]["forward"],
         r2 = lambda wc: SAMPLES_MAP[wc.sample].get("reverse", "")
     output:
-        f"{OUTDIR}/counts/{{sample}}.json"
+        json = f"{OUTDIR}/counts/{{sample}}.json"
     threads: 2
-    message: "Updating {input.json} with read counts..."
+    message:
+        "Counting reads for {wildcards.sample}..."
     run:
-            def count_reads(fq_path):
-                """Fast system-level read counter"""
-                if not fq_path or not Path(fq_path).exists():
-                    return 0
-                cmd = f"zcat {fq_path} | wc -l" if fq_path.endswith(".gz") else f"wc -l < {fq_path}"
-                res = subprocess.check_output(cmd, shell=True, text=True)
-                return int(int(res.strip()) / 4)
+        import json, subprocess
+        from pathlib import Path
 
-            r1_reads = count_reads(input.r1)
-            r2_reads = count_reads(input.r2)
-            total = r1_reads + r2_reads
+        def count_reads(fq_path: str) -> int:
+            if not fq_path or not Path(fq_path).exists():
+                return 0
+            cmd = f"zcat {fq_path} | wc -l" if fq_path.endswith(".gz") else f"wc -l < {fq_path}"
+            lines = int(subprocess.check_output(cmd, shell=True, text=True).strip())
+            return lines // 4
 
-            result = {
-                "sample": wildcards.sample,
-                "forward": input.r1,
-                "reverse": input.r2,
-                "forward_reads": r1_reads,
-                "reverse_reads": r2_reads,
-                "total_reads": total
-            }
+        r1_reads = count_reads(input.r1)
+        r2_reads = count_reads(input.r2)
+        total = r1_reads + r2_reads
 
-            Path(output[0]).parent.mkdir(parents=True, exist_ok=True)
-            with open(output[0], "w") as f:
-                json.dump(result, f, indent=2)
+        result = {
+            "sample": wildcards.sample,
+            "forward": input.r1,
+            "reverse": input.r2,
+            "forward_reads": r1_reads,
+            "reverse_reads": r2_reads,
+            "total_reads": total,
+        }
 
-            print(f"[✓] {wildcards.sample}: {total:,} total reads")
+        Path(output.json).parent.mkdir(parents=True, exist_ok=True)
+        with open(output.json, "w") as f:
+            json.dump(result, f, indent=2)
+
+        print(f"[✓] {wildcards.sample}: {total:,} total reads → {output.json}")
+
 
 rule seqtk:
     input: 
