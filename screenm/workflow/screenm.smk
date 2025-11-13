@@ -110,7 +110,7 @@ rule singlem:
     output:
         f"{OUTDIR}/singlem/{{sample}}.profile"
     params:
-        workdir= f"{OUTDIR}/singlem/{wildcards.sample}"
+        workdir = lambda wc: f"{OUTDIR}/singlem/{wc.sample}"
     threads: 1
     message: "Profiling {wildcards.sample} with SingleM..."
     shell:
