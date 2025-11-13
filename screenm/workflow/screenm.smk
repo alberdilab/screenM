@@ -16,7 +16,7 @@ SAMPLES = sorted(SAMPLES_MAP.keys())
 # Fan-out over all samples
 rule all:
     input:
-        "data_with_counts.json",
+        INPUT_JSON,
         [f"{OUTDIR}/fastp/{sample}.html" for sample in SAMPLES]
 
 rule depth:
