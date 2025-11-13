@@ -66,7 +66,7 @@ def main():
     parser.add_argument("-i", "--input", required=True, help="Path of the directory containing the metagenomic reads.")
     parser.add_argument("-o", "--output", required=False, default=os.getcwd(), type=pathlib.Path, help="Working directory. Default is the directory from which screenM is called.")
     parser.add_argument("-s", "--seed", required=False, type=int, default=random.randint(0, 9999), help="Random seed for reproducibility. If not set, results will vary across runs.")   
-    parser.add_argument("-t", "--threads", default=1, help="Number of threads to use (Default: 1)")   
+    parser.add_argument("-t", "--threads", default=1, required=False, help="Number of threads to use (Default: 1)")   
 
     args = parser.parse_args()
 

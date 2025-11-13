@@ -7,7 +7,7 @@ OUTDIR      = config["output"]
 SEED        = config["seed"]
 
 # Load data keys and paths
-with open(SAMPLES_JSON) as fh:
+with open(INPUT_JSON) as fh:
     SAMPLES_MAP = json.load(fh)
 
 SAMPLES = sorted(SAMPLES_MAP.keys())
