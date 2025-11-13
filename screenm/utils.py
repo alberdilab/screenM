@@ -9,7 +9,7 @@ def dir_to_files(input: str, output: str):
     and write a JSON mapping: {sample_name: {"forward": <path>, "reverse": <path>}}.
 
     Example:
-        dir_to_files("reads/", "data.json")
+        dir_to_files("reads/", "results/data.json")
 
     The function handles naming like:
         sampleA_R1.fastq.gz / sampleA_R2.fastq.gz
@@ -18,10 +18,17 @@ def dir_to_files(input: str, output: str):
     """
     input_path = Path(input)
     output_path = Path(output)
+
+    # --- verify input dir ---
     if not input_path.exists():
         raise FileNotFoundError(f"Input directory not found: {input}")
+    if not input_path.is_dir():
+        raise NotADirectoryError(f"Input path is not a directory: {input}")
 
-    # Collect all FASTQ / FQ files (case-insensitive)
+    # --- create output dir if missing ---
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+
+    # --- collect fastq/fq files (case-insensitive) ---
     fastq_files = list(input_path.rglob("*.[Ff][Aa][Ss][Tt][Qq]*")) + \
                   list(input_path.rglob("*.[Ff][Qq]*"))
     if not fastq_files:
@@ -31,7 +38,6 @@ def dir_to_files(input: str, output: str):
 
     for fq in fastq_files:
         fname = fq.name
-        # detect forward/reverse patterns
         if "_R1" in fname or "_1" in fname:
             sample_name = (
                 fname.replace("_R1", "")
@@ -54,9 +60,10 @@ def dir_to_files(input: str, output: str):
             )
             samples.setdefault(sample_name, {})["reverse"] = str(fq.resolve())
 
-    # Write to JSON
+    # --- write JSON safely ---
     with output_path.open("w") as f:
         json.dump(samples, f, indent=2)
 
-    print(f"[✓] Wrote {len(samples)} samples to {output_path}")
+    print(f"[✓] Found {len(samples)} samples.")
+    print(f"[✓] Wrote JSON to {output_path.resolve()}")
     return samples
