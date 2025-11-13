@@ -15,8 +15,7 @@ SAMPLES = sorted(SAMPLES_MAP.keys())
 # Fan-out over all samples
 rule all:
     input:
-        [f"{OUTDIR}/{s}/started.ok" for s in SAMPLES],
-        f"{OUTDIR}/manifest.tsv"
+        [f"{OUTDIR}/fastp/{{sample}}.html" for s in SAMPLES]
 
 rule start:
     input: 
