@@ -20,11 +20,11 @@ rule all:
         [f"{OUTDIR}/counts/{sample}.json" for sample in SAMPLES],
         [f"{OUTDIR}/fastp/{sample}.html" for sample in SAMPLES]
 
-rule depth:
+rule counts:
     input:
         json=INPUT_JSON
     output:
-        f"{OUTDIR}/counts/{{sample}}.fq"
+        f"{OUTDIR}/counts/{{sample}}.json"
     threads: 2
     message: "Updating {input.json} with read counts..."
     run:
@@ -78,8 +78,8 @@ rule fastp:
         r1=f"{OUTDIR}/seqtk/{{sample}}_1.fq",
         r2=f"{OUTDIR}/seqtk/{{sample}}_2.fq"
     output:
-        r1=f"{OUTDIR}/fastp/{{sample}}_1.fq.gz",
-        r2=f"{OUTDIR}/fastp/{{sample}}_2.fq.gz",
+        r1=f"{OUTDIR}/fastp/{{sample}}_1.fq",
+        r2=f"{OUTDIR}/fastp/{{sample}}_2.fq",
         html=f"{OUTDIR}/fastp/{{sample}}.html",
         json=f"{OUTDIR}/fastp/{{sample}}.json"
     threads: 1
@@ -101,4 +101,25 @@ rule fastp:
             --json {output.json} \
             --adapter_sequence AGATCGGAAGAGCACACGTCTGAACTCCAGTCA \
             --adapter_sequence_r2 AGATCGGAAGAGCGTCGTGTAGGGAAAGAGTGT
+        """
+
+rule singlem:
+    input: 
+        r1=f"{OUTDIR}/fastp/{{sample}}_1.fq",
+        r2=f"{OUTDIR}/fastp/{{sample}}_2.fq",
+    output:
+        f"{OUTDIR}/singlem/{{sample}}.profile"
+    params:
+        workdir= f"{OUTDIR}/singlem/{wildcards.sample}"
+    threads: 1
+    message: "Profiling {wildcards.sample} with SingleM..."
+    shell:
+        """
+        module load singlem/0.19.0
+        export SINGLEM_METAPACKAGE_PATH=/maps/datasets/globe_databases/singlem/5.4.0/S5.4.0.GTDB_r226.metapackage_20250331.smpkg.zb
+        singlem pipe \
+            -1 {input.r1} \
+            -2 {input.r2} \
+            --working-directory {params.workdir} \
+            -p {putput}
         """
