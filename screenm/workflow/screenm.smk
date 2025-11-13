@@ -22,7 +22,8 @@ rule all:
 
 rule counts:
     input:
-        json=INPUT_JSON
+        r1 = lambda wc: SAMPLES_MAP[wc.sample]["forward"],
+        r2 = lambda wc: SAMPLES_MAP[wc.sample].get("reverse", "")
     output:
         f"{OUTDIR}/counts/{{sample}}.json"
     threads: 2
@@ -106,7 +107,7 @@ rule fastp:
 rule singlem:
     input: 
         r1=f"{OUTDIR}/fastp/{{sample}}_1.fq",
-        r2=f"{OUTDIR}/fastp/{{sample}}_2.fq",
+        r2=f"{OUTDIR}/fastp/{{sample}}_2.fq"
     output:
         f"{OUTDIR}/singlem/{{sample}}.profile"
     params:
