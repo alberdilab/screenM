@@ -145,7 +145,7 @@ rule spf:
     params:
         workdir = lambda wc: f"{OUTDIR}/singlem/{wc.sample}"
     threads: 1
-    message: "Profiling {wildcards.sample} with SingleM..."
+    message: "Calculating prokaryotic fraction of {wildcards.sample}..."
     shell:
         """
         module load singlem/0.19.0
@@ -155,5 +155,3 @@ rule spf:
             -2 {input.r2} \
             -p {input.profile} > {output}
         """
-
-        singlem microbial_fraction -1 reads/EHI01325_1.fq -2 reads/EHI01325_2.fq -p EHI01325.tsv > EHI01325_fraction.tsv
