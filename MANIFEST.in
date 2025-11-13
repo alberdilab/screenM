@@ -1,0 +1,4 @@
+include screenm/workflow/*
+include screenm/workflow/rules/*
+include screenm/workflow/scripts/*
+include screenm/bin/*
