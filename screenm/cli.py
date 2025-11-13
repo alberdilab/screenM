@@ -48,7 +48,7 @@ def run_screenm_pipeline(input, output, threads, seed):
         f"-s {PACKAGE_DIR / 'workflow' / 'screenm.smk'} "
         f"--directory {output} "
         f"--cores {threads} "
-        f"--quiet 2>/dev/null "
+        #f"--quiet 2>/dev/null "
         f"--configfile {CONFIG_PATH} "
         f"--config package_dir={PACKAGE_DIR} input={input} output={output} seed={seed}"
     ]
