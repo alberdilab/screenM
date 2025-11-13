@@ -46,7 +46,7 @@ def run_screenm_pipeline(input, output, threads, seed):
         "/bin/bash", "-c",
         "snakemake "
         f"-s {PACKAGE_DIR / 'workflow' / 'screenm.smk'} "
-        f"--directory {output_dir} "
+        f"--directory {output} "
         f"--cores {threads} "
         f"--quiet 2>/dev/null "
         f"--configfile {CONFIG_PATH} "
