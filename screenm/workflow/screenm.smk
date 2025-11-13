@@ -188,7 +188,6 @@ rule nonpareil_markers:
     shell:
         """
         module load singlem/0.19.0
-        conda activate nonpareil    
         nonpareil -s {input} -T kmer -f fasta -b {params.workdir}
         """
 
@@ -238,7 +237,6 @@ rule nonpareil_reads:
     shell:
         """
         module load singlem/0.19.0
-        conda activate nonpareil    
         nonpareil -s {input} -T kmer -f fastq -b {params.workdir}
         """
 
