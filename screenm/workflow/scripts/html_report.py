@@ -9,35 +9,41 @@ HTML_TEMPLATE = r"""<!DOCTYPE html>
 <meta charset="UTF-8">
 <title>ScreenM Report</title>
 
-<!-- Basic styling, intentionally lightweight -->
 <style>
     body {
         font-family: Arial, sans-serif;
         max-width: 1100px;
         margin: auto;
-        padding: 20px;
+        padding: 20px 20px 60px 20px;
         background: #fafafa;
     }
     h1 {
         text-align: center;
-        margin-bottom: 40px;
+        margin-bottom: 30px;
+    }
+    h2 {
+        margin-top: 40px;
+        margin-bottom: 15px;
     }
 
     .section {
-        margin-bottom: 25px;
+        margin-bottom: 20px;
         border-radius: 8px;
-        padding: 15px;
+        padding: 10px 15px 15px 15px;
         border: 1px solid #ccc;
         background: #fff;
     }
 
-    /* Expand / collapse */
     details > summary {
-        font-size: 1.1em;
+        font-size: 1.05em;
         cursor: pointer;
-        padding: 5px;
-        margin: -5px;
+        padding: 4px 0;
         font-weight: bold;
+        list-style: none;
+    }
+
+    details[open] > summary {
+        margin-bottom: 5px;
     }
 
     /* Flag-based background colours */
@@ -51,17 +57,92 @@ HTML_TEMPLATE = r"""<!DOCTYPE html>
         background-color: #ffd2d2; /* red/pink */
     }
 
-    .figure-container {
-        margin-top: 15px;
-        padding: 10px;
-        background: #f5f5f5;
-        border-radius: 6px;
-        border: 1px solid #ddd;
+    .summary-message {
+        margin-bottom: 6px;
+    }
+
+    .summary-metrics {
+        margin: 0;
+        padding-left: 18px;
+        font-size: 0.95em;
+    }
+
+    .summary-metrics li {
+        margin-bottom: 2px;
     }
 
     .small-note {
-        font-size: 0.9em;
+        font-size: 0.85em;
         color: #666;
+        margin-top: 4px;
+    }
+
+    /* Depth fractions figure */
+    .depth-legend {
+        font-size: 0.9em;
+        margin-bottom: 6px;
+    }
+    .depth-legend span.box {
+        display: inline-block;
+        width: 12px;
+        height: 10px;
+        margin-right: 4px;
+        border-radius: 2px;
+        vertical-align: middle;
+    }
+    .seg-lowq   { background: #f44336; }  /* red */
+    .seg-prok   { background: #4caf50; }  /* green */
+    .seg-other  { background: #2196f3; }  /* blue */
+
+    .depth-table {
+        max-height: 350px;
+        overflow-y: auto;
+        border: 1px solid #ddd;
+        border-radius: 4px;
+        padding: 4px 6px;
+        background: #fcfcfc;
+    }
+    .depth-row {
+        display: flex;
+        align-items: center;
+        padding: 3px 0;
+        font-size: 0.9em;
+    }
+    .depth-label {
+        width: 120px;
+        flex-shrink: 0;
+        font-weight: 500;
+    }
+    .depth-bar-wrapper {
+        flex: 1;
+        margin: 0 8px;
+    }
+    .depth-bar {
+        position: relative;
+        height: 12px;
+        width: 100%;
+        background: #eee;
+        border-radius: 6px;
+        overflow: hidden;
+    }
+    .depth-bar-seg {
+        height: 100%;
+        display: inline-block;
+    }
+    .depth-info {
+        width: 200px;
+        flex-shrink: 0;
+        font-size: 0.8em;
+        text-align: right;
+    }
+
+    /* Redundancy biplot */
+    .biplot-container {
+        overflow-x: auto;
+    }
+    .biplot-svg {
+        border: 1px solid #ddd;
+        background: #fcfcfc;
     }
 </style>
 
@@ -70,7 +151,6 @@ HTML_TEMPLATE = r"""<!DOCTYPE html>
 
 <h1>ScreenM Summary Report</h1>
 
-<!-- Dynamic content containers -->
 <div id="summary-sections"></div>
 
 <h2>Figures</h2>
@@ -78,7 +158,6 @@ HTML_TEMPLATE = r"""<!DOCTYPE html>
 
 <script>
 // Embedded data from Python.
-// These placeholders will be replaced by the script.
 const DISTILL_DATA = __DISTILL_JSON__;
 const FIGURES_DATA = __FIGURES_JSON__;
 
@@ -88,34 +167,227 @@ function flagClass(flag) {
     return "flag-3";
 }
 
-/* ---------- Section Rendering (From distill.json) ---------- */
+/* ---------- Formatting helpers ---------- */
 
-function addSummarySection(parent, title, data, flagKey, messageKey) {
+function fmtInt(x) {
+    if (x === null || x === undefined) return "NA";
+    return Math.round(x).toLocaleString();
+}
+
+function fmtFloat(x, digits) {
+    if (x === null || x === undefined) return "NA";
+    return Number(x).toFixed(digits);
+}
+
+function fmtMillions(x) {
+    if (x === null || x === undefined) return "NA";
+    const v = Number(x);
+    if (!isFinite(v)) return "∞";
+    if (v >= 1e9) return (v / 1e9).toFixed(2) + " B";
+    if (v >= 1e6) return (v / 1e6).toFixed(2) + " M";
+    if (v >= 1e3) return (v / 1e3).toFixed(1) + " k";
+    return v.toString();
+}
+
+function fmtPercent(x, digits) {
+    if (x === null || x === undefined) return "NA";
+    return Number(x).toFixed(digits) + "%";
+}
+
+/* ---------- Summary sections ---------- */
+
+function addScreeningSection(parent, data) {
     if (!data) return;
-
-    const flag = data[flagKey];
-    const msg = data[messageKey];
-
     const div = document.createElement("div");
-    div.className = "section " + flagClass(flag);
+    div.className = "section " + flagClass(data.flag_reads_threshold);
+
+    const msg = data.message_reads_threshold || "";
 
     div.innerHTML = `
-        <details>
-            <summary>${title}</summary>
+        <details open>
+            <summary>Screening Threshold</summary>
             <div class="content">
-                <p>${msg}</p>
-                <pre>${JSON.stringify(data, null, 2)}</pre>
+                <p class="summary-message">${msg}</p>
+                <ul class="summary-metrics">
+                    <li>Total samples in data.json: ${fmtInt(data.n_samples_total)}</li>
+                    <li>Samples above threshold: ${fmtInt(data.n_samples_above_threshold)} (${fmtFloat(data.percent_above_threshold, 1)}%)</li>
+                    <li>Read threshold used: ${fmtInt(data.reads_threshold)} reads</li>
+                </ul>
             </div>
         </details>
     `;
-
     parent.appendChild(div);
 }
 
-/* ---------- Figures Rendering (From figures.json) ---------- */
-
-function addFigureDepthFractions(parent, data) {
+function addSequencingDepthSection(parent, data) {
     if (!data) return;
+    const div = document.createElement("div");
+    div.className = "section " + flagClass(data.flag_sequencing_depth);
+
+    const msg = data.message_sequencing_depth || "";
+
+    div.innerHTML = `
+        <details>
+            <summary>Sequencing Depth</summary>
+            <div class="content">
+                <p class="summary-message">${msg}</p>
+                <ul class="summary-metrics">
+                    <li>Samples with read counts: ${fmtInt(data.n_samples)}</li>
+                    <li>Mean reads per sample: ${fmtMillions(data.mean_reads)}</li>
+                    <li>Median reads per sample: ${fmtMillions(data.median_reads)}</li>
+                    <li>Standard deviation: ${fmtMillions(data.sd_reads)}</li>
+                    <li>Coefficient of variation (CV): ${fmtFloat(data.cv_reads, 3)}</li>
+                </ul>
+            </div>
+        </details>
+    `;
+    parent.appendChild(div);
+}
+
+function addLowQualitySection(parent, data) {
+    if (!data) return;
+    const div = document.createElement("div");
+    div.className = "section " + flagClass(data.flag_low_quality);
+
+    const msg = data.message_low_quality || "";
+
+    div.innerHTML = `
+        <details>
+            <summary>Low-quality Reads (fastp)</summary>
+            <div class="content">
+                <p class="summary-message">${msg}</p>
+                <ul class="summary-metrics">
+                    <li>Samples with fastp metrics: ${fmtInt(data.n_samples)}</li>
+                    <li>Total reads across these samples: ${fmtMillions(data.total_reads)}</li>
+                    <li>Total reads removed: ${fmtMillions(data.total_removed_reads)}</li>
+                    <li>Overall fraction removed: ${fmtFloat(data.percent_removed_reads_overall, 3)}%</li>
+                    <li>Mean fraction removed per sample: ${fmtFloat(100*data.mean_fraction_removed, 2)}%</li>
+                    <li>Median fraction removed per sample: ${fmtFloat(100*data.median_fraction_removed, 2)}%</li>
+                </ul>
+            </div>
+        </details>
+    `;
+    parent.appendChild(div);
+}
+
+function addProkFractionSection(parent, data) {
+    if (!data) return;
+    const div = document.createElement("div");
+    div.className = "section " + flagClass(data.flag_prokaryotic_fraction);
+
+    const msg = data.message_prokaryotic_fraction || "";
+
+    div.innerHTML = `
+        <details>
+            <summary>Prokaryotic Fraction (SingleM)</summary>
+            <div class="content">
+                <p class="summary-message">${msg}</p>
+                <ul class="summary-metrics">
+                    <li>Samples with SingleM estimates: ${fmtInt(data.n_samples)}</li>
+                    <li>Mean prokaryotic fraction: ${fmtFloat(data.mean_prokaryotic_fraction, 2)}%</li>
+                    <li>Median prokaryotic fraction: ${fmtFloat(data.median_prokaryotic_fraction, 2)}%</li>
+                    <li>Standard deviation: ${fmtFloat(data.sd_prokaryotic_fraction, 2)}</li>
+                    <li>Coefficient of variation (CV): ${fmtFloat(data.cv_prokaryotic_fraction, 3)}</li>
+                    <li>Samples with warnings: ${fmtInt(data.n_warnings)}</li>
+                </ul>
+            </div>
+        </details>
+    `;
+    parent.appendChild(div);
+}
+
+function addRedundancyReadsSection(parent, data) {
+    if (!data) return;
+    const div = document.createElement("div");
+    div.className = "section " + flagClass(data.flag_redundancy);
+
+    const msg = data.message_redundancy || "";
+
+    div.innerHTML = `
+        <details>
+            <summary>Redundancy (Reads, Nonpareil)</summary>
+            <div class="content">
+                <p class="summary-message">${msg}</p>
+                <ul class="summary-metrics">
+                    <li>Samples with kappa estimates: ${fmtInt(data.n_samples_kappa)}</li>
+                    <li>Mean kappa_total: ${fmtFloat(data.mean_kappa_total, 3)}</li>
+                    <li>Median kappa_total: ${fmtFloat(data.median_kappa_total, 3)}</li>
+                    <li>Standard deviation: ${fmtFloat(data.sd_kappa_total, 3)}</li>
+                    <li>CV of kappa_total: ${fmtFloat(data.cv_kappa_total, 3)}</li>
+                    <li>Samples with LR_reads target: ${fmtInt(data.n_samples_with_lr)}</li>
+                    <li>Samples where LR_reads &gt; observed depth: ${fmtInt(data.n_samples_lr_exceeds_depth)}</li>
+                    <li>LR target used (if any): ${data.lr_target_used || "NA"}%</li>
+                </ul>
+            </div>
+        </details>
+    `;
+    parent.appendChild(div);
+}
+
+function addRedundancyMarkersSection(parent, data) {
+    if (!data) return;
+    const div = document.createElement("div");
+    div.className = "section " + flagClass(data.flag_redundancy_markers);
+
+    const msg = data.message_redundancy_markers || "";
+
+    div.innerHTML = `
+        <details>
+            <summary>Redundancy (Marker genes, Nonpareil)</summary>
+            <div class="content">
+                <p class="summary-message">${msg}</p>
+                <ul class="summary-metrics">
+                    <li>Samples with kappa estimates: ${fmtInt(data.n_samples_kappa)}</li>
+                    <li>Mean kappa_total: ${fmtFloat(data.mean_kappa_total, 3)}</li>
+                    <li>Median kappa_total: ${fmtFloat(data.median_kappa_total, 3)}</li>
+                    <li>Standard deviation: ${fmtFloat(data.sd_kappa_total, 3)}</li>
+                    <li>CV of kappa_total: ${fmtFloat(data.cv_kappa_total, 3)}</li>
+                    <li>Samples with LR_reads target: ${fmtInt(data.n_samples_with_lr)}</li>
+                    <li>Samples where LR_reads &gt; observed depth: ${fmtInt(data.n_samples_lr_exceeds_depth)}</li>
+                    <li>LR target used (if any): ${data.lr_target_used || "NA"}%</li>
+                </ul>
+            </div>
+        </details>
+    `;
+    parent.appendChild(div);
+}
+
+function addClustersSection(parent, clusters) {
+    if (!clusters) return;
+    const div = document.createElement("div");
+    div.className = "section " + flagClass(clusters.flag_clusters);
+
+    const msg = clusters.message_clusters || "";
+    const markers = clusters.markers || {};
+    const reads = clusters.reads || {};
+
+    const nClustersMarkers = markers.n_clusters != null ? markers.n_clusters : "NA";
+    const nClustersReads = reads.n_clusters != null ? reads.n_clusters : "NA";
+
+    div.innerHTML = `
+        <details>
+            <summary>Sample Clusters (Mash-based)</summary>
+            <div class="content">
+                <p class="summary-message">${msg}</p>
+                <ul class="summary-metrics">
+                    <li>Marker-based clusters: ${nClustersMarkers}</li>
+                    <li>Read-based clusters: ${nClustersReads}</li>
+                </ul>
+                <p class="small-note">
+                    Cluster assignments and distances are available in the JSON output and can be explored programmatically.
+                </p>
+            </div>
+        </details>
+    `;
+    parent.appendChild(div);
+}
+
+/* ---------- Figures: depth fractions ---------- */
+
+function addFigureDepthFractions(parent, fig) {
+    if (!fig) return;
+    const data = fig.per_sample || [];
+    if (!data.length) return;
 
     const div = document.createElement("div");
     div.className = "section";
@@ -124,63 +396,214 @@ function addFigureDepthFractions(parent, data) {
         <details open>
             <summary>Sequencing Depth Components</summary>
             <div class="figure-container">
-                <div id="figure-depth"></div>
+                <div class="depth-legend">
+                    <span class="box seg-lowq"></span> low-quality &nbsp;
+                    <span class="box seg-prok"></span> prokaryotic &nbsp;
+                    <span class="box seg-other"></span> other (non-prokaryotic, QC-passing)
+                </div>
+                <div id="depth-bars" class="depth-table"></div>
                 <p class="small-note">
-                    This view shows total reads divided into low-quality, prokaryotic and other fractions.
-                    Nonpareil 95% LR_reads targets are included and can be plotted as dashed lines
-                    in downstream visualisations.
+                    Bars show per-sample relative contributions of low-quality reads, prokaryotic reads, "
+                    and other QC-passing reads. Tooltip values and right-hand text give approximate counts.
+                    Nonpareil 95% LR_reads thresholds are indicated in text for use as dashed horizontal
+                    lines in custom plots.
                 </p>
             </div>
         </details>
     `;
-
     parent.appendChild(div);
 
-    /* For now, render a small preview table. Plotting can be added later (Plotly, etc.). */
-    const preview = document.createElement("pre");
-    const previewRows = (data.per_sample || []).slice(0, 5);
-    preview.textContent =
-        JSON.stringify(previewRows, null, 2) +
-        (data.per_sample && data.per_sample.length > 5
-            ? "\n...\n(Full data available in figures.json)"
-            : "");
-    div.querySelector("#figure-depth").appendChild(preview);
+    const container = div.querySelector("#depth-bars");
+
+    const maxSamples = 50; // keep UI manageable
+    const rows = data.slice(0, maxSamples);
+    const truncated = data.length > maxSamples;
+
+    rows.forEach(d => {
+        const row = document.createElement("div");
+        row.className = "depth-row";
+
+        const fracLow = d.fraction_low_quality_of_total || 0;
+        const fracProk = d.fraction_prokaryotic_of_total || 0;
+        const fracOther = d.fraction_non_prokaryotic_of_total || 0;
+
+        const lowPct = (100 * fracLow).toFixed(2);
+        const prokPct = (100 * fracProk).toFixed(2);
+        const otherPct = (100 * fracOther).toFixed(2);
+
+        const totalReads = d.total_reads;
+        const targetReads95 = d.target_reads_95_LR_reads;
+
+        row.innerHTML = `
+            <div class="depth-label">${d.sample}</div>
+            <div class="depth-bar-wrapper">
+                <div class="depth-bar" title="Low-Q: ${lowPct}%, Prok: ${prokPct}%, Other: ${otherPct}%">
+                    <span class="depth-bar-seg seg-lowq" style="width: ${lowPct}%;"></span>
+                    <span class="depth-bar-seg seg-prok" style="width: ${prokPct}%;"></span>
+                    <span class="depth-bar-seg seg-other" style="width: ${otherPct}%;"></span>
+                </div>
+            </div>
+            <div class="depth-info">
+                ${fmtMillions(totalReads)} reads<br/>
+                95% LR (reads): ${fmtMillions(targetReads95)}
+            </div>
+        `;
+        container.appendChild(row);
+    });
+
+    if (truncated) {
+        const note = document.createElement("div");
+        note.className = "small-note";
+        note.textContent = `Showing first ${maxSamples} samples of ${data.length}.`;
+        container.appendChild(note);
+    }
 }
 
+/* ---------- Figures: redundancy biplot ---------- */
 
-function addFigureRedundancyBiplot(parent, data) {
-    if (!data) return;
+function addFigureRedundancyBiplot(parent, fig) {
+    if (!fig) return;
+    const data = (fig.per_sample || []).filter(d =>
+        d.kappa_reads !== null && d.kappa_reads !== undefined &&
+        d.kappa_markers !== null && d.kappa_markers !== undefined
+    );
+    if (!data.length) return;
 
     const div = document.createElement("div");
     div.className = "section";
 
     div.innerHTML = `
         <details open>
-            <summary>Redundancy Biplot</summary>
+            <summary>Redundancy Biplot (Nonpareil kappa)</summary>
             <div class="figure-container">
-                <div id="figure-biplot"></div>
+                <div class="biplot-container">
+                    <svg id="biplot-svg" class="biplot-svg" width="380" height="380"></svg>
+                </div>
                 <p class="small-note">
-                    Each point represents a sample: read-based vs marker-based Nonpareil redundancy.
-                    Use "kappa_reads" and "kappa_markers" as axes; coverage and LR targets can be used
-                    for point size, colour or annotations.
+                    Scatterplot of read-based vs marker-based Nonpareil kappa_total.
+                    Points are samples (hover for sample names). Axes are fixed to [0, 1].
                 </p>
             </div>
         </details>
     `;
-
     parent.appendChild(div);
 
-    const preview = document.createElement("pre");
-    const previewRows = (data.per_sample || []).slice(0, 5);
-    preview.textContent =
-        JSON.stringify(previewRows, null, 2) +
-        (data.per_sample && data.per_sample.length > 5
-            ? "\n...\n(Full data in figures.json)"
-            : "");
-    div.querySelector("#figure-biplot").appendChild(preview);
+    const svg = div.querySelector("#biplot-svg");
+    const w = 380, h = 380;
+    const margin = {left: 50, right: 10, top: 20, bottom: 40};
+    const plotW = w - margin.left - margin.right;
+    const plotH = h - margin.top - margin.bottom;
+
+    const svgns = "http://www.w3.org/2000/svg";
+
+    // Axes (0-1)
+    const x0 = margin.left;
+    const y0 = h - margin.bottom;
+    const x1 = margin.left + plotW;
+    const y1 = margin.top;
+
+    // X axis
+    const xAxis = document.createElementNS(svgns, "line");
+    xAxis.setAttribute("x1", x0);
+    xAxis.setAttribute("y1", y0);
+    xAxis.setAttribute("x2", x1);
+    xAxis.setAttribute("y2", y0);
+    xAxis.setAttribute("stroke", "#555");
+    svg.appendChild(xAxis);
+
+    // Y axis
+    const yAxis = document.createElementNS(svgns, "line");
+    yAxis.setAttribute("x1", x0);
+    yAxis.setAttribute("y1", y0);
+    yAxis.setAttribute("x2", x0);
+    yAxis.setAttribute("y2", y1);
+    yAxis.setAttribute("stroke", "#555");
+    svg.appendChild(yAxis);
+
+    // Axis labels
+    const xlabel = document.createElementNS(svgns, "text");
+    xlabel.setAttribute("x", margin.left + plotW / 2);
+    xlabel.setAttribute("y", h - 8);
+    xlabel.setAttribute("text-anchor", "middle");
+    xlabel.setAttribute("font-size", "11");
+    xlabel.textContent = "kappa_total (reads)";
+    svg.appendChild(xlabel);
+
+    const ylabel = document.createElementNS(svgns, "text");
+    ylabel.setAttribute("x", 14);
+    ylabel.setAttribute("y", margin.top + plotH / 2);
+    ylabel.setAttribute("text-anchor", "middle");
+    ylabel.setAttribute("font-size", "11");
+    ylabel.setAttribute("transform", `rotate(-90 14 ${margin.top + plotH / 2})`);
+    ylabel.textContent = "kappa_total (markers)";
+    svg.appendChild(ylabel);
+
+    // Ticks at 0.5 and 1.0
+    [0.5, 1.0].forEach(t => {
+        const xt = x0 + t * plotW;
+        const yt = y0 - t * plotH;
+
+        const xtick = document.createElementNS(svgns, "line");
+        xtick.setAttribute("x1", xt);
+        xtick.setAttribute("y1", y0);
+        xtick.setAttribute("x2", xt);
+        xtick.setAttribute("y2", y0 + 4);
+        xtick.setAttribute("stroke", "#555");
+        svg.appendChild(xtick);
+
+        const xtlab = document.createElementNS(svgns, "text");
+        xtlab.setAttribute("x", xt);
+        xtlab.setAttribute("y", y0 + 15);
+        xtlab.setAttribute("font-size", "10");
+        xtlab.setAttribute("text-anchor", "middle");
+        xtlab.textContent = t.toFixed(1);
+        svg.appendChild(xtlab);
+
+        const ytick = document.createElementNS(svgns, "line");
+        ytick.setAttribute("x1", x0 - 4);
+        ytick.setAttribute("y1", yt);
+        ytick.setAttribute("x2", x0);
+        ytick.setAttribute("y2", yt);
+        ytick.setAttribute("stroke", "#555");
+        svg.appendChild(ytick);
+
+        const ytlab = document.createElementNS(svgns, "text");
+        ytlab.setAttribute("x", x0 - 7);
+        ytlab.setAttribute("y", yt + 3);
+        ytlab.setAttribute("font-size", "10");
+        ytlab.setAttribute("text-anchor", "end");
+        ytlab.textContent = t.toFixed(1);
+        svg.appendChild(ytlab);
+    });
+
+    // Points
+    data.forEach(d => {
+        const xr = Number(d.kappa_reads);
+        const yr = Number(d.kappa_markers);
+        if (!isFinite(xr) || !isFinite(yr)) return;
+
+        const cx = x0 + Math.max(0, Math.min(1, xr)) * plotW;
+        const cy = y0 - Math.max(0, Math.min(1, yr)) * plotH;
+
+        const circle = document.createElementNS(svgns, "circle");
+        circle.setAttribute("cx", cx);
+        circle.setAttribute("cy", cy);
+        circle.setAttribute("r", 4);
+        circle.setAttribute("fill", "#1976d2");
+        circle.setAttribute("fill-opacity", "0.8");
+
+        const title = document.createElementNS(svgns, "title");
+        title.textContent =
+            `${d.sample}\n` +
+            `kappa_reads = ${xr.toFixed(3)}\n` +
+            `kappa_markers = ${yr.toFixed(3)}`;
+        circle.appendChild(title);
+
+        svg.appendChild(circle);
+    });
 }
 
-/* ---------- Main Rendering Pipeline ---------- */
+/* ---------- Main ---------- */
 
 function main() {
     const distill = DISTILL_DATA;
@@ -191,86 +614,19 @@ function main() {
 
     const S = distill.summary || {};
 
-    addSummarySection(
-        summaryDiv, 
-        "Screening Threshold",
-        S.screening_threshold,
-        "flag_reads_threshold",
-        "message_reads_threshold"
-    );
-
-    addSummarySection(
-        summaryDiv,
-        "Sequencing Depth",
-        S.sequencing_depth,
-        "flag_sequencing_depth",
-        "message_sequencing_depth"
-    );
-
-    addSummarySection(
-        summaryDiv,
-        "Low-quality Reads",
-        S.low_quality_reads,
-        "flag_low_quality",
-        "message_low_quality"
-    );
-
-    addSummarySection(
-        summaryDiv,
-        "Prokaryotic Fraction",
-        S.prokaryotic_fraction,
-        "flag_prokaryotic_fraction",
-        "message_prokaryotic_fraction"
-    );
-
-    addSummarySection(
-        summaryDiv,
-        "Redundancy (Reads)",
-        S.redundancy_reads,
-        "flag_redundancy",
-        "message_redundancy"
-    );
-
-    addSummarySection(
-        summaryDiv,
-        "Redundancy (Markers)",
-        S.redundancy_markers,
-        "flag_redundancy_markers",
-        "message_redundancy_markers"
-    );
-
-    if (S.clusters) {
-        const flag = S.clusters.flag_clusters;
-        const msg = S.clusters.message_clusters;
-
-        const div = document.createElement("div");
-        div.className = "section " + flagClass(flag);
-        div.innerHTML = `
-            <details>
-                <summary>Sample Clusters (Mash-based)</summary>
-                <div class="content">
-                    <p>${msg}</p>
-                    <pre>${JSON.stringify(S.clusters, null, 2)}</pre>
-                </div>
-            </details>
-        `;
-        summaryDiv.appendChild(div);
-    }
-
-    /* FIGURES */
+    addScreeningSection(summaryDiv, S.screening_threshold);
+    addSequencingDepthSection(summaryDiv, S.sequencing_depth);
+    addLowQualitySection(summaryDiv, S.low_quality_reads);
+    addProkFractionSection(summaryDiv, S.prokaryotic_fraction);
+    addRedundancyReadsSection(summaryDiv, S.redundancy_reads);
+    addRedundancyMarkersSection(summaryDiv, S.redundancy_markers);
+    addClustersSection(summaryDiv, S.clusters);
 
     if (figures.figures && figures.figures.dna_depth_fractions) {
-        addFigureDepthFractions(
-            figureDiv,
-            figures.figures.dna_depth_fractions
-        );
+        addFigureDepthFractions(figureDiv, figures.figures.dna_depth_fractions);
     }
-
     if (figures.figures && figures.figures.redundancy_biplot) {
-        addFigureRedundancyBiplot(
-            figureDiv,
-            figures.figures.redundancy_biplot
-        );
+        addFigureRedundancyBiplot(figureDiv, figures.figures.redundancy_biplot);
     }
 }
 
@@ -286,7 +642,7 @@ def main():
     parser = argparse.ArgumentParser(
         description=(
             "Create a static HTML report from distill.json and figures.json.\n"
-            "The report shows collapsible sections coloured by flags and figure-friendly previews."
+            "The report shows collapsible sections coloured by flags, with user-friendly text and figures."
         )
     )
     parser.add_argument(
@@ -315,11 +671,10 @@ def main():
     with figures_path.open() as f:
         figures_data = json.load(f)
 
-    # Serialize JSON for embedding in JS
     distill_json_str = json.dumps(distill_data, indent=2)
     figures_json_str = json.dumps(figures_data, indent=2)
 
-    # Escape closing </script> to avoid breaking the script tag
+    # Avoid breaking the <script> tag if JSON contains "</script>"
     distill_json_str = distill_json_str.replace("</script>", "<\\/script>")
     figures_json_str = figures_json_str.replace("</script>", "<\\/script>")
 
