@@ -278,7 +278,7 @@ rule mash_sketch_markers:
     shell:
         """
         module load mash/2.3
-        mash sketch -k {params.kmer} -S {seed} -o {params.base} {input}
+        mash sketch -k {params.kmer} -S {params.seed} -o {params.base} {input}
         """
 
 rule mash_distance_markers:
