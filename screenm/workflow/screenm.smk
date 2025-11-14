@@ -355,7 +355,7 @@ rule mash_distance_reads:
         f"{OUTDIR}/mash/mash_reads.dist"
     threads: 1
     params:
-        seed = seed
+        seed = SEED
     shell:
         """
         module load mash/2.3
