@@ -80,7 +80,7 @@ def compute_screening_threshold(data_json: Dict[str, Any]) -> Dict[str, Any]:
 def compute_sequencing_depth(results_json: Dict[str, Any]) -> Dict[str, Any]:
     """
     Compute sequencing depth statistics from results.json, using
-    samples[*].count.reads.
+    samples[*].count.reads (or total_reads).
     """
     samples = results_json.get("samples", {}) or {}
 
@@ -152,7 +152,7 @@ def compute_low_quality(results_json: Dict[str, Any]) -> Dict[str, Any]:
     """
     Summarise low-quality / discarded reads using samples[*].fastp.* fields.
 
-    We aggregate:
+    Aggregate:
       - total reads
       - total discarded reads (low_quality + too_many_N + low_complexity + too_short + too_long)
       - per-sample fraction of discarded reads
@@ -359,56 +359,66 @@ def compute_prokaryotic_fraction(results_json: Dict[str, Any]) -> Dict[str, Any]
     }
 
 
-# ---------- 5) Redundancy and LR_reads (Nonpareil kappa_total & LR_*_reads) ----------
+# ---------- 5) Redundancy and LR_reads (Nonpareil kappa_total & targets.LR_reads) ----------
 
-def _pick_lr_reads_key(npr_block: Dict[str, Any]) -> Optional[Tuple[str, float]]:
+def _pick_target_lr_reads(npr_block: Dict[str, Any]) -> Optional[Tuple[str, float]]:
     """
-    From a nonpareil_reads block, pick one LR_*_reads value (e.g. LR_95_reads).
+    From a nonpareil_reads block, pick one LR_reads value from the 'targets' dict:
+
+      "targets": {
+        "95": { "LR_bp": ..., "LR_reads": ... },
+        "99": { ... }
+      }
+
     Strategy:
-      - Find all keys of the form 'LR_<pct>_reads'
+      - Find all numeric targets (e.g. "95", "99")
       - Use the one with the lowest target percentage (e.g. 95 before 99)
-    Returns (key, value) with value as float or inf, or None if not found/parseable.
+    Returns (target_str, lr_reads) or None if not found.
     """
-    lr_keys = []
-    for key in npr_block.keys():
-        if key.startswith("LR_") and key.endswith("_reads"):
-            mid = key[3:-6]  # string between 'LR_' and '_reads'
-            try:
-                pct = float(mid)
-                lr_keys.append((pct, key))
-            except ValueError:
-                continue
-
-    if not lr_keys:
+    targets = npr_block.get("targets") or {}
+    if not isinstance(targets, dict):
         return None
 
-    lr_keys.sort(key=lambda x: x[0])  # sort by percentage
-    _, best_key = lr_keys[0]
-    raw_val = npr_block.get(best_key)
+    candidates: List[Tuple[float, str, float]] = []
+    for pct_str, info in targets.items():
+        try:
+            pct = float(pct_str)
+        except (TypeError, ValueError):
+            continue
+        if not isinstance(info, dict):
+            continue
+        lr_val = info.get("LR_reads")
+        if lr_val is None:
+            continue
 
-    if raw_val is None:
-        return None
-
-    # Convert "inf" or strings to float
-    if isinstance(raw_val, (int, float)):
-        val = float(raw_val)
-    elif isinstance(raw_val, str):
-        if raw_val.lower() == "inf":
-            val = float("inf")
+        # parse LR_reads to float, allowing "inf"
+        if isinstance(lr_val, (int, float)):
+            lr = float(lr_val)
+        elif isinstance(lr_val, str):
+            if lr_val.lower() == "inf":
+                lr = float("inf")
+            else:
+                try:
+                    lr = float(lr_val)
+                except ValueError:
+                    continue
         else:
-            try:
-                val = float(raw_val)
-            except ValueError:
-                return None
-    else:
+            continue
+
+        candidates.append((pct, pct_str, lr))
+
+    if not candidates:
         return None
 
-    return best_key, val
+    candidates.sort(key=lambda x: x[0])  # smallest target first (e.g. 95)
+    _, pct_str, lr = candidates[0]
+    return pct_str, lr
 
 
-def compute_redundancy(results_json: Dict[str, Any]) -> Dict[str, Any]:
+def compute_redundancy_reads(results_json: Dict[str, Any]) -> Dict[str, Any]:
     """
-    Summarise redundancy using Nonpareil kappa_total and LR_*_reads.
+    Summarise redundancy using Nonpareil kappa_total and LR_reads from
+    nonpareil_reads.targets.
 
     - kappa_total summarises redundancy (0–1 scale).
       Mean kappa_total → flag_redundancy:
@@ -419,13 +429,14 @@ def compute_redundancy(results_json: Dict[str, Any]) -> Dict[str, Any]:
     - Variation in redundancy based on CV of kappa_total.
 
     - LR_reads comparison:
-        We use the first LR_*_reads key (e.g., LR_95_reads). For each sample:
-          if LR_reads > total_reads, we count this as "insufficient depth".
-        Summarised into a second flag:
+        For each sample we pick a single target (e.g., 95%) and its LR_reads.
+        If LR_reads > total_reads, we count this as "insufficient depth".
+
+        Summarised into:
           flag_LR_vs_depth:
-            1 → LR requirement is below or equal to depth for all samples
-            2 → LR exceeds depth in some samples (<50%)
-            3 → LR exceeds depth in many samples (>=50%)
+            1 → LR_reads <= depth in all samples
+            2 → LR_reads > depth in some samples (<50%)
+            3 → LR_reads > depth in many samples (>=50%)
     """
 
     samples = results_json.get("samples", {}) or {}
@@ -433,7 +444,7 @@ def compute_redundancy(results_json: Dict[str, Any]) -> Dict[str, Any]:
     kappas: List[float] = []
     lr_exceeds = 0
     n_with_lr = 0
-    lr_key_used: Optional[str] = None
+    lr_target_used: Optional[str] = None
 
     for name, sample_data in samples.items():
         npr = sample_data.get("nonpareil_reads", {}) or {}
@@ -450,11 +461,11 @@ def compute_redundancy(results_json: Dict[str, Any]) -> Dict[str, Any]:
         if isinstance(kappa, (int, float)):
             kappas.append(float(kappa))
 
-        # LR_*_reads comparison
-        lr_info = _pick_lr_reads_key(npr)
+        # LR_reads from targets
+        lr_info = _pick_target_lr_reads(npr)
         if lr_info is not None:
-            key, lr_reads = lr_info
-            lr_key_used = lr_key_used or key  # remember one example key
+            target_str, lr_reads = lr_info
+            lr_target_used = lr_target_used or target_str
 
             count_block = sample_data.get("count", {}) or {}
             total_reads = count_block.get("reads", count_block.get("total_reads"))
@@ -473,7 +484,6 @@ def compute_redundancy(results_json: Dict[str, Any]) -> Dict[str, Any]:
     n_kappa = len(kappas)
 
     if n_kappa == 0:
-        # No usable Nonpareil kappa_total values
         msg = (
             "No Nonpareil-based redundancy estimates (kappa_total) were found; "
             "redundancy and LR-based effort cannot be assessed."
@@ -488,7 +498,7 @@ def compute_redundancy(results_json: Dict[str, Any]) -> Dict[str, Any]:
             "n_samples_with_lr": n_with_lr,
             "n_samples_lr_exceeds_depth": lr_exceeds,
             "flag_LR_vs_depth": 3 if n_with_lr > 0 else None,
-            "lr_reads_key_used": lr_key_used,
+            "lr_target_used": lr_target_used,
             "message_redundancy": msg,
         }
 
@@ -523,7 +533,7 @@ def compute_redundancy(results_json: Dict[str, Any]) -> Dict[str, Any]:
     if n_with_lr == 0:
         flag_lr = None
         lr_msg = (
-            "No LR_*_reads values were available from Nonpareil; "
+            "No LR_reads targets were available from Nonpareil; "
             "cannot compare required sequencing effort to observed depth."
         )
     else:
@@ -531,24 +541,24 @@ def compute_redundancy(results_json: Dict[str, Any]) -> Dict[str, Any]:
         if lr_exceeds == 0:
             flag_lr = 1
             lr_msg = (
-                f"For all {n_with_lr} samples, the required reads "
-                f"({lr_key_used or 'LR_*_reads'}) are below or equal to the observed depth, "
-                "indicating sufficient sequencing effort for the target coverage."
+                f"For all {n_with_lr} samples, LR_reads at target {lr_target_used}% "
+                "are below or equal to the observed depth, indicating sufficient "
+                "sequencing effort for the chosen target coverage."
             )
         elif frac_exceeds < 0.5:
             flag_lr = 2
             lr_msg = (
-                f"In {lr_exceeds}/{n_with_lr} samples, the required reads "
-                f"({lr_key_used or 'LR_*_reads'}) exceed the observed depth. "
-                "Some libraries may be under-sequenced relative to the target coverage."
+                f"In {lr_exceeds}/{n_with_lr} samples, LR_reads at target {lr_target_used}% "
+                "exceed the observed depth. Some libraries may be under-sequenced "
+                "relative to the desired coverage."
             )
         else:
             flag_lr = 3
             lr_msg = (
-                f"In many samples ({lr_exceeds}/{n_with_lr}), the required reads "
-                f"({lr_key_used or 'LR_*_reads'}) exceed the observed depth. "
-                "A substantial fraction of the dataset appears under-sequenced given the "
-                "desired coverage; consider increasing depth or relaxing the target coverage."
+                f"In many samples ({lr_exceeds}/{n_with_lr}), LR_reads at target {lr_target_used}% "
+                "exceed the observed depth. A substantial fraction of the dataset appears "
+                "under-sequenced given the chosen coverage; consider increasing depth or "
+                "relaxing the target coverage."
             )
 
     message = (
@@ -568,7 +578,7 @@ def compute_redundancy(results_json: Dict[str, Any]) -> Dict[str, Any]:
         "n_samples_with_lr": n_with_lr,
         "n_samples_lr_exceeds_depth": lr_exceeds,
         "flag_LR_vs_depth": flag_lr,
-        "lr_reads_key_used": lr_key_used,
+        "lr_target_used": lr_target_used,
         "message_redundancy": message,
     }
 
@@ -611,7 +621,7 @@ def main():
     sequencing_depth = compute_sequencing_depth(results_json)
     low_quality = compute_low_quality(results_json)
     prok_fraction = compute_prokaryotic_fraction(results_json)
-    redundancy = compute_redundancy(results_json)
+    redundancy_reads = compute_redundancy_reads(results_json)
 
     distilled: Dict[str, Any] = {
         "meta": {
@@ -626,7 +636,7 @@ def main():
             "sequencing_depth": sequencing_depth,
             "low_quality_reads": low_quality,
             "prokaryotic_fraction": prok_fraction,
-            "redundancy": redundancy,
+            "redundancy_reads": redundancy_reads,
         },
     }
 
