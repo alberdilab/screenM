@@ -40,12 +40,19 @@ def main():
     ap.add_argument(
         "-i", "--input",
         required=True,
-        help="Input fastp JSON file (e.g. Sample1.json)"
+        help="Input fastp JSON file (e.g. Sample1_full.json)"
     )
     ap.add_argument(
         "-o", "--output",
         required=True,
         help="Output simplified JSON file"
+    )
+    ap.add_argument(
+        "--sample",
+        help=(
+            "Sample name to use in output JSON. "
+            "If not provided, the input filename stem is used."
+        ),
     )
     args = ap.parse_args()
 
@@ -53,7 +60,8 @@ def main():
     with in_path.open() as f:
         data = json.load(f)
 
-    sample_name = in_path.stem  # e.g. 'Sample1' from 'Sample1.json'
+    # Either explicit --sample or fall back to file stem
+    sample_name = args.sample if args.sample else in_path.stem
 
     simplified = extract_fields(data, sample_name)
 
