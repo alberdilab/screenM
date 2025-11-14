@@ -32,7 +32,8 @@ rule all:
         [f"{OUTDIR}/json/{sample}.json" for sample in SAMPLES],
         f"{OUTDIR}/mash/mash_markers.tsv",
         f"{OUTDIR}/mash/mash_reads.tsv",
-        f"{OUTDIR}/distill.json"
+        f"{OUTDIR}/distill.json",
+        f"{OUTDIR}/mash/mash_reads.json"
 
 rule counts:
     input:
@@ -461,6 +462,24 @@ rule mash_medoids_reads:
             --silhouettes-out {output.sil} \
             --assignments-out {output.ass} \
             --medoids-out {output.med}
+        """
+
+rule mash_to_json_reads:
+    input:
+        dist=f"{OUTDIR}/mash/mash_reads.msh",
+        clusters=f"{OUTDIR}/mash/mash_reads.tsv"
+    output:
+        f"{OUTDIR}/mash/mash_reads.json"
+    threads: 1
+    params:
+        package_dir=PACKAGE_DIR
+    shell:
+        """
+        module load singlem/0.19.0
+        python {params.package_dir}/workflow/scripts/mash_to_json.py \
+            --dist {input.dist} \
+            --clusters {input.clusters} \
+            --output {output}
         """
 
 rule sample_json:

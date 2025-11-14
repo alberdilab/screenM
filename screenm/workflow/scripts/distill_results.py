@@ -833,8 +833,5 @@ def main():
     with out_path.open("w") as f:
         json.dump(distilled, f, indent=2)
 
-    print(f"[✓] Wrote distilled summary → {out_path}")
-
-
 if __name__ == "__main__":
     main()
