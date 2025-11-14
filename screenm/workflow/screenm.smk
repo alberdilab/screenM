@@ -320,7 +320,7 @@ rule mash_medoids_markers:
         f"{OUTDIR}/mash/mash_markers.mat"
     output:
         sil=f"{OUTDIR}/mash/mash_markers.sil",
-        ass=f"{OUTDIR}/mash/mash_markers.tsv"
+        ass=f"{OUTDIR}/mash/mash_markers.tsv",
         med=f"{OUTDIR}/mash/mash_markers.med"
     threads: 1
     params:
@@ -397,7 +397,7 @@ rule mash_medoids_reads:
         f"{OUTDIR}/mash/mash_reads.mat"
     output:
         sil=f"{OUTDIR}/mash/mash_reads.sil",
-        ass=f"{OUTDIR}/mash/mash_reads.tsv"
+        ass=f"{OUTDIR}/mash/mash_reads.tsv",
         med=f"{OUTDIR}/mash/mash_reads.med"
     threads: 1
     params:
