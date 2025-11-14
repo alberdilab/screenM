@@ -1,9 +1,10 @@
 #!/usr/bin/env python3
 import json
 from pathlib import Path
-from typing import Dict, Any, Optional
+from typing import Dict, Any, Optional, Tuple, List
 from datetime import datetime
 import gzip
+from concurrent.futures import ProcessPoolExecutor
 
 def ts():
     return datetime.now().strftime("%Y-%m-%d %H:%M:%S")
@@ -15,7 +16,6 @@ def _count_fastq_reads(path: Path) -> int:
     if not path.is_file():
         raise FileNotFoundError(f"FASTQ file not found: {path}")
 
-    # Choose opener based on extension
     if path.suffix == ".gz":
         opener = gzip.open
         mode = "rt"
@@ -30,7 +30,16 @@ def _count_fastq_reads(path: Path) -> int:
     return lines // 4
 
 
-def dir_to_files(input: str, output: str, min_reads: int) -> Dict[str, Any]:
+def _count_reads_job(job: Tuple[str, str]) -> Tuple[str, int]:
+    """
+    Helper for parallel execution: (sample_name, path_str) -> (sample_name, reads)
+    """
+    sample, path_str = job
+    reads = _count_fastq_reads(Path(path_str))
+    return sample, reads
+
+
+def dir_to_files(input: str, output: str, min_reads: int, threads: Optional[int] = None) -> Dict[str, Any]:
     """
     Scan a directory containing FASTQ/FASTQ.GZ files, detect paired-end samples,
     count reads from the first end (forward), and write a JSON of the form:
@@ -49,10 +58,7 @@ def dir_to_files(input: str, output: str, min_reads: int) -> Dict[str, Any]:
 
     Samples are assigned to "above" if reads >= min_reads, otherwise to "below".
 
-    Handles naming like:
-        sampleA_R1.fastq.gz / sampleA_R2.fastq.gz
-        sampleB_1.fq / sampleB_2.fq
-        sampleC_1.fastq / sampleC_2.fastq
+    Read counting is done in parallel using a process pool.
     """
     input_path = Path(input)
     output_path = Path(output)
@@ -99,30 +105,33 @@ def dir_to_files(input: str, output: str, min_reads: int) -> Dict[str, Any]:
             )
             samples.setdefault(sample_name, {})["reverse"] = str(fq.resolve())
 
-    # Second pass: count reads from forward (or reverse if forward missing)
+    # Build jobs: (sample, path_for_counting)
+    jobs: List[Tuple[str, str]] = []
+    for sample, info in samples.items():
+        fq_path_str: Optional[str] = info.get("forward") or info.get("reverse")
+        if fq_path_str is None:
+            raise ValueError(f"Sample {sample!r} has no forward or reverse file.")
+        jobs.append((sample, fq_path_str))
+
+    # Parallel counting
+    reads_per_sample: Dict[str, int] = {}
+    with ProcessPoolExecutor(max_workers=threads) as exe:
+        for sample, reads in exe.map(_count_reads_job, jobs):
+            reads_per_sample[sample] = reads
+
+    # Bucket into above / below and attach reads
     above: Dict[str, Dict[str, Any]] = {}
     below: Dict[str, Dict[str, Any]] = {}
 
     for sample, info in samples.items():
-        print(f"[{ts()}] Staging sample {sample}", flush=True)
-        # Prefer forward; if absent, fall back to reverse
-        fq_path_str: Optional[str] = info.get("forward") or info.get("reverse")
-        if fq_path_str is None:
-            # Sample detected but no actual FASTQ path stored; skip or raise
-            raise ValueError(f"Sample {sample!r} has no forward or reverse file.")
+        reads = reads_per_sample[sample]
+        entry: Dict[str, Any] = dict(info)
+        entry["reads"] = reads
 
-        fq_path = Path(fq_path_str)
-        reads = _count_fastq_reads(fq_path)
-
-        # Attach reads count
-        sample_entry: Dict[str, Any] = dict(info)
-        sample_entry["reads"] = reads
-
-        # Bucket into above / below
         if reads >= min_reads:
-            above[sample] = sample_entry
+            above[sample] = entry
         else:
-            below[sample] = sample_entry
+            below[sample] = entry
 
     result = {
         "min_reads": int(min_reads),
@@ -130,7 +139,6 @@ def dir_to_files(input: str, output: str, min_reads: int) -> Dict[str, Any]:
         "below": below,
     }
 
-    # --- write JSON safely ---
     with output_path.open("w") as f:
         json.dump(result, f, indent=2)
 
