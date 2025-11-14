@@ -317,7 +317,7 @@ rule mash_sketch_markers:
         """
         echo "[`date '+%Y-%m-%d %H:%M:%S'`] Sketching marker kmer profile"
         module load mash/2.3
-        mash sketch -k {params.kmer} -S {params.seed} -o {params.base} {input}
+        mash sketch -k {params.kmer} -S {params.seed} -o {params.base} {input} > /dev/null 2>&1
         """
 
 rule mash_distance_markers:
@@ -397,7 +397,7 @@ rule mash_sketch_reads:
         """
         echo "[`date '+%Y-%m-%d %H:%M:%S'`] Sketching read kmer profile"
         module load mash/2.3
-        mash sketch -k {params.kmer} -S {params.seed} -o {params.base} {input}
+        mash sketch -k {params.kmer} -S {params.seed} -o {params.base} {input} > /dev/null 2>&1
         """
 
 rule mash_distance_reads:
