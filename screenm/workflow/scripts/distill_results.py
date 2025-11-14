@@ -522,7 +522,7 @@ def compute_redundancy_reads(results_json: Dict[str, Any]) -> Dict[str, Any]:
         var_msg = "Variation in redundancy cannot be evaluated."
     else:
         if cv_k < 0.10:
-            var_msg = c(
+            var_msg = (
                 f"Read redundancy is consistent across samples (CV = {cv_k:.3f}), "
                 "indicating that average estimates should be applicable to most samples."
             )
@@ -701,7 +701,7 @@ def compute_redundancy_markers(results_json: Dict[str, Any]) -> Dict[str, Any]:
         var_msg = "Variation in marker redundancy cannot be evaluated."
     else:
         if cv_k < 0.10:
-            var_msg = c(
+            var_msg = (
                 f"Marker redundancy is consistent across samples (CV = {cv_k:.3f}), "
                 "indicating that average estimates should be applicable to most samples."
             )
