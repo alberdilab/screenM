@@ -324,7 +324,7 @@ rule mash_medoids_markers:
         med=f"{OUTDIR}/mash/mash_markers.med"
     threads: 1
     params:
-        seed = SEED
+        seed = SEED,
         kmax = len(SAMPLES_MAP),
         package_dir=PACKAGE_DIR,
         base=f"{OUTDIR}/mash/mash_markers"
@@ -401,7 +401,7 @@ rule mash_medoids_reads:
         med=f"{OUTDIR}/mash/mash_reads.med"
     threads: 1
     params:
-        seed = SEED
+        seed = SEED,
         kmax = len(SAMPLES_MAP),
         package_dir=PACKAGE_DIR,
         base=f"{OUTDIR}/mash/mash_reads"
