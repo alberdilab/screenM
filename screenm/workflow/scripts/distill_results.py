@@ -54,6 +54,8 @@ def compute_screening_threshold(data_json: Dict[str, Any]) -> Dict[str, Any]:
             message = (
                 f"Most samples ({n_above}/{n_total}, {percent_above:.1f}%) are above the "
                 f"read threshold ({min_reads} reads), but some are below."
+                "If you want to include more samples for the estimations consider lowering "
+                "the read threshold using the -r flag; but note that this will make the estimations less accurate."
             )
         else:
             flag = 3
@@ -119,20 +121,20 @@ def compute_sequencing_depth(results_json: Dict[str, Any]) -> Dict[str, Any]:
         if cv_reads < 0.10:
             flag = 1
             message = (
-                f"Sequencing depth is well balanced across samples "
-                f"(CV = {cv_reads:.3f})."
+                f"Sequencing depth is well balanced across samples (CV = {cv_reads:.3f}), "
+                f"so average estimates should be applicable to most samples."
             )
         elif cv_reads < 0.30:
             flag = 2
             message = (
-                f"Sequencing depth shows moderate variation across samples "
-                f"(CV = {cv_reads:.3f})."
+                f"Sequencing depth shows moderate variation across samples (CV = {cv_reads:.3f}),"
+                f"so average estimates may not fully reflect all samples."
             )
         else:
             flag = 3
             message = (
-                f"Sequencing depth is uneven across samples (CV = {cv_reads:.3f}); "
-                "some samples have substantially higher or lower read counts than others."
+                f"Sequencing depth is uneven across samples (CV = {cv_reads:.3f}), "
+                "so average estimates may be misleading for some libraries."
             )
 
     return {
@@ -208,20 +210,25 @@ def compute_low_quality(results_json: Dict[str, Any]) -> Dict[str, Any]:
         flag = 1
         message = (
             f"On average {mean_frac*100:.1f}% of reads are removed by quality filtering, "
-            "indicating generally high read quality."
+            "indicating generally high read quality. Sequencing quality is not likely to "
+            "be a limiting factor for downstream analyses."
         )
     elif mean_frac <= 0.30:
         flag = 2
         message = (
             f"On average {mean_frac*100:.1f}% of reads are removed by quality filtering. "
-            "Some libraries may have noticeable quality issues."
+            "Some libraries may have noticeable quality issues, so the effective sequencing "
+            "depth could be lower than expected for those samples."
         )
     else:
         flag = 3
         message = (
             f"On average {mean_frac*100:.1f}% of reads are removed by quality filtering. "
             "A substantial fraction of sequencing effort is lost to low quality, Ns, or "
-            "length/complexity filters; consider revisiting library prep or sequencing depth."
+            "length/complexity filters. These results suggest issues during library preparation or "
+            "sequencing, leading to compromised data quality. Consider revisiting library preparation"
+            "and sequencing protocols. Treat downstream analyses with caution, as results may be affected "
+            "by the low-quality data."
         )
 
     return {
@@ -297,32 +304,42 @@ def compute_prokaryotic_fraction(results_json: Dict[str, Any]) -> Dict[str, Any]
         var_msg = "Variation in prokaryotic fraction cannot be evaluated."
     else:
         if cv_frac < 0.10:
-            var_msg = f"Prokaryotic fraction is consistent across samples (CV = {cv_frac:.3f})."
+            var_msg = (
+                f"Prokaryotic fraction is consistent across samples (CV = {cv_frac:.3f}), "
+                "so average estimates should be representative of the dataset."
+            )
         elif cv_frac < 0.30:
-            var_msg = f"Prokaryotic fraction shows moderate variation across samples (CV = {cv_frac:.3f})."
+            var_msg = (
+                f"Prokaryotic fraction shows moderate variation across samples (CV = {cv_frac:.3f}), "
+                "so some samples may differ from the average estimate. Consider looking at individual sample values "
+                "to assess whether any samples deviate significantly from the average patterns."
+            )
         else:
             var_msg = (
                 f"Prokaryotic fraction is highly variable across samples (CV = {cv_frac:.3f}), "
-                "indicating inconsistent microbial loads between libraries."
+                "so average estimates may not reflect individual sample compositions. Have a look at the per-sample "
+                "prokaryotic fractions to understand the variation in microbial content across your dataset."
             )
 
     warning_ratio = warnings_count / n_samples if n_samples > 0 else 0.0
     if warnings_count == 0:
-        warn_msg = "No warnings were reported for prokaryotic fraction estimation."
+        warn_msg = ""
     elif warning_ratio >= 0.5:
         warn_msg = (
-            f"Many samples ({warnings_count}/{n_samples}) contain warnings in marker detection. "
-            "This may indicate systematic issues with marker coverage or sample quality."
+            f"Many samples ({warnings_count}/{n_samples}) contain warnings in prokaryotic fraction estimation, "
+            "indicating that the reliability of the estimated prokaryotic fractions is low across the dataset. "
+            "If sequencing depth is high enough, consider increasing the number of reads used for estimation "
+            "through the -r parameter to improve these estimates."
         )
     else:
         warn_msg = (
-            f"{warnings_count}/{n_samples} samples contain warnings in marker detection. "
-            "These samples may have reduced marker coverage or quality issues."
+            f"Some samples ({warnings_count}/{n_samples}) contain warnings in prokaryotic fraction estimation, "
+            "indicating that the reliability of the estimated prokaryotic fractions is low for some samples. "
+            "Consider checking those samples individually."
         )
 
     message = (
-        f"Mean prokaryotic fraction: {mean_frac:.1f}% across {n_samples} samples "
-        f"(flag = {flag_mean}). "
+        f"Mean prokaryotic fraction across {n_samples} samples is {mean_frac:.1f}%. "
         + var_msg + " "
         + warn_msg
     )
@@ -476,17 +493,50 @@ def compute_redundancy_reads(results_json: Dict[str, Any]) -> Dict[str, Any]:
     else:
         flag_redundancy = 3
 
+    if mean_k is None:
+        mean_k_msg = "Variation in redundancy cannot be evaluated."
+    else:
+        if mean_k > 0.9:
+            mean_k_msg = c(
+                f"Average estimated read redundancy is high ({mean_k:.3f}), "
+                "indicating that the sequencing data captures most of the "
+                "metagenomic diversity estimated in the samples."
+            )
+        elif mean_k > 0.5:
+            mean_k_msg = (
+                f"Average estimated read redundancy is moderate ({mean_k:.3f}), "
+                "indicating that a significant portion of the metagenomic diversity is "
+                "likely not to be captured by the sequencing data."
+                ""
+            )
+        else:
+            mean_k_msg = (
+                f"Average estimated read redundancy is low ({mean_k:.3f}), "
+                "indicating that a significant portion of the metagenomic diversity "
+                "remains unsampled. Consider increasing sequencing depth to better "
+                "capture the diversity. "
+            )
+
+
     if cv_k is None:
         var_msg = "Variation in redundancy cannot be evaluated."
     else:
         if cv_k < 0.10:
-            var_msg = f"Redundancy (kappa_total) based on reads is consistent across samples (CV = {cv_k:.3f})."
+            var_msg = c(
+                f"Read redundancy is consistent across samples (CV = {cv_k:.3f}), "
+                "indicating that average estimates should be applicable to most samples."
+            )
         elif cv_k < 0.30:
-            var_msg = f"Redundancy (kappa_total) based on reads shows moderate variation across samples (CV = {cv_k:.3f})."
+            var_msg = (
+                f"Marker redundancy shows moderate variation across samples (CV = {cv_k:.3f}), "
+                "indicating that average estimates may not fully reflect all samples. "
+                "Consider looking at individual sample redundancy estimates to assess the variation."
+            )
         else:
             var_msg = (
-                f"Redundancy (kappa_total) based on reads is highly variable across samples (CV = {cv_k:.3f}), "
-                "indicating uneven sequencing effort relative to community complexity."
+                f"Marker redundancy is highly variable across samples (CV = {cv_k:.3f}), "
+                "indicating that average estimates may be misleading for some libraries. "
+                "Look at individual sample redundancy estimates to assess the variation."
             )
 
     if n_with_lr == 0:
@@ -500,29 +550,27 @@ def compute_redundancy_reads(results_json: Dict[str, Any]) -> Dict[str, Any]:
         if lr_exceeds == 0:
             flag_lr = 1
             lr_msg = (
-                f"For all {n_with_lr} samples, LR_reads at target {lr_target_used}% "
-                "are below or equal to the observed depth, indicating sufficient "
-                "sequencing effort for the chosen coverage target."
+                f"For all {n_with_lr} samples, the sequencing depth estimated to be needed to capture {lr_target_used}% "
+                "of the metagenomic diversity is below the conducted sequencing depth, "
+                "indicating sufficient sequencing effort."
             )
         elif frac_exceeds < 0.5:
             flag_lr = 2
             lr_msg = (
-                f"In {lr_exceeds}/{n_with_lr} samples, LR_reads at target {lr_target_used}% "
-                "exceed the observed depth. Some libraries may be under-sequenced "
-                "relative to the desired coverage."
+                f"In {lr_exceeds}/{n_with_lr} samples, the sequencing depth estimated to be needed to capture {lr_target_used}% "
+                "of the metagenomic diversity is above the conducted sequencing depth, indicating that these samples "
+                "may not be able to represent the complexity of the samples adequately."
             )
         else:
             flag_lr = 3
             lr_msg = (
-                f"In many samples ({lr_exceeds}/{n_with_lr}), LR_reads at target {lr_target_used}% "
-                "exceed the observed depth. A substantial fraction of the dataset appears "
-                "under-sequenced given the chosen coverage; consider increasing depth or "
-                "relaxing the coverage target."
+                f"In most ({lr_exceeds}/{n_with_lr}) samples, the sequencing depth estimated to be needed to capture {lr_target_used}% "
+                "of the metagenomic diversity is above the conducted sequencing depth, indicating that a substantial fraction of "
+                "the dataset will likely be unable to represent the complexity of the samples adequately. "
             )
 
     message = (
-        f"Mean Nonpareil redundancy (kappa_total, reads) is {mean_k:.3f} across {n_kappa} samples "
-        f"(flag = {flag_redundancy}). "
+        mean_k_msg + " "
         + var_msg + " "
         + lr_msg
     )
@@ -625,17 +673,49 @@ def compute_redundancy_markers(results_json: Dict[str, Any]) -> Dict[str, Any]:
     else:
         flag_redundancy = 3
 
+    if mean_k is None:
+        mean_k_msg = "Variation in redundancy cannot be evaluated."
+    else:
+        if mean_k > 0.9:
+            mean_k_msg = c(
+                f"Average estimated marker redundancy is high ({mean_k:.3f}), "
+                "indicating that the sequencing data captures most of the "
+                "microbial diversity estimated in the samples."
+            )
+        elif mean_k > 0.5:
+            mean_k_msg = (
+                f"Average estimated marker redundancy is moderate ({mean_k:.3f}), "
+                "indicating that a significant portion of the microbial diversity is "
+                "likely not to be captured by the sequencing data."
+                ""
+            )
+        else:
+            mean_k_msg = (
+                f"Average estimated marker redundancy is low ({mean_k:.3f}), "
+                "indicating that a significant portion of the microbial diversity "
+                "remains unsampled. Consider increasing sequencing depth to better "
+                "capture the microbial community. "
+            )
+
     if cv_k is None:
         var_msg = "Variation in marker redundancy cannot be evaluated."
     else:
         if cv_k < 0.10:
-            var_msg = f"Marker redundancy (kappa_total) is consistent across samples (CV = {cv_k:.3f})."
+            var_msg = c(
+                f"Marker redundancy is consistent across samples (CV = {cv_k:.3f}), "
+                "indicating that average estimates should be applicable to most samples."
+            )
         elif cv_k < 0.30:
-            var_msg = f"Marker redundancy (kappa_total) shows moderate variation across samples (CV = {cv_k:.3f})."
+            var_msg = (
+                f"Marker redundancy shows moderate variation across samples (CV = {cv_k:.3f}), "
+                "indicating that average estimates may not fully reflect all samples. "
+                "Consider looking at individual sample redundancy estimates to assess the variation."
+            )
         else:
             var_msg = (
-                f"Marker redundancy (kappa_total) is highly variable across samples (CV = {cv_k:.3f}), "
-                "indicating uneven sampling of the prokaryotic marker gene pool."
+                f"Marker redundancy is highly variable across samples (CV = {cv_k:.3f}), "
+                "indicating that average estimates may be misleading for some libraries. "
+                "Look at individual sample redundancy estimates to assess the variation."
             )
 
     if n_with_lr == 0:
@@ -649,29 +729,27 @@ def compute_redundancy_markers(results_json: Dict[str, Any]) -> Dict[str, Any]:
         if lr_exceeds == 0:
             flag_lr = 1
             lr_msg = (
-                f"For all {n_with_lr} samples, LR_reads at target {lr_target_used}% "
-                "for marker genes are below or equal to the observed marker depth, "
-                "indicating sufficient coverage of the marker gene space."
+                f"For all {n_with_lr} samples, the sequencing depth estimated to be needed to capture {lr_target_used}% "
+                "of the microbial diversity is below the conducted sequencing depth, "
+                "indicating sufficient sequencing effort."
             )
         elif frac_exceeds < 0.5:
             flag_lr = 2
             lr_msg = (
-                f"In {lr_exceeds}/{n_with_lr} samples, LR_reads at target {lr_target_used}% "
-                "for marker genes exceed the observed marker depth. Some samples may lack "
-                "sufficient marker coverage."
+                f"In {lr_exceeds}/{n_with_lr} samples, the sequencing depth estimated to be needed to capture {lr_target_used}% "
+                "of the microbial diversity is above the conducted sequencing depth, indicating that these samples "
+                "may not be able to represent the complexity of the communities adequately."
             )
         else:
             flag_lr = 3
             lr_msg = (
-                f"In many samples ({lr_exceeds}/{n_with_lr}), LR_reads at target {lr_target_used}% "
-                "for marker genes exceed the observed marker depth. A substantial fraction of "
-                "samples appears under-sampled at the marker level; consider deeper sequencing "
-                "or a lower coverage target."
+                f"In most ({lr_exceeds}/{n_with_lr}) samples, the sequencing depth estimated to be needed to capture {lr_target_used}% "
+                "of the microbial diversity is above the conducted sequencing depth, indicating that a substantial fraction of "
+                "the dataset will likely be unable to represent the complexity of the communities adequately. "
             )
 
     message = (
-        f"Mean Nonpareil marker redundancy (kappa_total) is {mean_k:.3f} across {n_kappa} samples "
-        f"(flag = {flag_redundancy}). "
+        mean_k_msg + " "
         + var_msg + " "
         + lr_msg
     )
