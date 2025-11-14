@@ -147,6 +147,7 @@ rule singlem:
         r2=f"{OUTDIR}/singlem/{{sample}}/prefilter_reverse/{{sample}}_2.fna",
         profile=f"{OUTDIR}/singlem/{{sample}}.profile"
     params:
+        siglemdir = f"{OUTDIR}/singlem/"
         workdir = lambda wc: f"{OUTDIR}/singlem/{wc.sample}"
     threads: 1
     message: "Profiling {wildcards.sample} with SingleM..."
@@ -154,7 +155,7 @@ rule singlem:
         """
         module load singlem/0.19.0
         export SINGLEM_METAPACKAGE_PATH=/maps/datasets/globe_databases/singlem/5.4.0/S5.4.0.GTDB_r226.metapackage_20250331.smpkg.zb
-        mkdir -fp {params.workdir}
+        mkdir -fp {params.siglemdir}
         singlem pipe \
             -1 {input.r1} \
             -2 {input.r2} \
