@@ -466,7 +466,7 @@ rule mash_medoids_reads:
 
 rule mash_to_json_reads:
     input:
-        dist=f"{OUTDIR}/mash/mash_reads.msh",
+        dist=f"{OUTDIR}/mash/mash_reads.dist",
         clusters=f"{OUTDIR}/mash/mash_reads.tsv"
     output:
         f"{OUTDIR}/mash/mash_reads.json"
