@@ -33,8 +33,9 @@ rule all:
         #f"{OUTDIR}/mash/mash_reads.json",
         #f"{OUTDIR}/mash/mash_markers.json",
         #f"{OUTDIR}/results.json",
-        f"{OUTDIR}/distill.json",
-        f"{OUTDIR}/figures.json"
+        #f"{OUTDIR}/distill.json",
+        #f"{OUTDIR}/figures.json",
+        f"{OUTDIR}/screenm_report.html"
 
 rule counts:
     input:
@@ -544,4 +545,22 @@ rule results_to_figures:
             --data-json {input.data} \
             --results-json {input.results} \
             -o {output} 
+        """
+
+rule html_report:
+    input:
+       distill=f"{OUTDIR}/distill.json",
+       figures=f"{OUTDIR}/figures.json"
+    output:
+        f"{OUTDIR}/screenm_report.html"
+    threads: 1
+    params:
+        package_dir=PACKAGE_DIR
+    shell:
+        """
+        module load singlem/0.19.0
+        python html_report.py \
+        --distill-json {input.distill} \
+        --figures-json {input.figures} \
+        -o {output}
         """
