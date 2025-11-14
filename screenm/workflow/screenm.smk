@@ -33,7 +33,8 @@ rule all:
         f"{OUTDIR}/mash/mash_markers.tsv",
         f"{OUTDIR}/mash/mash_reads.tsv",
         f"{OUTDIR}/distill.json",
-        f"{OUTDIR}/mash/mash_reads.json"
+        f"{OUTDIR}/mash/mash_reads.json",
+        f"{OUTDIR}/mash/mash_markers.json"
 
 rule counts:
     input:
@@ -528,7 +529,9 @@ rule sample_json:
 
 rule merge_json:
     input:
-       expand(f"{OUTDIR}/json/{{sample}}.json", sample=SAMPLES)
+       samples=expand(f"{OUTDIR}/json/{{sample}}.json", sample=SAMPLES),
+       markers=f"{OUTDIR}/mash/mash_reads.json",
+       reads=f"{OUTDIR}/mash/mash_markers.json"
     output:
         f"{OUTDIR}/results.json"
     threads: 1
@@ -538,7 +541,9 @@ rule merge_json:
         """
         module load singlem/0.19.0
         python {params.package_dir}/workflow/scripts/merge_json.py \
-            -i {input} \
+            -i {input.samples} \
+            --mash-markers {input.markers} \
+            --mash-reads {input.reads} \
             -o {output} 
         """
 
