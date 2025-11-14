@@ -384,6 +384,25 @@ rule mash_medoids_markers:
             --medoids-out {output.med}
         """
 
+rule mash_to_json_markers:
+    input:
+        dist=f"{OUTDIR}/mash/mash_markers.dist",
+        clusters=f"{OUTDIR}/mash/mash_markers.tsv"
+    output:
+        f"{OUTDIR}/mash/mash_markers.json"
+    threads: 1
+    params:
+        package_dir=PACKAGE_DIR
+    shell:
+        """
+        module load singlem/0.19.0
+        python {params.package_dir}/workflow/scripts/mash_to_json.py \
+            --dist {input.dist} \
+            --clusters {input.clusters} \
+            --kind markers \
+            --output {output}
+        """
+
 rule mash_sketch_reads:
     input:
         expand(f"{OUTDIR}/nonpareil_reads/{{sample}}.fq", sample=SAMPLES)
@@ -479,6 +498,7 @@ rule mash_to_json_reads:
         python {params.package_dir}/workflow/scripts/mash_to_json.py \
             --dist {input.dist} \
             --clusters {input.clusters} \
+            --kind reads \
             --output {output}
         """
 
