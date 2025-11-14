@@ -230,7 +230,6 @@ def main():
     best_labels: np.ndarray | None = None
     best_medoids: np.ndarray | None = None
 
-    print(f"[INFO] Testing k={args.kmin}..{kmax} on n={n} samples (pure Python PAM) ...")
     for k in range(args.kmin, kmax + 1):
         labels, medoids, cost = pam_best_of_n(
             D,
@@ -241,7 +240,6 @@ def main():
         )
         sil = silhouette_precomputed(D, labels)
         results.append((k, sil))
-        print(f"  k={k:<2d} | silhouette={sil:.4f} | cost={cost:.3f}")
         if sil > best_sil:
             best_sil = sil
             best_k = k
@@ -274,10 +272,6 @@ def main():
         "Medoid_Sample": medoid_names,
     })
     medoid_df.to_csv(medoid_path, sep="\t", index=False)
-
-    print("\n[✓] Done.")
-    print(f"    Best k: {best_k} (silhouette={best_sil:.4f})")
-    print(f"    Wrote: {sil_path}, {assign_path}, {medoid_path}")
 
 
 if __name__ == "__main__":

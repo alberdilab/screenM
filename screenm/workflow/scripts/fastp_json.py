@@ -70,8 +70,5 @@ def main():
     with out_path.open("w") as out:
         json.dump(simplified, out, indent=2)
 
-    print(f"[✓] Wrote simplified JSON for sample '{sample_name}' → {out_path}")
-
-
 if __name__ == "__main__":
     main()

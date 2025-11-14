@@ -46,7 +46,7 @@ rule counts:
 
         sample = wildcards.sample
 
-        with open(input) as fh:
+        with open(input[0]) as fh:
                 data = json.load(fh)
 
         above = data.get("above", {}) or {}
