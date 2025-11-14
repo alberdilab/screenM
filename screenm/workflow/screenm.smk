@@ -559,7 +559,7 @@ rule html_report:
     shell:
         """
         module load singlem/0.19.0
-        python html_report.py \
+        python {params.package_dir}/workflow/scripts/html_report.py \
         --distill-json {input.distill} \
         --figures-json {input.figures} \
         -o {output}
