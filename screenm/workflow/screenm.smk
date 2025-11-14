@@ -530,8 +530,8 @@ rule sample_json:
 rule merge_json:
     input:
        samples=expand(f"{OUTDIR}/json/{{sample}}.json", sample=SAMPLES),
-       markers=f"{OUTDIR}/mash/mash_reads.json",
-       reads=f"{OUTDIR}/mash/mash_markers.json"
+       markers=f"{OUTDIR}/mash/mash_markers.json",
+       reads=f"{OUTDIR}/mash/mash_reads.json"
     output:
         f"{OUTDIR}/results.json"
     threads: 1
