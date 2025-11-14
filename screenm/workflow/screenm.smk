@@ -25,8 +25,8 @@ rule all:
         [f"{OUTDIR}/singlem/{sample}.fraction" for sample in SAMPLES],
         [f"{OUTDIR}/nonpareil_markers/{sample}.tsv" for sample in SAMPLES],
         [f"{OUTDIR}/nonpareil_reads/{sample}.tsv" for sample in SAMPLES],
-        f"{OUTDIR}/mash/mash_markers.med",
-        f"{OUTDIR}/mash/mash_reads.med"
+        f"{OUTDIR}/mash/mash_markers.tsv",
+        f"{OUTDIR}/mash/mash_reads.tsv"
 
 rule counts:
     input:
@@ -319,19 +319,27 @@ rule mash_medoids_markers:
     input:
         f"{OUTDIR}/mash/mash_markers.mat"
     output:
-        f"{OUTDIR}/mash/mash_markers.med"
+        sil=f"{OUTDIR}/mash/mash_markers.sil",
+        ass=f"{OUTDIR}/mash/mash_markers.tsv"
+        med=f"{OUTDIR}/mash/mash_markers.med"
     threads: 1
     params:
+        seed = SEED
         kmax = len(SAMPLES_MAP),
-        package_dir=PACKAGE_DIR
+        package_dir=PACKAGE_DIR,
+        base=f"{OUTDIR}/mash/mash_markers"
     shell:
         """
         module load singlem/0.19.0
         python {params.package_dir}/workflow/scripts/kmedoids.py \
             -i {input} \
-            -o {output} \
+            -o {params.base} \
             --kmin 2 \
-            --kmax {params.kmax}
+            --kmax {params.kmax} \
+            --seed {params.seed} \
+            --silhouettes-out {output.sil} \
+            --assignments-out {output.ass} \
+            --medoids-out {output.med}
         """
 
 rule mash_sketch_reads:
@@ -388,17 +396,25 @@ rule mash_medoids_reads:
     input:
         f"{OUTDIR}/mash/mash_reads.mat"
     output:
-        f"{OUTDIR}/mash/mash_reads.med"
+        sil=f"{OUTDIR}/mash/mash_reads.sil",
+        ass=f"{OUTDIR}/mash/mash_reads.tsv"
+        med=f"{OUTDIR}/mash/mash_reads.med"
     threads: 1
     params:
+        seed = SEED
         kmax = len(SAMPLES_MAP),
-        package_dir=PACKAGE_DIR
+        package_dir=PACKAGE_DIR,
+        base=f"{OUTDIR}/mash/mash_reads"
     shell:
         """
         module load singlem/0.19.0
         python {params.package_dir}/workflow/scripts/kmedoids.py \
             -i {input} \
-            -o {output} \
+            -o {params.base} \
             --kmin 2 \
-            --kmax {params.kmax}
+            --kmax {params.kmax} \
+            --seed {params.seed} \
+            --silhouettes-out {output.sil} \
+            --assignments-out {output.ass} \
+            --medoids-out {output.med}
         """

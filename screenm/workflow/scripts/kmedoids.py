@@ -4,17 +4,19 @@ cluster_mash_pam.py — Pure-Python K-Medoids (PAM) clustering on a Mash distanc
 with silhouette-based selection of the best k. No scikit-learn(-extra), no scipy required.
 
 Input:  square TSV (header row, first column sample ids) with Mash distances.
-Outputs:
-  - <prefix>_silhouettes.tsv            (k vs. silhouette)
-  - <prefix>_k<bestk>_assignments.tsv   (Sample,Cluster)
-  - <prefix>_k<bestk>_medoids.tsv       (Cluster,Medoid_Sample)
+Outputs (configurable via CLI):
+  - silhouettes table (k vs. silhouette)
+  - assignments table (Sample, Cluster)
+  - medoids table (Cluster, Medoid_Sample)
 """
 
 import argparse
 import math
+from typing import Tuple, List
+
 import numpy as np
 import pandas as pd
-from typing import Tuple, List
+
 
 def read_distance_matrix(path: str) -> Tuple[pd.DataFrame, np.ndarray]:
     df = pd.read_csv(path, sep="\t", header=0, index_col=0)
@@ -23,6 +25,7 @@ def read_distance_matrix(path: str) -> Tuple[pd.DataFrame, np.ndarray]:
     np.fill_diagonal(D, 0.0)
     D = 0.5 * (D + D.T)
     return df, D
+
 
 def silhouette_precomputed(D: np.ndarray, labels: np.ndarray) -> float:
     """Compute average silhouette score from a precomputed distance matrix D."""
@@ -52,6 +55,7 @@ def silhouette_precomputed(D: np.ndarray, labels: np.ndarray) -> float:
         return 0.0
     return float(np.mean(s))
 
+
 def init_medoids_kpp(D: np.ndarray, k: int, rng: np.random.Generator) -> np.ndarray:
     """k-medoids++ style initialization on distances."""
     n = D.shape[0]
@@ -66,6 +70,7 @@ def init_medoids_kpp(D: np.ndarray, k: int, rng: np.random.Generator) -> np.ndar
         d2 = np.minimum(d2, D[:, medoids[t]])
     return np.unique(medoids) if len(np.unique(medoids)) == k else init_medoids_kpp(D, k, rng)
 
+
 def assign_to_medoids(D: np.ndarray, medoids: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
     """Return (labels, dist_to_nearest) given current medoids."""
     # compute distances to each medoid and take argmin
@@ -74,8 +79,13 @@ def assign_to_medoids(D: np.ndarray, medoids: np.ndarray) -> Tuple[np.ndarray, n
     dmin = np.min(dist_to_medoids, axis=1)
     return labels, dmin
 
-def pam_once(D: np.ndarray, k: int, rng: np.random.Generator,
-             max_iter: int = 100) -> Tuple[np.ndarray, np.ndarray, float]:
+
+def pam_once(
+    D: np.ndarray,
+    k: int,
+    rng: np.random.Generator,
+    max_iter: int = 100
+) -> Tuple[np.ndarray, np.ndarray, float]:
     """
     Run one PAM (Partitioning Around Medoids) optimization:
     - init medoids (k-medoids++ style),
@@ -101,10 +111,9 @@ def pam_once(D: np.ndarray, k: int, rng: np.random.Generator,
             # For all candidate h not a medoid
             for h in np.where(~in_medoids)[0]:
                 dh = D[:, h]
-                # New distance after swap: if point was assigned to m, its new distance is min(dh, second-best);
-                # else min(current dmin, dh).
                 # Compute second-best efficiently:
-                # For points i where current nearest medoid is m, we need the best distance to other medoids.
+                # For points i where current nearest medoid is m, we need
+                # the best distance to other medoids.
                 # Precompute distances to all other medoids (excluding m).
                 others = np.delete(medoids, mi)
                 if others.size > 0:
@@ -142,42 +151,94 @@ def pam_once(D: np.ndarray, k: int, rng: np.random.Generator,
     cluster_labels = np.array([medoid_to_cluster[l] for l in labels], dtype=int)
     return cluster_labels, medoids, cost
 
-def pam_best_of_n(D: np.ndarray, k: int, n_init: int, seed: int,
-                  max_iter: int = 100) -> Tuple[np.ndarray, np.ndarray, float]:
+
+def pam_best_of_n(
+    D: np.ndarray,
+    k: int,
+    n_init: int,
+    seed: int,
+    max_iter: int = 100
+) -> Tuple[np.ndarray, np.ndarray, float]:
     rng = np.random.default_rng(seed)
-    best = None
+    best: Tuple[np.ndarray, np.ndarray, float] | None = None
     for t in range(n_init):
         labels, medoids, cost = pam_once(D, k, rng, max_iter=max_iter)
         if best is None or cost < best[2]:
             best = (labels, medoids, cost)
-    return best
+    return best  # type: ignore[return-value]
+
 
 def main():
     ap = argparse.ArgumentParser(
         description="Pure-Python K-Medoids (PAM) on Mash distances with silhouette-based k selection."
     )
-    ap.add_argument("-i", "--infile", required=True, help="Mash distance matrix (TSV; square, header+index).")
-    ap.add_argument("-o", "--out", default="mash_pam", help="Output prefix [default: mash_pam].")
-    ap.add_argument("--kmin", type=int, default=2, help="Minimum k to test [default: 2].")
-    ap.add_argument("--kmax", type=int, default=15, help="Maximum k to test [default: 15].")
-    ap.add_argument("--n-init", type=int, default=5, help="Number of random initializations per k [default: 5].")
-    ap.add_argument("--max-iter", type=int, default=100, help="Max PAM iterations per init [default: 100].")
-    ap.add_argument("--seed", type=int, default=1, help="Random seed [default: 1].")
+    ap.add_argument(
+        "-i", "--infile", required=True,
+        help="Mash distance matrix (TSV; square, header+index)."
+    )
+    ap.add_argument(
+        "-o", "--out", default="mash_pam",
+        help="Output prefix [default: mash_pam]."
+    )
+
+    # Explicit, predictable outputs (no k in the filename unless you specify it)
+    ap.add_argument(
+        "--silhouettes-out", default=None,
+        help="Output TSV for k vs silhouette "
+             "(default: <out>_silhouettes.tsv)."
+    )
+    ap.add_argument(
+        "--assignments-out", default=None,
+        help="Output TSV for sample-to-cluster assignments "
+             "(default: <out>_assignments.tsv)."
+    )
+    ap.add_argument(
+        "--medoids-out", default=None,
+        help="Output TSV for medoids "
+             "(default: <out>_medoids.tsv)."
+    )
+
+    ap.add_argument(
+        "--kmin", type=int, default=2,
+        help="Minimum k to test [default: 2]."
+    )
+    ap.add_argument(
+        "--kmax", type=int, default=15,
+        help="Maximum k to test [default: 15]."
+    )
+    ap.add_argument(
+        "--n-init", type=int, default=5,
+        help="Number of random initializations per k [default: 5]."
+    )
+    ap.add_argument(
+        "--max-iter", type=int, default=100,
+        help="Max PAM iterations per init [default: 100]."
+    )
+    ap.add_argument(
+        "--seed", type=int, default=1,
+        help="Random seed [default: 1]."
+    )
     args = ap.parse_args()
 
     df, D = read_distance_matrix(args.infile)
     n = D.shape[0]
     kmax = max(args.kmin, min(args.kmax, n - 1))
 
-    results = []
-    best_k = None
+    results: List[Tuple[int, float]] = []
+    best_k: int | None = None
     best_sil = -1.0
-    best_labels = None
-    best_medoids = None
+    best_labels: np.ndarray | None = None
+    best_medoids: np.ndarray | None = None
 
     print(f"[INFO] Testing k={args.kmin}..{kmax} on n={n} samples (pure Python PAM) ...")
     for k in range(args.kmin, kmax + 1):
-        labels, medoids, cost = pam_best_of_n(D, k, n_init=args.n_init, seed=args.seed, max_iter=args.max_iter)
+        labels, medoids, cost = pam_best_of_n(
+            D,
+            k,
+            n_init=args.n_init,
+            seed=args.seed,
+            max_iter=args.max_iter,
+        )
         sil = silhouette_precomputed(D, labels)
         results.append((k, sil))
         print(f"  k={k:<2d} | silhouette={sil:.4f} | cost={cost:.3f}")
@@ -187,25 +248,37 @@ def main():
             best_labels = labels
             best_medoids = medoids
 
+    # Decide final output paths; all fully predictable and do NOT depend on k
+    sil_path = args.silhouettes_out or f"{args.out}_silhouettes.tsv"
+    assign_path = args.assignments_out or f"{args.out}_assignments.tsv"
+    medoid_path = args.medoids_out or f"{args.out}_medoids.tsv"
+
     # Save silhouettes
     sil_df = pd.DataFrame(results, columns=["k", "silhouette"])
-    sil_path = f"{args.out}_silhouettes.tsv"
     sil_df.to_csv(sil_path, sep="\t", index=False)
 
     # Save best assignments
-    assign_df = pd.DataFrame({"Sample": df.index, "Cluster": best_labels})
-    assign_path = f"{args.out}_k{best_k}_assignments.tsv"
+    if best_labels is None or best_medoids is None or best_k is None:
+        raise RuntimeError("No valid clustering found; check k range and input matrix.")
+
+    assign_df = pd.DataFrame({
+        "Sample": df.index,
+        "Cluster": best_labels,
+    })
     assign_df.to_csv(assign_path, sep="\t", index=False)
 
     # Save medoids
     medoid_names = [df.index[i] for i in best_medoids]
-    medoid_df = pd.DataFrame({"Cluster": range(best_k), "Medoid_Sample": medoid_names})
-    medoid_path = f"{args.out}_k{best_k}_medoids.tsv"
+    medoid_df = pd.DataFrame({
+        "Cluster": range(best_k),
+        "Medoid_Sample": medoid_names,
+    })
     medoid_df.to_csv(medoid_path, sep="\t", index=False)
 
     print("\n[✓] Done.")
     print(f"    Best k: {best_k} (silhouette={best_sil:.4f})")
     print(f"    Wrote: {sil_path}, {assign_path}, {medoid_path}")
+
 
 if __name__ == "__main__":
     main()
