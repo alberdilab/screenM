@@ -79,7 +79,7 @@ def main():
         sys.exit(1)
 
     DATA_JSON =  "data.json"
-    dir_to_files(input=args.input, output=args.output / DATA_JSON, threshold=args.reads)
+    dir_to_files(input=args.input, output=args.output / DATA_JSON, min_reads=args.reads)
 
     run_screenm_pipeline(
                 DATA_JSON,
