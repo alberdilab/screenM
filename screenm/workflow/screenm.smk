@@ -82,6 +82,7 @@ rule seqtk:
     message: "Subsetting sample {wildcards.sample}..."
     shell:
         """
+        echo "[`date '+%Y-%m-%d %H:%M:%S'`] Subsetting sample {wildcards.sample}"
         module load seqtk/1.4
         seqtk sample -s100 {input.r1} {params.reads} > {output.r1}
         seqtk sample -s100 {input.r2} {params.reads} > {output.r2}
@@ -97,10 +98,10 @@ rule fastp:
         html=f"{OUTDIR}/fastp/{{sample}}.html",
         json=f"{OUTDIR}/fastp/{{sample}}_full.json"
     threads: 1
-    message: "Quality-filtering sample {wildcards.sample}..."
     shell:
         """
         module load fastp/0.24.0
+        echo "[`date '+%Y-%m-%d %H:%M:%S'`] Quality-filtering sample {wildcards.sample}"
         fastp \
             --in1 {input.r1} --in2 {input.r2} \
             --out1 {output.r1} --out2 {output.r2} \
@@ -143,9 +144,9 @@ rule singlem:
         siglemdir = f"{OUTDIR}/singlem/",
         workdir = lambda wc: f"{OUTDIR}/singlem/{wc.sample}"
     threads: 1
-    message: "Profiling {wildcards.sample} with SingleM..."
     shell:
         """
+        echo "[`date '+%Y-%m-%d %H:%M:%S'`] Profiling marker genes of {wildcards.sample}"
         module load singlem/0.19.0
         export SINGLEM_METAPACKAGE_PATH=/maps/datasets/globe_databases/singlem/5.4.0/S5.4.0.GTDB_r226.metapackage_20250331.smpkg.zb
         mkdir -p {params.siglemdir}
@@ -167,9 +168,9 @@ rule spf:
     params:
         workdir = lambda wc: f"{OUTDIR}/singlem/{wc.sample}"
     threads: 1
-    message: "Calculating prokaryotic fraction of {wildcards.sample}..."
     shell:
         """
+        echo "[`date '+%Y-%m-%d %H:%M:%S'`] Calculating prokaryotic fraction of {wildcards.sample}"
         module load singlem/0.19.0
         export SINGLEM_METAPACKAGE_PATH=/maps/datasets/globe_databases/singlem/5.4.0/S5.4.0.GTDB_r226.metapackage_20250331.smpkg.zb
         singlem microbial_fraction \
@@ -218,9 +219,9 @@ rule nonpareil_markers:
     params:
         workdir = lambda wc: f"{OUTDIR}/nonpareil_markers/{wc.sample}",
         kmer = KMER
-    message: "Calculating marker gene redundancy of {wildcards.sample}..."
     shell:
         """
+        echo "[`date '+%Y-%m-%d %H:%M:%S'`] Estimating marker redundancy of {wildcards.sample}"
         module load singlem/0.19.0
         nonpareil -s {input} -T kmer -f fasta -b {params.workdir} -k {params.kmer} -t {threads}
         """
@@ -272,9 +273,9 @@ rule nonpareil_reads:
     params:
         workdir = lambda wc: f"{OUTDIR}/nonpareil_reads/{wc.sample}",
         kmer = KMER
-    message: "Calculating marker gene redundancy of {wildcards.sample}..."
     shell:
         """
+        echo "[`date '+%Y-%m-%d %H:%M:%S'`] Estimating read redundancy of {wildcards.sample}"
         module load singlem/0.19.0
         nonpareil -s {input} -T kmer -f fastq -b {params.workdir} -k {params.kmer} -t {threads}
         """
@@ -314,6 +315,7 @@ rule mash_sketch_markers:
         kmer = KMER
     shell:
         """
+        echo "[`date '+%Y-%m-%d %H:%M:%S'`] Sketching marker kmer profile"
         module load mash/2.3
         mash sketch -k {params.kmer} -S {params.seed} -o {params.base} {input}
         """
@@ -328,6 +330,7 @@ rule mash_distance_markers:
         seed = SEED
     shell:
         """
+        echo "[`date '+%Y-%m-%d %H:%M:%S'`] Calculating mash distance of marker profiles"
         module load mash/2.3
         mash dist -S {params.seed} -p {threads} {input} {input} > {output}
         """
@@ -367,6 +370,7 @@ rule mash_medoids_markers:
         base=f"{OUTDIR}/mash/mash_markers"
     shell:
         """
+        echo "[`date '+%Y-%m-%d %H:%M:%S'`] Calculating number of clusters based on marker genes"
         module load singlem/0.19.0
         python {params.package_dir}/workflow/scripts/kmedoids.py \
             -i {input} \
@@ -391,6 +395,7 @@ rule mash_sketch_reads:
         kmer = KMER
     shell:
         """
+        echo "[`date '+%Y-%m-%d %H:%M:%S'`] Sketching read kmer profile"
         module load mash/2.3
         mash sketch -k {params.kmer} -S {params.seed} -o {params.base} {input}
         """
@@ -405,6 +410,7 @@ rule mash_distance_reads:
         seed = SEED
     shell:
         """
+        echo "[`date '+%Y-%m-%d %H:%M:%S'`] Calculating mash distance of read profiles"
         module load mash/2.3
         mash dist -S {params.seed} -p {threads} {input} {input} > {output}
         """
@@ -444,6 +450,7 @@ rule mash_medoids_reads:
         base=f"{OUTDIR}/mash/mash_reads"
     shell:
         """
+        echo "[`date '+%Y-%m-%d %H:%M:%S'`] Calculating number of clusters based on reads"
         module load singlem/0.19.0
         python {params.package_dir}/workflow/scripts/kmedoids.py \
             -i {input} \
