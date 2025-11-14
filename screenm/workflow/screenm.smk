@@ -336,29 +336,9 @@ rule mash_distance_markers:
         mash dist -S {params.seed} -p {threads} {input} {input} > {output}
         """
 
-rule mash_matrix_markers:
-    input:
-        f"{OUTDIR}/mash/mash_markers.dist"
-    output:
-        matrix=f"{OUTDIR}/mash/mash_markers.mat",
-        plot=f"{OUTDIR}/mash/mash_markers.png"
-    threads: 1
-    params:
-        base = f"{OUTDIR}/mash/mash_reads",
-        dpi = DPI,
-        package_dir=PACKAGE_DIR
-    shell:
-        """
-        module load singlem/0.19.0
-        python {params.package_dir}/workflow/scripts/mash_heatmap.py {input} \
-            -o {output.plot} \
-            -m {output.matrix} \
-            --dpi {params.dpi}
-        """
-
 rule mash_medoids_markers:
     input:
-        f"{OUTDIR}/mash/mash_markers.mat"
+        f"{OUTDIR}/mash/mash_markers.dist"
     output:
         sil=f"{OUTDIR}/mash/mash_markers.sil",
         ass=f"{OUTDIR}/mash/mash_markers.tsv",
@@ -435,29 +415,9 @@ rule mash_distance_reads:
         mash dist -S {params.seed} -p {threads} {input} {input} > {output}
         """
 
-rule mash_matrix_reads:
-    input:
-        f"{OUTDIR}/mash/mash_reads.dist"
-    output:
-        matrix=f"{OUTDIR}/mash/mash_reads.mat",
-        plot=f"{OUTDIR}/mash/mash_reads.png"
-    threads: 1
-    params:
-        base = f"{OUTDIR}/mash/mash_reads",
-        dpi = DPI,
-        package_dir=PACKAGE_DIR
-    shell:
-        """
-        module load singlem/0.19.0
-        python {params.package_dir}/workflow/scripts/mash_heatmap.py {input} \
-            -o {output.plot} \
-            -m {output.matrix} \
-            --dpi {params.dpi}
-        """
-
 rule mash_medoids_reads:
     input:
-        f"{OUTDIR}/mash/mash_reads.mat"
+        f"{OUTDIR}/mash/mash_reads.dist"
     output:
         sil=f"{OUTDIR}/mash/mash_reads.sil",
         ass=f"{OUTDIR}/mash/mash_reads.tsv",

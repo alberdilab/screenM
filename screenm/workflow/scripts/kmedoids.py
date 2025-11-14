@@ -1,9 +1,11 @@
 #!/usr/bin/env python3
 """
-cluster_mash_pam.py — Pure-Python K-Medoids (PAM) clustering on a Mash distance matrix,
+kmedoids.py — Pure-Python K-Medoids (PAM) clustering on a Mash distance file,
 with silhouette-based selection of the best k. No scikit-learn(-extra), no scipy required.
 
-Input:  square TSV (header row, first column sample ids) with Mash distances.
+Input:  Mash .dist-like file:
+    ref<TAB>query<TAB>distance<TAB>p-value<TAB>shared-hashes
+
 Outputs (configurable via CLI):
   - silhouettes table (k vs. silhouette)
   - assignments table (Sample, Cluster)
@@ -12,20 +14,107 @@ Outputs (configurable via CLI):
 
 import argparse
 import math
-from typing import Tuple, List
+from pathlib import Path
+from typing import Tuple, List, Dict
 
 import numpy as np
 import pandas as pd
 
 
+# ---------------------------------------------------------
+# Helpers to read Mash .dist and build a distance matrix
+# ---------------------------------------------------------
+
+def clean_sample_name(name: str) -> str:
+    """
+    Normalise Mash sample names by:
+    - Removing directories
+    - Removing ALL extensions (.fastq.gz, .fq.gz, .fna, .msh, etc.)
+
+    Examples:
+        /path/to/Sample10_1.fastq.gz -> Sample10_1
+        Sample2.fna                  -> Sample2
+    """
+    p = Path(name)
+    # strip all suffixes, not just the last one
+    while p.suffix:
+        p = p.with_suffix("")
+    return p.name
+
+
 def read_distance_matrix(path: str) -> Tuple[pd.DataFrame, np.ndarray]:
-    df = pd.read_csv(path, sep="\t", header=0, index_col=0)
-    D = df.values.astype(float)
-    # enforce symmetry & zero diagonal (Mash is symmetric but just to be safe)
+    """
+    Read a Mash .dist-like file and build a symmetric distance matrix.
+
+    Expected format per line (tab-separated):
+        ref<TAB>query<TAB>distance<TAB>p-value<TAB>shared-hashes
+
+    - ref and query are normalised with clean_sample_name().
+    - Diagonal distances are set to 0.
+    - If both (i,j) and (j,i) occur, the last value seen is kept.
+    """
+    p = Path(path)
+    if not p.is_file():
+        raise FileNotFoundError(f"Distance file not found: {p}")
+
+    # First pass: collect sample names and distances
+    samples_set = set()
+    triples: List[Tuple[str, str, float]] = []
+
+    with p.open("r") as fh:
+        for line in fh:
+            line = line.strip()
+            if not line or line.startswith("#"):
+                continue
+            parts = line.split("\t")
+            if len(parts) < 3:
+                continue
+
+            raw_ref, raw_query, dist_str = parts[0], parts[1], parts[2]
+            ref = clean_sample_name(raw_ref)
+            query = clean_sample_name(raw_query)
+
+            # skip self if present
+            if ref == query:
+                continue
+
+            try:
+                dist = float(dist_str)
+            except ValueError:
+                continue
+
+            samples_set.add(ref)
+            samples_set.add(query)
+            triples.append((ref, query, dist))
+
+    if not samples_set:
+        raise ValueError(f"No valid distances found in {p}")
+
+    # Create deterministic ordering of samples
+    samples = sorted(samples_set)
+    idx: Dict[str, int] = {s: i for i, s in enumerate(samples)}
+    n = len(samples)
+
+    # Build matrix
+    D = np.zeros((n, n), dtype=float)
     np.fill_diagonal(D, 0.0)
-    D = 0.5 * (D + D.T)
+
+    for ref, query, dist in triples:
+        i = idx[ref]
+        j = idx[query]
+        D[i, j] = dist
+        D[j, i] = dist
+
+    # You can add sanity checks here if you expect a fully dense matrix
+    # e.g., warn if any off-diagonal is still 0.0
+
+    df = pd.DataFrame(D, index=samples, columns=samples)
     return df, D
 
+
+# ---------------------------------------------------------
+# Silhouette, PAM, and clustering logic (unchanged)
+# ---------------------------------------------------------
 
 def silhouette_precomputed(D: np.ndarray, labels: np.ndarray) -> float:
     """Compute average silhouette score from a precomputed distance matrix D."""
@@ -68,12 +157,15 @@ def init_medoids_kpp(D: np.ndarray, k: int, rng: np.random.Generator) -> np.ndar
         prob = d2 / (d2.sum() + 1e-12)
         medoids[t] = rng.choice(n, p=prob)
         d2 = np.minimum(d2, D[:, medoids[t]])
-    return np.unique(medoids) if len(np.unique(medoids)) == k else init_medoids_kpp(D, k, rng)
+    # ensure k distinct medoids; if not, retry
+    uniq = np.unique(medoids)
+    if len(uniq) == k:
+        return medoids
+    return init_medoids_kpp(D, k, rng)
 
 
 def assign_to_medoids(D: np.ndarray, medoids: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
     """Return (labels, dist_to_nearest) given current medoids."""
-    # compute distances to each medoid and take argmin
     dist_to_medoids = D[:, medoids]
     labels = medoids[np.argmin(dist_to_medoids, axis=1)]
     dmin = np.min(dist_to_medoids, axis=1)
@@ -99,54 +191,43 @@ def pam_once(
 
     for _ in range(max_iter):
         improved = False
-        # Precompute for speed
         in_medoids = np.zeros(n, dtype=bool)
         in_medoids[medoids] = True
-        # For each medoid m and non-medoid h, compute cost change if swap
         best_delta = 0.0
         best_swap = None
+
         for mi, m in enumerate(medoids):
-            # distances to this medoid
             dm = D[:, m]
-            # For all candidate h not a medoid
             for h in np.where(~in_medoids)[0]:
                 dh = D[:, h]
-                # Compute second-best efficiently:
-                # For points i where current nearest medoid is m, we need
-                # the best distance to other medoids.
-                # Precompute distances to all other medoids (excluding m).
                 others = np.delete(medoids, mi)
                 if others.size > 0:
                     d_to_others = np.min(D[:, others], axis=1)
                 else:
                     d_to_others = np.full(n, np.inf)
 
-                # For each point:
-                # case1: labels[i] == m → newd = min(dh[i], d_to_others[i])
-                # case2: labels[i] != m → newd = min(dmin[i], dh[i])
                 same = (labels == m)
                 newd = np.where(same, np.minimum(dh, d_to_others), np.minimum(dmin, dh))
                 delta = float(newd.sum() - cost)
                 if delta < best_delta:
                     best_delta = delta
-                    best_swap = (mi, h, d_to_others)  # cache second-best for reuse
+                    best_swap = (mi, h)
+
         if best_swap is None:
-            break  # no improving swap
-        # Apply best swap
-        mi, h, d_to_others = best_swap
+            break
+
+        mi, h = best_swap
         m_old = medoids[mi]
         medoids[mi] = h
         in_medoids[m_old] = False
         in_medoids[h] = True
-        # Reassign with updated medoids
+
         labels, dmin = assign_to_medoids(D, medoids)
         cost = float(dmin.sum())
         improved = True
         if not improved:
             break
 
-    # Convert labels from medoid ids to 0..k-1 cluster ids
-    # Map medoid index -> cluster id
     medoid_to_cluster = {m: ci for ci, m in enumerate(medoids)}
     cluster_labels = np.array([medoid_to_cluster[l] for l in labels], dtype=int)
     return cluster_labels, medoids, cost
@@ -161,41 +242,41 @@ def pam_best_of_n(
 ) -> Tuple[np.ndarray, np.ndarray, float]:
     rng = np.random.default_rng(seed)
     best: Tuple[np.ndarray, np.ndarray, float] | None = None
-    for t in range(n_init):
+    for _ in range(n_init):
         labels, medoids, cost = pam_once(D, k, rng, max_iter=max_iter)
         if best is None or cost < best[2]:
             best = (labels, medoids, cost)
     return best  # type: ignore[return-value]
 
 
+# ---------------------------------------------------------
+# CLI
+# ---------------------------------------------------------
+
 def main():
     ap = argparse.ArgumentParser(
-        description="Pure-Python K-Medoids (PAM) on Mash distances with silhouette-based k selection."
+        description="Pure-Python K-Medoids (PAM) on Mash .dist distances with silhouette-based k selection."
     )
     ap.add_argument(
         "-i", "--infile", required=True,
-        help="Mash distance matrix (TSV; square, header+index)."
+        help="Mash distance file (.dist-like; ref\\tquery\\tdistance ...)."
     )
     ap.add_argument(
         "-o", "--out", default="mash_pam",
         help="Output prefix [default: mash_pam]."
     )
 
-    # Explicit, predictable outputs (no k in the filename unless you specify it)
     ap.add_argument(
         "--silhouettes-out", default=None,
-        help="Output TSV for k vs silhouette "
-             "(default: <out>_silhouettes.tsv)."
+        help="Output TSV for k vs silhouette (default: <out>_silhouettes.tsv)."
     )
     ap.add_argument(
         "--assignments-out", default=None,
-        help="Output TSV for sample-to-cluster assignments "
-             "(default: <out>_assignments.tsv)."
+        help="Output TSV for sample-to-cluster assignments (default: <out>_assignments.tsv)."
     )
     ap.add_argument(
         "--medoids-out", default=None,
-        help="Output TSV for medoids "
-             "(default: <out>_medoids.tsv)."
+        help="Output TSV for medoids (default: <out>_medoids.tsv)."
     )
 
     ap.add_argument(
@@ -246,18 +327,15 @@ def main():
             best_labels = labels
             best_medoids = medoids
 
-    # Decide final output paths; all fully predictable and do NOT depend on k
     sil_path = args.silhouettes_out or f"{args.out}_silhouettes.tsv"
     assign_path = args.assignments_out or f"{args.out}_assignments.tsv"
     medoid_path = args.medoids_out or f"{args.out}_medoids.tsv"
 
-    # Save silhouettes
     sil_df = pd.DataFrame(results, columns=["k", "silhouette"])
     sil_df.to_csv(sil_path, sep="\t", index=False)
 
-    # Save best assignments
     if best_labels is None or best_medoids is None or best_k is None:
-        raise RuntimeError("No valid clustering found; check k range and input matrix.")
+        raise RuntimeError("No valid clustering found; check k range and input distances.")
 
     assign_df = pd.DataFrame({
         "Sample": df.index,
@@ -265,7 +343,6 @@ def main():
     })
     assign_df.to_csv(assign_path, sep="\t", index=False)
 
-    # Save medoids
     medoid_names = [df.index[i] for i in best_medoids]
     medoid_df = pd.DataFrame({
         "Cluster": range(best_k),
