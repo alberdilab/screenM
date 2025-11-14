@@ -2,10 +2,8 @@
 import argparse
 import json
 from pathlib import Path
-from string import Template
 
-
-HTML_TEMPLATE = Template(r"""<!DOCTYPE html>
+HTML_TEMPLATE = r"""<!DOCTYPE html>
 <html lang="en">
 <head>
 <meta charset="UTF-8">
@@ -50,7 +48,7 @@ HTML_TEMPLATE = Template(r"""<!DOCTYPE html>
         background-color: #fff9c4; /* yellow */
     }
     .flag-3 {
-        background-color: #ffd2d2; /* red */
+        background-color: #ffd2d2; /* red/pink */
     }
 
     .figure-container {
@@ -79,9 +77,10 @@ HTML_TEMPLATE = Template(r"""<!DOCTYPE html>
 <div id="figure-sections"></div>
 
 <script>
-// Embedded data from Python
-const DISTILL_DATA = $DISTILL_JSON;
-const FIGURES_DATA = $FIGURES_JSON;
+// Embedded data from Python.
+// These placeholders will be replaced by the script.
+const DISTILL_DATA = __DISTILL_JSON__;
+const FIGURES_DATA = __FIGURES_JSON__;
 
 function flagClass(flag) {
     if (flag === 1) return "flag-1";
@@ -240,14 +239,11 @@ function main() {
         "message_redundancy_markers"
     );
 
-    // Clusters section (if present)
     if (S.clusters) {
-        const flagKey = "flag_clusters";
-        const messageKey = "message_clusters";
-        const div = document.createElement("div");
-        const flag = S.clusters[flagKey];
-        const msg = S.clusters[messageKey];
+        const flag = S.clusters.flag_clusters;
+        const msg = S.clusters.message_clusters;
 
+        const div = document.createElement("div");
         div.className = "section " + flagClass(flag);
         div.innerHTML = `
             <details>
@@ -283,7 +279,7 @@ main();
 
 </body>
 </html>
-""")
+"""
 
 
 def main():
@@ -307,7 +303,7 @@ def main():
         "-o",
         "--output",
         required=True,
-        help="Path to output HTML report (e.g. report.html).",
+        help="Path to output HTML report (e.g. screenm_report.html).",
     )
     args = parser.parse_args()
 
@@ -323,9 +319,14 @@ def main():
     distill_json_str = json.dumps(distill_data, indent=2)
     figures_json_str = json.dumps(figures_data, indent=2)
 
-    html = HTML_TEMPLATE.substitute(
-        DISTILL_JSON=distill_json_str,
-        FIGURES_JSON=figures_json_str,
+    # Escape closing </script> to avoid breaking the script tag
+    distill_json_str = distill_json_str.replace("</script>", "<\\/script>")
+    figures_json_str = figures_json_str.replace("</script>", "<\\/script>")
+
+    html = (
+        HTML_TEMPLATE
+        .replace("__DISTILL_JSON__", distill_json_str)
+        .replace("__FIGURES_JSON__", figures_json_str)
     )
 
     out_path = Path(args.output)
