@@ -23,7 +23,7 @@ rule all:
     input:
         [f"{OUTDIR}/counts/{sample}.json" for sample in SAMPLES],
         [f"{OUTDIR}/fastp/{sample}.html" for sample in SAMPLES],
-        [f"{OUTDIR}/singlem/{sample}.fraction" for sample in SAMPLES],
+        [f"{OUTDIR}/singlem/{sample}.json" for sample in SAMPLES],
         [f"{OUTDIR}/nonpareil_markers/{sample}.json" for sample in SAMPLES],
         [f"{OUTDIR}/nonpareil_reads/{sample}.json" for sample in SAMPLES],
         f"{OUTDIR}/mash/mash_markers.tsv",
@@ -164,6 +164,22 @@ rule spf:
             -1 {input.r1} \
             -2 {input.r2} \
             -p {input.profile} > {output}
+        """
+
+rule spf_json:
+    input: 
+        f"{OUTDIR}/singlem/{{sample}}.fraction"
+    output:
+        f"{OUTDIR}/singlem/{{sample}}.json"
+    params:
+        package_dir=PACKAGE_DIR
+    threads: 1
+    shell:
+        """
+        module load singlem/0.19.0
+        python {params.package_dir}/workflow/scripts/spf_to_jason.py \
+            -i {input} \
+            -o {output}
         """
 
 rule merge_markers:
