@@ -78,10 +78,23 @@ def main():
         parser.print_help()
         sys.exit(1)
 
+    # 0. Initialising screenM
+
+    print(f"[{ts()}] {HEADER1}Initialising screenM{RESET}", flush=True)
+
     # 1. Count the number of reads per sample and generate the input JSON for screenM
 
     DATA_JSON =  "data.json"
-    dir_to_files(input=args.input, output=args.output / DATA_JSON, min_reads=args.reads, threads=args.threads)
+    DATA_JSON_PATH = args.output / DATA_JSON
+
+    if not DATA_JSON_PATH.exists():
+        print(f"[{ts()}] {INFO}Staging samples for screening...{RESET}", flush=True)
+        dir_to_files(input=args.input,
+                    output=DATA_JSON_PATH, 
+                    min_reads=args.reads, 
+                    threads=args.threads)
+    else:
+        print(f"[{ts()}] {INFO}Samples already staged. Initialising screening...{RESET}", flush=True)
 
     # 2. Run the screenM Snakemake pipeline
 

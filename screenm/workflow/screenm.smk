@@ -36,7 +36,7 @@ rule all:
 
 rule counts:
     input:
-        data
+        INPUT_JSON
     output:
         json = f"{OUTDIR}/counts/{{sample}}.json"
     threads: 1
@@ -45,6 +45,9 @@ rule counts:
         from pathlib import Path
 
         sample = wildcards.sample
+
+        with open(input) as fh:
+                data = json.load(fh)
 
         above = data.get("above", {}) or {}
 
