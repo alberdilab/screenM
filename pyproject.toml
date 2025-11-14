@@ -1,0 +1,29 @@
+[build-system]
+requires = ["setuptools>=64", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "screenM"
+version = "1.0.0"
+description = "Data screener for genome-resolved metagenomics"
+authors = [
+    { name="Antton Alberdi", email="antton.alberdi@sund.ku.dk" },
+]
+requires-python = ">=3.12"
+
+dependencies = [
+    "numpy",
+    "pandas",
+    "PyYAML",
+    "plotly",
+    "biopython",
+]
+
+[project.urls]
+Homepage = "https://github.com/alberdilab/screenm"
+
+[project.scripts]
+screenm = "screenm.cli:main"
+
+[tool.setuptools.packages.find]
+include = ["screenm*"]
