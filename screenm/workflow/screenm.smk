@@ -156,6 +156,7 @@ rule singlem:
         module load singlem/0.19.0
         export SINGLEM_METAPACKAGE_PATH=/maps/datasets/globe_databases/singlem/5.4.0/S5.4.0.GTDB_r226.metapackage_20250331.smpkg.zb
         mkdir -p {params.siglemdir}
+        rm -rf {params.workdir}
         singlem pipe \
             -1 {input.r1} \
             -2 {input.r2} \
