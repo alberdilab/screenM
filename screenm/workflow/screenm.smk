@@ -101,7 +101,7 @@ rule fastp:
         r1=f"{OUTDIR}/fastp/{{sample}}_1.fq",
         r2=f"{OUTDIR}/fastp/{{sample}}_2.fq",
         html=f"{OUTDIR}/fastp/{{sample}}.html",
-        json=f"{OUTDIR}/fastp/{{sample}}.json"
+        json=f"{OUTDIR}/fastp/{{sample}}_full.json"
     threads: 1
     message: "Quality-filtering sample {wildcards.sample}..."
     shell:
@@ -121,6 +121,22 @@ rule fastp:
             --json {output.json} \
             --adapter_sequence AGATCGGAAGAGCACACGTCTGAACTCCAGTCA \
             --adapter_sequence_r2 AGATCGGAAGAGCGTCGTGTAGGGAAAGAGTGT
+        """
+
+rule fastp_json:
+    input: 
+        f"{OUTDIR}/fastp/{{sample}}_full.json"
+    output:
+        f"{OUTDIR}/fastp/{{sample}}.json"
+    params:
+        package_dir=PACKAGE_DIR
+    threads: 1
+    shell:
+        """
+        module load singlem/0.19.0
+        python {params.package_dir}/workflow/scripts/fastp_json.py \    
+            -i {input} \
+            -o {output}
         """
 
 rule singlem:
@@ -448,6 +464,7 @@ rule mash_medoids_reads:
 rule sample_json:
     input:
        counts=f"{OUTDIR}/counts/{{sample}}.json",
+       fastp=f"{OUTDIR}/fastp/{{sample}}.json",
        singlem=f"{OUTDIR}/singlem/{{sample}}.json",
        nonpareil_reads=f"{OUTDIR}/nonpareil_reads/{{sample}}.json",
        nonpareil_markers=f"{OUTDIR}/nonpareil_markers/{{sample}}.json"
@@ -461,6 +478,7 @@ rule sample_json:
         module load singlem/0.19.0
         python {params.package_dir}/workflow/scripts/sample_json.py \
             --count {input.counts} \
+            --fastp {input.fastp} \
             --singlem {input.singlem} \
             --nonpareil-reads {input.nonpareil_reads} \
             --nonpareil-markers {input.nonpareil_markers} \

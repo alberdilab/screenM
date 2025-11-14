@@ -19,49 +19,55 @@ def load_json(path: str) -> Dict[str, Any]:
 def main():
     ap = argparse.ArgumentParser(
         description=(
-            "Merge multiple per-sample JSON files into one grouped JSON:\n"
-            "top-level 'sample', plus groups: 'count', 'singlem', "
-            "'nonpareil_reads', 'nonpareil_markers'."
+            "Merge multiple per-sample JSON files into one grouped JSON.\n"
+            "Order of groups: count → fastp → singlem → nonpareil_reads → nonpareil_markers."
         )
     )
+
+    # Inputs
     ap.add_argument("--count", help="JSON file with read counts info")
+    ap.add_argument("--fastp", help="JSON file with simplified fastp results")
     ap.add_argument("--singlem", help="JSON file with SingleM / marker info")
     ap.add_argument("--nonpareil-reads", dest="nonpareil_reads",
                     help="JSON file with Nonpareil results based on reads")
     ap.add_argument("--nonpareil-markers", dest="nonpareil_markers",
                     help="JSON file with Nonpareil results based on markers")
+
     ap.add_argument("-o", "--output", required=True,
-                    help="Output JSON file")
+                    help="Output merged JSON file")
+
     args = ap.parse_args()
 
-    group_args = {
-        "count": args.count,
-        "singlem": args.singlem,
-        "nonpareil_reads": args.nonpareil_reads,
-        "nonpareil_markers": args.nonpareil_markers,
-    }
+    # Explicit order — THIS is where fastp is placed after count
+    group_args = [
+        ("count", args.count),
+        ("fastp", args.fastp),
+        ("singlem", args.singlem),
+        ("nonpareil_reads", args.nonpareil_reads),
+        ("nonpareil_markers", args.nonpareil_markers),
+    ]
 
     merged: Dict[str, Any] = {}
     sample_name = None
 
-    for group_name, path in group_args.items():
+    for group_name, path in group_args:
         if not path:
-            continue  # group not provided
+            continue
 
         data = load_json(path)
 
-        # Check / unify sample
+        # Check or set sample name
         s = data.get("sample")
         if s is not None:
             if sample_name is None:
                 sample_name = s
             elif sample_name != s:
                 raise ValueError(
-                    f"Conflicting sample names between files: "
+                    f"Conflicting sample names: "
                     f"{sample_name!r} vs {s!r} (group {group_name})"
                 )
 
-        # Remove 'sample' from nested group to avoid duplication
+        # Remove inner sample
         data = {k: v for k, v in data.items() if k != "sample"}
 
         merged[group_name] = data
@@ -69,14 +75,14 @@ def main():
     if not merged:
         raise SystemExit("No input JSONs provided; nothing to merge.")
 
+    # Add sample name at top
     if sample_name is not None:
         merged = {"sample": sample_name, **merged}
-    else:
-        # If none of the JSONs had 'sample', just leave it out
-        pass
 
+    # Write output
     out_path = Path(args.output)
     out_path.parent.mkdir(parents=True, exist_ok=True)
+
     with out_path.open("w") as f:
         json.dump(merged, f, indent=2)
 
