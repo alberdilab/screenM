@@ -223,7 +223,7 @@ rule nonpareil_markers:
         """
         echo "[`date '+%Y-%m-%d %H:%M:%S'`] Estimating marker redundancy of {wildcards.sample}"
         module load singlem/0.19.0
-        nonpareil -s {input} -T kmer -f fasta -b {params.workdir} -k {params.kmer} -t {threads}
+        nonpareil -s {input} -T kmer -f fasta -b {params.workdir} -k {params.kmer} -t {threads} > /dev/null 2>&1
         """
 
 rule nonpareil_markers_out:
@@ -277,7 +277,7 @@ rule nonpareil_reads:
         """
         echo "[`date '+%Y-%m-%d %H:%M:%S'`] Estimating read redundancy of {wildcards.sample}"
         module load singlem/0.19.0
-        nonpareil -s {input} -T kmer -f fastq -b {params.workdir} -k {params.kmer} -t {threads}
+        nonpareil -s {input} -T kmer -f fastq -b {params.workdir} -k {params.kmer} -t {threads} > /dev/null 2>&1
         """
 
 rule nonpareil_reads_out:
