@@ -63,12 +63,13 @@ def main():
         description="ScreenM: data screener for genome-resolved metagenomics",
         formatter_class=argparse.RawTextHelpFormatter
     )
-    parser.add_argument("-i", "--input", required=True, help="Path of the directory containing the metagenomic reads.")
-    parser.add_argument("-o", "--output", required=False, default=os.getcwd(), type=pathlib.Path, help="Working directory. Default is the directory from which screenM is called.")
+    parser.add_argument("-i", "--input", required=True, type=pathlib.Path, help="Path of the directory containing the metagenomic reads.")
+    parser.add_argument("-o", "--output", required=False, type=pathlib.Path, default=os.getcwd(), help="Working directory. Default is the directory from which screenM is called.")
     parser.add_argument("-r", "--reads", required=False, type=int, default=1000000, help="Number of reads per sample to be used for screening (Default: 1 million).")   
     parser.add_argument("-k", "--kmer", required=False, type=int, default=21, help="K-mer length used for the calculations (Default: 21).")   
     parser.add_argument("-s", "--seed", required=False, type=int, default=random.randint(0, 9999), help="Random seed for reproducibility. If not set, results will vary across runs.")   
-    parser.add_argument("-t", "--threads", default=1, required=False, help="Number of threads to use (Default: 1).")   
+    parser.add_argument("-t", "--threads", required=False, type=int, default=1, help="Number of threads to use (Default: 1).")   
+    parser.add_argument("-d", "--dpi", required=False, type=int, default=150, help="Resolution of ploted imaged (Default: 150).")   
 
     args = parser.parse_args()
 

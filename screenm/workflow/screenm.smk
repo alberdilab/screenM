@@ -8,6 +8,7 @@ INPUT_JSON  = config["input"]
 OUTDIR      = config["output"]
 READS       = config["reads"]
 KMER        = config["kmer"]
+DPI         = config["dpi"]
 SEED        = config["seed"]
 
 # Load data keys and paths
