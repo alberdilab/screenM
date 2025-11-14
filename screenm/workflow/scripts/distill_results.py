@@ -16,11 +16,13 @@ def load_json(path: Path) -> Dict[str, Any]:
     return data
 
 
+# ---------- 1) Screening threshold (above/below) ----------
+
 def compute_screening_threshold(data_json: Dict[str, Any]) -> Dict[str, Any]:
     """
     From data.json of the form:
       { "min_reads": N, "above": {...}, "below": {...} }
-    compute counts and flag.
+    compute counts, percentages and flag.
     """
     min_reads = data_json.get("min_reads")
     above = data_json.get("above", {}) or {}
@@ -35,7 +37,6 @@ def compute_screening_threshold(data_json: Dict[str, Any]) -> Dict[str, Any]:
     else:
         percent_above = 100.0 * n_above / n_total
 
-    # Determine flag and message
     if n_total == 0:
         flag = 3
         message = (
@@ -74,6 +75,8 @@ def compute_screening_threshold(data_json: Dict[str, Any]) -> Dict[str, Any]:
     }
 
 
+# ---------- 2) Sequencing depth ----------
+
 def compute_sequencing_depth(results_json: Dict[str, Any]) -> Dict[str, Any]:
     """
     Compute sequencing depth statistics from results.json, using
@@ -97,31 +100,36 @@ def compute_sequencing_depth(results_json: Dict[str, Any]) -> Dict[str, Any]:
             "median_reads": None,
             "sd_reads": None,
             "cv_reads": None,
-            "message_depth_balance": "No per-sample read counts were found; sequencing depth cannot be assessed.",
+            "flag_sequencing_depth": 3,
+            "message_sequencing_depth": (
+                "No per-sample read counts were found; sequencing depth cannot be assessed."
+            ),
         }
 
     mean_reads = stats.mean(reads_list)
     median_reads = stats.median(reads_list)
-    # Use population SD; for many samples it makes little difference
     sd_reads = stats.pstdev(reads_list) if n_samples > 1 else 0.0
     cv_reads = sd_reads / mean_reads if mean_reads > 0 else None
 
-    # Interpret CV to decide if depth is “leveled”
-    # (simple heuristic: <0.1 very balanced, 0.1–0.3 moderate, >0.3 uneven)
+    # Decide flag based on CV
     if cv_reads is None:
+        flag = 3
         message = "Sequencing depth could not be evaluated due to missing values."
     else:
         if cv_reads < 0.10:
+            flag = 1
             message = (
                 f"Sequencing depth is well balanced across samples "
                 f"(CV = {cv_reads:.3f})."
             )
         elif cv_reads < 0.30:
+            flag = 2
             message = (
                 f"Sequencing depth shows moderate variation across samples "
                 f"(CV = {cv_reads:.3f})."
             )
         else:
+            flag = 3
             message = (
                 f"Sequencing depth is uneven across samples (CV = {cv_reads:.3f}); "
                 "some samples have substantially higher or lower read counts than others."
@@ -133,15 +141,118 @@ def compute_sequencing_depth(results_json: Dict[str, Any]) -> Dict[str, Any]:
         "median_reads": median_reads,
         "sd_reads": sd_reads,
         "cv_reads": cv_reads,
-        "message_depth_balance": message,
+        "flag_sequencing_depth": flag,
+        "message_sequencing_depth": message,
     }
 
+
+# ---------- 3) Low-quality reads (fastp-based) ----------
+
+def compute_low_quality(results_json: Dict[str, Any]) -> Dict[str, Any]:
+    """
+    Summarise low-quality / discarded reads using samples[*].fastp.* fields.
+
+    We aggregate:
+      - total reads
+      - total discarded reads (low_quality + too_many_N + low_complexity + too_short + too_long)
+      - per-sample fraction of discarded reads
+      - mean/median/sd of discarded fraction
+      - flag + message
+    """
+    samples = results_json.get("samples", {}) or {}
+
+    frac_removed_list: List[float] = []
+    total_reads_all = 0
+    total_removed_all = 0
+    n_samples_with_fastp = 0
+
+    for name, sample_data in samples.items():
+        fastp = sample_data.get("fastp", {}) or {}
+        total = fastp.get("total_reads")
+        if not isinstance(total, (int, float)) or total <= 0:
+            continue
+
+        low_q = fastp.get("low_quality_reads", 0) or 0
+        too_n = fastp.get("too_many_N_reads", 0) or 0
+        low_complex = fastp.get("low_complexity_reads", 0) or 0
+        too_short = fastp.get("too_short_reads", 0) or 0
+        too_long = fastp.get("too_long_reads", 0) or 0
+
+        removed = low_q + too_n + low_complex + too_short + too_long
+        # Guard against pathological cases
+        removed = max(0, min(removed, total))
+
+        frac_removed = removed / total if total > 0 else 0.0
+
+        frac_removed_list.append(frac_removed)
+        total_reads_all += total
+        total_removed_all += removed
+        n_samples_with_fastp += 1
+
+    if n_samples_with_fastp == 0:
+        return {
+            "n_samples": 0,
+            "total_reads": None,
+            "total_removed_reads": None,
+            "percent_removed_reads_overall": None,
+            "mean_fraction_removed": None,
+            "median_fraction_removed": None,
+            "sd_fraction_removed": None,
+            "flag_low_quality": 3,
+            "message_low_quality": (
+                "No fastp-derived quality metrics were found; low-quality reads cannot be assessed."
+            ),
+        }
+
+    mean_frac = stats.mean(frac_removed_list)
+    median_frac = stats.median(frac_removed_list)
+    sd_frac = stats.pstdev(frac_removed_list) if n_samples_with_fastp > 1 else 0.0
+    percent_removed_overall = (
+        100.0 * total_removed_all / total_reads_all if total_reads_all > 0 else 0.0
+    )
+
+    # Flag based on average fraction removed
+    # Heuristic: <=10% very good, 10–30% moderate, >30% problematic.
+    if mean_frac <= 0.10:
+        flag = 1
+        message = (
+            f"On average {mean_frac*100:.1f}% of reads are removed by quality filtering, "
+            "indicating generally high read quality."
+        )
+    elif mean_frac <= 0.30:
+        flag = 2
+        message = (
+            f"On average {mean_frac*100:.1f}% of reads are removed by quality filtering. "
+            "Some libraries may have noticeable quality issues."
+        )
+    else:
+        flag = 3
+        message = (
+            f"On average {mean_frac*100:.1f}% of reads are removed by quality filtering. "
+            "A substantial fraction of sequencing effort is lost to low quality, Ns, or "
+            "length/complexity filters; consider revisiting library prep or sequencing depth."
+        )
+
+    return {
+        "n_samples": n_samples_with_fastp,
+        "total_reads": total_reads_all,
+        "total_removed_reads": total_removed_all,
+        "percent_removed_reads_overall": percent_removed_overall,
+        "mean_fraction_removed": mean_frac,
+        "median_fraction_removed": median_frac,
+        "sd_fraction_removed": sd_frac,
+        "flag_low_quality": flag,
+        "message_low_quality": message,
+    }
+
+
+# ---------- Main ----------
 
 def main():
     ap = argparse.ArgumentParser(
         description=(
             "Distill ScreenM outputs (data.json + results.json) into a summary JSON.\n"
-            "Includes: screening threshold coverage and sequencing depth statistics."
+            "Includes: screening threshold coverage, sequencing depth, and low-quality read metrics."
         )
     )
     ap.add_argument(
@@ -170,6 +281,7 @@ def main():
 
     screening_threshold = compute_screening_threshold(data_json)
     sequencing_depth = compute_sequencing_depth(results_json)
+    low_quality = compute_low_quality(results_json)
 
     distilled: Dict[str, Any] = {
         "meta": {
@@ -182,6 +294,7 @@ def main():
         "summary": {
             "screening_threshold": screening_threshold,
             "sequencing_depth": sequencing_depth,
+            "low_quality_reads": low_quality,
         },
     }
 
