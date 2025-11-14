@@ -1,17 +1,54 @@
+#!/usr/bin/env python3
 import json
 from pathlib import Path
+from typing import Dict, Any, Optional
+import gzip
+
+def ts():
+    return datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+
+def _count_fastq_reads(path: Path) -> int:
+    """
+    Count reads in a FASTQ/FASTQ.GZ file: number_of_lines / 4.
+    """
+    if not path.is_file():
+        raise FileNotFoundError(f"FASTQ file not found: {path}")
+
+    # Choose opener based on extension
+    if path.suffix == ".gz":
+        opener = gzip.open
+        mode = "rt"
+    else:
+        opener = open
+        mode = "r"
+
+    lines = 0
+    with opener(path, mode) as fh:
+        for _ in fh:
+            lines += 1
+    return lines // 4
 
 
-
-def dir_to_files(input: str, output: str):
+def dir_to_files(input: str, output: str, min_reads: int) -> Dict[str, Any]:
     """
     Scan a directory containing FASTQ/FASTQ.GZ files, detect paired-end samples,
-    and write a JSON mapping: {sample_name: {"forward": <path>, "reverse": <path>}}.
+    count reads from the first end (forward), and write a JSON of the form:
 
-    Example:
-        dir_to_files("reads/", "results/data.json")
+    {
+      "min_reads": <min_reads>,
+      "above": {
+        "SampleA": {"forward": "...", "reverse": "...", "reads": 123456},
+        ...
+      },
+      "below": {
+        "SampleB": {"forward": "...", "reverse": "...", "reads": 7890},
+        ...
+      }
+    }
 
-    The function handles naming like:
+    Samples are assigned to "above" if reads >= min_reads, otherwise to "below".
+
+    Handles naming like:
         sampleA_R1.fastq.gz / sampleA_R2.fastq.gz
         sampleB_1.fq / sampleB_2.fq
         sampleC_1.fastq / sampleC_2.fastq
@@ -34,7 +71,8 @@ def dir_to_files(input: str, output: str):
     if not fastq_files:
         raise ValueError(f"No FASTQ files found in {input}")
 
-    samples = {}
+    # First pass: detect forward/reverse files per sample
+    samples: Dict[str, Dict[str, str]] = {}
 
     for fq in fastq_files:
         fname = fq.name
@@ -60,10 +98,44 @@ def dir_to_files(input: str, output: str):
             )
             samples.setdefault(sample_name, {})["reverse"] = str(fq.resolve())
 
+    # Second pass: count reads from forward (or reverse if forward missing)
+    above: Dict[str, Dict[str, Any]] = {}
+    below: Dict[str, Dict[str, Any]] = {}
+
+    for sample, info in samples.items():
+        print(f"[{ts()}] Staging sample {sample}", flush=True)
+        # Prefer forward; if absent, fall back to reverse
+        fq_path_str: Optional[str] = info.get("forward") or info.get("reverse")
+        if fq_path_str is None:
+            # Sample detected but no actual FASTQ path stored; skip or raise
+            raise ValueError(f"Sample {sample!r} has no forward or reverse file.")
+
+        fq_path = Path(fq_path_str)
+        reads = _count_fastq_reads(fq_path)
+
+        # Attach reads count
+        sample_entry: Dict[str, Any] = dict(info)
+        sample_entry["reads"] = reads
+
+        # Bucket into above / below
+        if reads >= min_reads:
+            above[sample] = sample_entry
+        else:
+            below[sample] = sample_entry
+
+    result = {
+        "min_reads": int(min_reads),
+        "above": above,
+        "below": below,
+    }
+
     # --- write JSON safely ---
     with output_path.open("w") as f:
-        json.dump(samples, f, indent=2)
+        json.dump(result, f, indent=2)
 
     print(f"[✓] Found {len(samples)} samples.")
+    print(f"[✓] {len(above)} samples ≥ {min_reads} reads (above).")
+    print(f"[✓] {len(below)} samples < {min_reads} reads (below).")
     print(f"[✓] Wrote JSON to {output_path.resolve()}")
-    return samples
+
+    return result

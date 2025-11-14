@@ -14,7 +14,10 @@ SEED        = config["seed"]
 
 # Load data keys and paths
 with open(INPUT_JSON) as fh:
-    SAMPLES_MAP = json.load(fh)
+    data = json.load(fh)
+
+# Use only the "above" group (discard the too low seq samples)
+SAMPLES_MAP = data.get("above", {})
 
 SAMPLES = sorted(SAMPLES_MAP.keys())
 
