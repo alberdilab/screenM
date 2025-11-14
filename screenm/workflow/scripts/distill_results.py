@@ -794,6 +794,196 @@ def compute_redundancy_markers(results_json: Dict[str, Any]) -> Dict[str, Any]:
     }
 
 
+# ---------- 8) Mash-based clusters (potential coassemblies) ----------
+
+def _summarise_mash_cluster_block(
+    mash_block: Optional[Dict[str, Any]],
+    label: str,
+) -> Dict[str, Any]:
+    """
+    Summarise clustering structure from a Mash block (markers or reads).
+
+    Uses the precomputed summary.structure fields:
+      - n_clusters
+      - mean_within_distance / mean_between_distance
+      - ratio_between_over_within
+      - pair_ratio_mean / pair_ratio_sd
+
+    and provides a flag + message describing how well-separated the clusters are
+    as candidates for coassemblies.
+
+    Flags:
+      1 = well separated clusters (good candidates for coassembly)
+      2 = moderate separation
+      3 = weak/no separation or missing information
+    """
+    if not mash_block:
+        return {
+            "n_clusters": None,
+            "n_between_pairs": None,
+            "mean_within_distance": None,
+            "sd_within_distance": None,
+            "mean_between_distance": None,
+            "sd_between_distance": None,
+            "ratio_between_over_within": None,
+            "pair_ratio_mean": None,
+            "pair_ratio_sd": None,
+            "clusters": [],
+            "flag_cluster_structure": 3,
+            "message_cluster_structure": (
+                f"No Mash-based {label} distances were found; coassembly clusters "
+                "cannot be evaluated."
+            ),
+        }
+
+    summary = mash_block.get("summary") or {}
+    structure = summary.get("structure") or {}
+    clusters_block = summary.get("clusters") or {}
+    between_block = summary.get("between_clusters") or {}
+
+    n_clusters = structure.get("n_clusters")
+    n_between_pairs = structure.get("n_between_pairs")
+    mean_within = structure.get("mean_within_distance")
+    sd_within = structure.get("sd_within_distance")
+    mean_between = structure.get("mean_between_distance")
+    sd_between = structure.get("sd_between_distance")
+    ratio = structure.get("ratio_between_over_within")
+    pair_ratio_mean = structure.get("pair_ratio_mean")
+    pair_ratio_sd = structure.get("pair_ratio_sd")
+
+    # Per-cluster info (compact summary)
+    cluster_list: List[Dict[str, Any]] = []
+    for cid, c in clusters_block.items():
+        members = c.get("members") or []
+        n_members = c.get("n_members", len(members))
+        mean_d = c.get("mean_distance")
+        median_d = c.get("median_distance")
+        cluster_list.append(
+            {
+                "cluster_id": cid,
+                "n_members": n_members,
+                "members": members,
+                "mean_distance": mean_d,
+                "median_distance": median_d,
+            }
+        )
+
+    # Sort clusters by within-cluster mean distance (more compact first)
+    cluster_list.sort(
+        key=lambda x: (
+            x["mean_distance"]
+            if isinstance(x.get("mean_distance"), (int, float))
+            else float("inf")
+        )
+    )
+
+    # Flag and message based on separation ratio
+    if not n_clusters or n_clusters <= 1 or ratio is None:
+        if not n_clusters or n_clusters <= 1:
+            msg = (
+                f"Mash-based clustering of {label} distances identifies a single group "
+                "of samples or no clusters, indicating no clear subdivision into "
+                "candidate coassemblies."
+            )
+        else:
+            msg = (
+                f"Mash-based clustering of {label} distances could not be fully evaluated "
+                "because required summary statistics are missing."
+            )
+        flag = 3
+    else:
+        # Interpret ratio = between / within as separation; "magnified" so that
+        # higher ratios correspond to flag = 1, lower to 2 or 3.
+        if ratio >= 1.20:
+            flag = 1
+            msg = (
+                f"Clusters based on Mash {label} distances are well separated "
+                f"(between-cluster distances are on average {ratio:.2f}× higher than "
+                "within-cluster distances). These clusters are strong candidates for "
+                "defining coassemblies."
+            )
+        elif ratio >= 1.05:
+            flag = 2
+            msg = (
+                f"Clusters based on Mash {label} distances show modest separation "
+                f"(between-cluster distances are on average {ratio:.2f}× higher than "
+                "within-cluster distances). Coassemblies based on these clusters are "
+                "possible, but some mixing of moderately distinct communities is likely."
+            )
+        else:
+            flag = 3
+            msg = (
+                f"Clusters based on Mash {label} distances are weakly separated "
+                f"(between-cluster distances are only {ratio:.2f}× higher than "
+                "within-cluster distances). Using these clusters for coassemblies may "
+                "mix samples with quite different community compositions."
+            )
+
+        # Optional note on cluster size balance
+        sizes = [c["n_members"] for c in cluster_list if c.get("n_members") is not None]
+        if sizes:
+            total = sum(sizes)
+            max_size = max(sizes)
+            mean_size = stats.mean(sizes)
+            if max_size >= 2 * mean_size and total > 0:
+                msg += (
+                    f" Cluster sizes are unbalanced (largest cluster has {max_size} out "
+                    f"of {total} samples), so coassemblies may be dominated by a single "
+                    "large group."
+                )
+
+    return {
+        "n_clusters": n_clusters,
+        "n_between_pairs": n_between_pairs,
+        "mean_within_distance": mean_within,
+        "sd_within_distance": sd_within,
+        "mean_between_distance": mean_between,
+        "sd_between_distance": sd_between,
+        "ratio_between_over_within": ratio,
+        "pair_ratio_mean": pair_ratio_mean,
+        "pair_ratio_sd": pair_ratio_sd,
+        "clusters": cluster_list,
+        "between_clusters": between_block,
+        "flag_cluster_structure": flag,
+        "message_cluster_structure": msg,
+    }
+
+
+def compute_clusters(results_json: Dict[str, Any]) -> Dict[str, Any]:
+    """
+    Summarise Mash-based clustering (markers and reads) as potential
+    coassembly groups.
+
+    Returns a nested structure with per-distance-type summaries and an
+    overall flag/message (preferring markers if available).
+    """
+    mash_markers_block = results_json.get("mash_markers")
+    mash_reads_block = results_json.get("mash_reads")
+
+    markers_summary = _summarise_mash_cluster_block(mash_markers_block, "marker")
+    reads_summary = _summarise_mash_cluster_block(mash_reads_block, "read")
+
+    # Choose primary view for overall flag/message:
+    #   - Prefer markers when they have at least 2 clusters,
+    #   - otherwise fall back to reads.
+    overall_source = markers_summary
+    if (
+        markers_summary.get("n_clusters") is None
+        or markers_summary.get("n_clusters", 0) <= 1
+    ) and reads_summary.get("n_clusters", 0) > 1:
+        overall_source = reads_summary
+
+    overall_flag = overall_source.get("flag_cluster_structure")
+    overall_message = overall_source.get("message_cluster_structure")
+
+    return {
+        "markers": markers_summary,
+        "reads": reads_summary,
+        "flag_clusters": overall_flag,
+        "message_clusters": overall_message,
+    }
+
+
 # ---------- Main ----------
 
 def main():
@@ -801,7 +991,8 @@ def main():
         description=(
             "Distill ScreenM outputs (data.json + results.json) into a summary JSON.\n"
             "Includes: screening threshold coverage, sequencing depth, low-quality reads, "
-            "prokaryotic fraction, and redundancy based on reads and marker genes."
+            "prokaryotic fraction, redundancy based on reads and marker genes, and "
+            "Mash-based clustering as potential coassemblies."
         )
     )
     ap.add_argument(
@@ -834,6 +1025,7 @@ def main():
     prok_fraction = compute_prokaryotic_fraction(results_json)
     redundancy_reads = compute_redundancy_reads(results_json)
     redundancy_markers = compute_redundancy_markers(results_json)
+    clusters = compute_clusters(results_json)
 
     distilled: Dict[str, Any] = {
         "meta": {
@@ -850,6 +1042,7 @@ def main():
             "prokaryotic_fraction": prok_fraction,
             "redundancy_reads": redundancy_reads,
             "redundancy_markers": redundancy_markers,
+            "clusters": clusters,
         },
     }
 
