@@ -243,7 +243,7 @@ rule nonpareil_markers_out:
         module load singlem/0.19.0
         python {params.package_dir}/workflow/scripts/nonpareil_project.py {input.npo} \
             --subset-reads {params.subset} \
-            --total-reads $(python -c "import json; print(json.load(open('{input.counts}'))['total_reads'])") \
+            --total-reads $(python -c "import json; print(json.load(open('{input.counts}'))['reads'])") \
             --tsv-out {output.tsv} \
             --json-out {output.json} \
             --targets {params.completeness}
@@ -297,7 +297,7 @@ rule nonpareil_reads_out:
         module load singlem/0.19.0
         python {params.package_dir}/workflow/scripts/nonpareil_project.py {input.npo} \
             --subset-reads {params.subset} \
-            --total-reads $(python -c "import json; print(json.load(open('{input.counts}'))['total_reads'])") \
+            --total-reads $(python -c "import json; print(json.load(open('{input.counts}'))['reads'])") \
             --tsv-out {output.tsv} \
             --json-out {output.json} \
             --targets {params.completeness}
