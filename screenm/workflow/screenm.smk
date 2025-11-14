@@ -207,8 +207,8 @@ rule merge_markers:
     shell:
         r"""
         (
-          awk 'BEGIN{{OFS=""}} /^>/{ print $0 "_R1" ; next } {{print}}' {input.r1}
-          awk 'BEGIN{{OFS=""}} /^>/{ print $0 "_R2" ; next } {{print}}' {input.r2}
+            awk 'BEGIN{{{{OFS=""}}}} /^>/{{{{print $0 "_R1"; next}}}} {{{{print}}}}' {input.r1}
+            awk 'BEGIN{{{{OFS=""}}}} /^>/{{{{print $0 "_R2"; next}}}} {{{{print}}}}' {input.r2}
         ) > {output}
         """
 
