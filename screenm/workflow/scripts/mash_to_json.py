@@ -343,8 +343,5 @@ def main():
     with out_path.open("w") as f:
         json.dump(mash_json, f, indent=2)
 
-    print(f"[✓] Wrote Mash {args.kind} summary → {out_path}")
-
-
 if __name__ == "__main__":
     main()

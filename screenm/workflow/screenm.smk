@@ -24,16 +24,17 @@ SAMPLES = sorted(SAMPLES_MAP.keys())
 # Fan-out over all samples
 rule all:
     input:
-        [f"{OUTDIR}/counts/{sample}.json" for sample in SAMPLES],
-        [f"{OUTDIR}/fastp/{sample}.html" for sample in SAMPLES],
-        [f"{OUTDIR}/singlem/{sample}.json" for sample in SAMPLES],
-        [f"{OUTDIR}/nonpareil_markers/{sample}.json" for sample in SAMPLES],
-        [f"{OUTDIR}/nonpareil_reads/{sample}.json" for sample in SAMPLES],
-        [f"{OUTDIR}/json/{sample}.json" for sample in SAMPLES],
-        f"{OUTDIR}/mash/mash_reads.json",
-        f"{OUTDIR}/mash/mash_markers.json",
-        f"{OUTDIR}/results.json",
-        f"{OUTDIR}/distill.json"
+        #[f"{OUTDIR}/counts/{sample}.json" for sample in SAMPLES],
+        #[f"{OUTDIR}/fastp/{sample}.html" for sample in SAMPLES],
+        #[f"{OUTDIR}/singlem/{sample}.json" for sample in SAMPLES],
+        #[f"{OUTDIR}/nonpareil_markers/{sample}.json" for sample in SAMPLES],
+        #[f"{OUTDIR}/nonpareil_reads/{sample}.json" for sample in SAMPLES],
+        #[f"{OUTDIR}/json/{sample}.json" for sample in SAMPLES],
+        #f"{OUTDIR}/mash/mash_reads.json",
+        #f"{OUTDIR}/mash/mash_markers.json",
+        #f"{OUTDIR}/results.json",
+        f"{OUTDIR}/distill.json",
+        f"{OUTDIR}/figures.json"
 
 rule counts:
     input:
@@ -519,6 +520,24 @@ rule distill_results:
         """
         module load singlem/0.19.0
         python {params.package_dir}/workflow/scripts/distill_results.py \
+            --data-json {input.data} \
+            --results-json {input.results} \
+            -o {output} 
+        """
+
+rule results_to_figures:
+    input:
+       data=f"{OUTDIR}/data.json",
+       results=f"{OUTDIR}/results.json"
+    output:
+        f"{OUTDIR}/figures.json"
+    threads: 1
+    params:
+        package_dir=PACKAGE_DIR
+    shell:
+        """
+        module load singlem/0.19.0
+        python {params.package_dir}/workflow/scripts/results_to_figures.py \
             --data-json {input.data} \
             --results-json {input.results} \
             -o {output} 

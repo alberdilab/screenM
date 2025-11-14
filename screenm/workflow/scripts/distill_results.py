@@ -5,6 +5,44 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 import statistics as stats
 
+# ---------- Global thresholds (tune here) ----------
+
+# Screening threshold: fraction of samples above read cutoff
+THRESH_PCT_ABOVE_ALL = 100.0  # "all samples above"
+THRESH_PCT_ABOVE_GOOD = 80.0  # "most samples above"
+
+# Coefficient of variation (CV) thresholds for "balanced / moderate / uneven"
+THRESH_CV_BALANCED = 0.10
+THRESH_CV_MODERATE = 0.30
+
+# Low-quality read fraction thresholds (fastp)
+THRESH_LOWQ_GOOD = 0.05   # <= 5% removed → very good
+THRESH_LOWQ_MODERATE = 0.20  # 5–20% → moderate, >20% → problematic
+
+# Prokaryotic fraction (%)
+THRESH_PROK_HIGH = 90.0
+THRESH_PROK_MODERATE = 50.0
+
+# Redundancy (Nonpareil kappa_total)
+THRESH_KAPPA_HIGH = 0.9
+THRESH_KAPPA_MODERATE = 0.5
+
+# Fractions used for "many" warnings or LR_exceeds
+THRESH_WARNINGS_HIGH_FRACTION = 0.5
+THRESH_LR_EXCEEDS_FRACTION = 0.5
+
+# Mash clustering – separation ratio (between / within)
+THRESH_CLUSTER_RATIO_GOOD = 1.20
+THRESH_CLUSTER_RATIO_MODERATE = 1.05
+
+# Mash clustering – absolute within-cluster Mash distances
+# reference value = worst (max) mean distance across clusters, or global mean_within_distance
+THRESH_CLUSTER_WITHIN_MILD = 0.05   # >0.05 → mild warning
+THRESH_CLUSTER_WITHIN_STRONG = 0.15  # >0.15 → strong warning
+
+# Mash clustering – imbalance in cluster sizes
+THRESH_CLUSTER_SIZE_UNBALANCED_FACTOR = 2.0  # largest >= 2× mean size → unbalanced
+
 
 def load_json(path: Path) -> Dict[str, Any]:
     if not path.is_file():
@@ -43,13 +81,13 @@ def compute_screening_threshold(data_json: Dict[str, Any]) -> Dict[str, Any]:
             "No samples were found in the input data; cannot evaluate read threshold."
         )
     else:
-        if percent_above == 100.0:
+        if percent_above == THRESH_PCT_ABOVE_ALL:
             flag = 1
             message = (
                 f"All samples ({n_above}/{n_total}, {percent_above:.1f}%) are above the "
                 f"read threshold ({min_reads} reads)."
             )
-        elif percent_above >= 80.0:
+        elif percent_above >= THRESH_PCT_ABOVE_GOOD:
             flag = 2
             message = (
                 f"Most samples ({n_above}/{n_total}, {percent_above:.1f}%) are above the "
@@ -62,7 +100,7 @@ def compute_screening_threshold(data_json: Dict[str, Any]) -> Dict[str, Any]:
             message = (
                 f"Only {n_above}/{n_total} samples ({percent_above:.1f}%) are above the "
                 f"read threshold ({min_reads} reads). "
-                "As less than 80% of the samples are above the number of reads used for "
+                f"As less than {THRESH_PCT_ABOVE_GOOD:.0f}% of the samples are above the number of reads used for "
                 "the estimations, a lower threshold should be chosen using the -r flag; "
                 "note that this will make the estimations less accurate."
             )
@@ -118,13 +156,13 @@ def compute_sequencing_depth(results_json: Dict[str, Any]) -> Dict[str, Any]:
         flag = 3
         message = "Sequencing depth could not be evaluated due to missing values."
     else:
-        if cv_reads < 0.10:
+        if cv_reads < THRESH_CV_BALANCED:
             flag = 1
             message = (
                 f"Sequencing depth is well balanced across samples (CV = {cv_reads:.3f}), "
                 f"so average estimates should be applicable to most samples."
             )
-        elif cv_reads < 0.30:
+        elif cv_reads < THRESH_CV_MODERATE:
             flag = 2
             message = (
                 f"Sequencing depth shows moderate variation across samples (CV = {cv_reads:.3f}),"
@@ -205,15 +243,16 @@ def compute_low_quality(results_json: Dict[str, Any]) -> Dict[str, Any]:
         100.0 * total_removed_all / total_reads_all if total_reads_all > 0 else 0.0
     )
 
-    # Heuristic: <=10% very good, 10–20% moderate, >20% problematic.
-    if mean_frac <= 0.05:
+    # Heuristic: <= THRESH_LOWQ_GOOD very good,
+    # THRESH_LOWQ_GOOD–THRESH_LOWQ_MODERATE moderate, >THRESH_LOWQ_MODERATE problematic.
+    if mean_frac <= THRESH_LOWQ_GOOD:
         flag = 1
         message = (
             f"On average {mean_frac*100:.1f}% of reads are removed by quality filtering, "
             "indicating generally high read quality. Sequencing quality is not likely to "
             "be a limiting factor for downstream analyses."
         )
-    elif mean_frac <= 0.20:
+    elif mean_frac <= THRESH_LOWQ_MODERATE:
         flag = 2
         message = (
             f"On average {mean_frac*100:.1f}% of reads are removed by quality filtering. "
@@ -251,9 +290,9 @@ def compute_prokaryotic_fraction(results_json: Dict[str, Any]) -> Dict[str, Any]
     Summarise the prokaryotic fraction (read_fraction) from SingleM-based results.
 
     - Classification for mean prokaryotic fraction (interpreted as %):
-        > 90%   → flag = 1
-        > 50%   → flag = 2
-        <= 50%  → flag = 3
+        > THRESH_PROK_HIGH   → flag = 1
+        > THRESH_PROK_MODERATE → flag = 2
+        <= THRESH_PROK_MODERATE  → flag = 3
     """
     samples = results_json.get("samples", {}) or {}
 
@@ -293,9 +332,9 @@ def compute_prokaryotic_fraction(results_json: Dict[str, Any]) -> Dict[str, Any]
     sd_frac = stats.pstdev(fractions) if n_samples > 1 else 0.0
     cv_frac = sd_frac / mean_frac if mean_frac > 0 else None
 
-    if mean_frac > 90:
+    if mean_frac > THRESH_PROK_HIGH:
         flag_mean = 1
-    elif mean_frac > 50:
+    elif mean_frac > THRESH_PROK_MODERATE:
         flag_mean = 2
     else:
         flag_mean = 3
@@ -303,12 +342,12 @@ def compute_prokaryotic_fraction(results_json: Dict[str, Any]) -> Dict[str, Any]
     if mean_frac is None:
         mean_frac_msg = "Prokaryotic fraction cannot be evaluated."
     else:
-        if mean_frac > 90:
+        if mean_frac > THRESH_PROK_HIGH:
             mean_frac_msg = (
                 f"Average prokaryotic fraction of the dataset is high ({mean_frac:.3f}), "
                 "indicating that marginal amounts of host and other non-prokaryotic DNA are unlikely to affect the analyses. "
             )
-        elif mean_frac > 50:
+        elif mean_frac > THRESH_PROK_MODERATE:
             mean_frac_msg = (
                 f"Average prokaryotic fraction of the dataset is moderate ({mean_frac:.3f}), "
                 "indicating that samples may contain significant amounts of host or other non-prokaryotic DNA "
@@ -328,12 +367,12 @@ def compute_prokaryotic_fraction(results_json: Dict[str, Any]) -> Dict[str, Any]
     if cv_frac is None:
         var_msg = "Variation in prokaryotic fraction cannot be evaluated."
     else:
-        if cv_frac < 0.10:
+        if cv_frac < THRESH_CV_BALANCED:
             var_msg = (
                 f"Prokaryotic fraction is consistent across samples (CV = {cv_frac:.3f}), "
                 "so average estimates should be representative of the dataset. "
             )
-        elif cv_frac < 0.30:
+        elif cv_frac < THRESH_CV_MODERATE:
             var_msg = (
                 f"Prokaryotic fraction shows moderate variation across samples (CV = {cv_frac:.3f}), "
                 "so some samples may differ from the average estimate. Consider looking at individual sample values "
@@ -349,7 +388,7 @@ def compute_prokaryotic_fraction(results_json: Dict[str, Any]) -> Dict[str, Any]
     warning_ratio = warnings_count / n_samples if n_samples > 0 else 0.0
     if warnings_count == 0:
         warn_msg = ""
-    elif warning_ratio >= 0.5:
+    elif warning_ratio >= THRESH_WARNINGS_HIGH_FRACTION:
         warn_msg = (
             f"Note that many samples ({warnings_count}/{n_samples}) contain warnings in prokaryotic fraction estimation, "
             "indicating that the reliability of the estimated prokaryotic fractions is low across the dataset. "
@@ -511,9 +550,9 @@ def compute_redundancy_reads(results_json: Dict[str, Any]) -> Dict[str, Any]:
     sd_k = stats.pstdev(kappas) if n_kappa > 1 else 0.0
     cv_k = sd_k / mean_k if mean_k > 0 else None
 
-    if mean_k > 0.9:
+    if mean_k > THRESH_KAPPA_HIGH:
         flag_redundancy = 1
-    elif mean_k > 0.5:
+    elif mean_k > THRESH_KAPPA_MODERATE:
         flag_redundancy = 2
     else:
         flag_redundancy = 3
@@ -521,13 +560,13 @@ def compute_redundancy_reads(results_json: Dict[str, Any]) -> Dict[str, Any]:
     if mean_k is None:
         mean_k_msg = "Variation in redundancy cannot be evaluated."
     else:
-        if mean_k > 0.9:
+        if mean_k > THRESH_KAPPA_HIGH:
             mean_k_msg = (
                 f"Average estimated read redundancy is high ({mean_k:.3f}), "
                 "indicating that the sequencing data captures most of the "
                 "metagenomic diversity estimated in the samples. "
             )
-        elif mean_k > 0.5:
+        elif mean_k > THRESH_KAPPA_MODERATE:
             mean_k_msg = (
                 f"Average estimated read redundancy is moderate ({mean_k:.3f}), "
                 "indicating that a significant portion of the metagenomic diversity is "
@@ -545,12 +584,12 @@ def compute_redundancy_reads(results_json: Dict[str, Any]) -> Dict[str, Any]:
     if cv_k is None:
         var_msg = "Variation in redundancy cannot be evaluated."
     else:
-        if cv_k < 0.10:
+        if cv_k < THRESH_CV_BALANCED:
             var_msg = (
                 f"Read redundancy is consistent across samples (CV = {cv_k:.3f}), "
                 "indicating that average estimates should be applicable to most samples. "
             )
-        elif cv_k < 0.30:
+        elif cv_k < THRESH_CV_MODERATE:
             var_msg = (
                 f"Marker redundancy shows moderate variation across samples (CV = {cv_k:.3f}), "
                 "indicating that average estimates may not fully reflect all samples. "
@@ -578,7 +617,7 @@ def compute_redundancy_reads(results_json: Dict[str, Any]) -> Dict[str, Any]:
                 "of the metagenomic diversity is lower than the depth achieved, "
                 "indicating that the sequencing effort was most likely sufficient. "
             )
-        elif frac_exceeds < 0.5:
+        elif frac_exceeds < THRESH_LR_EXCEEDS_FRACTION:
             flag_lr = 2
             lr_msg = (
                 f"In {lr_exceeds}/{n_with_lr} samples, he sequencing depth required to capture {lr_target_used}% "
@@ -690,9 +729,9 @@ def compute_redundancy_markers(results_json: Dict[str, Any]) -> Dict[str, Any]:
     sd_k = stats.pstdev(kappas) if n_kappa > 1 else 0.0
     cv_k = sd_k / mean_k if mean_k > 0 else None
 
-    if mean_k > 0.9:
+    if mean_k > THRESH_KAPPA_HIGH:
         flag_redundancy = 1
-    elif mean_k > 0.5:
+    elif mean_k > THRESH_KAPPA_MODERATE:
         flag_redundancy = 2
     else:
         flag_redundancy = 3
@@ -700,13 +739,13 @@ def compute_redundancy_markers(results_json: Dict[str, Any]) -> Dict[str, Any]:
     if mean_k is None:
         mean_k_msg = "Variation in redundancy cannot be evaluated."
     else:
-        if mean_k > 0.9:
+        if mean_k > THRESH_KAPPA_HIGH:
             mean_k_msg = (
                 f"Average estimated marker redundancy is high ({mean_k:.3f}), "
                 "indicating that the sequencing data captures most of the "
                 "microbial diversity estimated in the samples."
             )
-        elif mean_k > 0.5:
+        elif mean_k > THRESH_KAPPA_MODERATE:
             mean_k_msg = (
                 f"Average estimated marker redundancy is moderate ({mean_k:.3f}), "
                 "indicating that a significant portion of the microbial diversity is "
@@ -724,12 +763,12 @@ def compute_redundancy_markers(results_json: Dict[str, Any]) -> Dict[str, Any]:
     if cv_k is None:
         var_msg = "Variation in marker redundancy cannot be evaluated."
     else:
-        if cv_k < 0.10:
+        if cv_k < THRESH_CV_BALANCED:
             var_msg = (
                 f"Marker redundancy is consistent across samples (CV = {cv_k:.3f}), "
                 "indicating that average estimates should be applicable to most samples."
             )
-        elif cv_k < 0.30:
+        elif cv_k < THRESH_CV_MODERATE:
             var_msg = (
                 f"Marker redundancy shows moderate variation across samples (CV = {cv_k:.3f}), "
                 "indicating that average estimates may not fully reflect all samples. "
@@ -757,7 +796,7 @@ def compute_redundancy_markers(results_json: Dict[str, Any]) -> Dict[str, Any]:
                 "of the microbial diversity is below the conducted sequencing depth, "
                 "indicating sufficient sequencing effort."
             )
-        elif frac_exceeds < 0.5:
+        elif frac_exceeds < THRESH_LR_EXCEEDS_FRACTION:
             flag_lr = 2
             lr_msg = (
                 f"In {lr_exceeds}/{n_with_lr} samples, the sequencing depth estimated to be needed to capture {lr_target_used}% "
@@ -817,8 +856,8 @@ def _summarise_mash_cluster_block(
       3 = weak/no separation or missing information
 
     Additionally, considers absolute within-cluster Mash distances:
-      - if the worst mean within-cluster distance > 0.15 → strong warning
-      - if 0.05 < distance ≤ 0.15 → mild warning
+      - if the worst mean within-cluster distance > THRESH_CLUSTER_WITHIN_STRONG → strong warning
+      - if THRESH_CLUSTER_WITHIN_MILD < distance ≤ THRESH_CLUSTER_WITHIN_STRONG → mild warning
     """
     if not mash_block:
         return {
@@ -897,7 +936,7 @@ def _summarise_mash_cluster_block(
     else:
         # Interpret ratio = between / within as separation; "magnified" so that
         # higher ratios correspond to flag = 1, lower to 2 or 3.
-        if ratio >= 1.20:
+        if ratio >= THRESH_CLUSTER_RATIO_GOOD:
             flag = 1
             msg = (
                 f"Clusters based on Mash {label} distances are well separated "
@@ -905,7 +944,7 @@ def _summarise_mash_cluster_block(
                 "within-cluster distances). These clusters are strong candidates for "
                 "defining coassemblies."
             )
-        elif ratio >= 1.05:
+        elif ratio >= THRESH_CLUSTER_RATIO_MODERATE:
             flag = 2
             msg = (
                 f"Clusters based on Mash {label} distances show modest separation "
@@ -928,7 +967,10 @@ def _summarise_mash_cluster_block(
             total = sum(sizes)
             max_size = max(sizes)
             mean_size = stats.mean(sizes)
-            if max_size >= 2 * mean_size and total > 0:
+            if (
+                total > 0
+                and max_size >= THRESH_CLUSTER_SIZE_UNBALANCED_FACTOR * mean_size
+            ):
                 msg += (
                     f" Cluster sizes are unbalanced (largest cluster has {max_size} out "
                     f"of {total} samples), so coassemblies may be dominated by a single "
@@ -953,7 +995,7 @@ def _summarise_mash_cluster_block(
     ref_within = worst_mean_within if worst_mean_within is not None else global_mean_within
 
     if ref_within is not None:
-        if ref_within > 0.15:
+        if ref_within > THRESH_CLUSTER_WITHIN_STRONG:
             # Strong warning: within-cluster distances high in absolute terms
             if flag == 1:
                 flag = 2  # demote slightly: not as ideal as ratio alone suggests
@@ -963,7 +1005,7 @@ def _summarise_mash_cluster_block(
                 "be quite dissimilar. Consider splitting large clusters or using "
                 "single-sample assemblies for the most divergent samples."
             )
-        elif ref_within > 0.05:
+        elif ref_within > THRESH_CLUSTER_WITHIN_MILD:
             # Mild warning
             if flag < 2:
                 flag = 2
