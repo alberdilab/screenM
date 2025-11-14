@@ -177,7 +177,7 @@ rule spf_json:
     shell:
         """
         module load singlem/0.19.0
-        python {params.package_dir}/workflow/scripts/spf_to_jason.py \
+        python {params.package_dir}/workflow/scripts/spf_to_json.py \
             -i {input} \
             -o {output}
         """
