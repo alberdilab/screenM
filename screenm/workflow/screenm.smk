@@ -26,6 +26,7 @@ rule all:
         [f"{OUTDIR}/singlem/{sample}.json" for sample in SAMPLES],
         [f"{OUTDIR}/nonpareil_markers/{sample}.json" for sample in SAMPLES],
         [f"{OUTDIR}/nonpareil_reads/{sample}.json" for sample in SAMPLES],
+        [f"{OUTDIR}/json/{sample}.json" for sample in SAMPLES],
         f"{OUTDIR}/mash/mash_markers.tsv",
         f"{OUTDIR}/mash/mash_reads.tsv"
 
@@ -442,4 +443,26 @@ rule mash_medoids_reads:
             --silhouettes-out {output.sil} \
             --assignments-out {output.ass} \
             --medoids-out {output.med}
+        """
+
+rule sample_json:
+    input:
+       count=f"{OUTDIR}/counts/{{sample}}.json",
+       singlem=f"{OUTDIR}/singlem/{{sample}}.json",
+       nonpareil_reads=f"{OUTDIR}/nonpareil_reads/{{sample}}.json",
+       nonpareil_markers=f"{OUTDIR}/nonpareil_markers/{{sample}}.json"
+    output:
+        f"{OUTDIR}/json/{{sample}}.json"
+    threads: 1
+    params:
+        package_dir=PACKAGE_DIR
+    shell:
+        """
+        module load singlem/0.19.0
+        python {params.package_dir}/workflow/scripts/sample_json.py \
+            --counts {input.count} \
+            --singlem {input.singlem} \
+            --nonpareil_reads {input.nonpareil_reads} \
+            --nonpareil_markers {input.nonpareil_markers} \
+            --output {output} 
         """
