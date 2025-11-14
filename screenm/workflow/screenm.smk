@@ -447,7 +447,7 @@ rule mash_medoids_reads:
 
 rule sample_json:
     input:
-       count=f"{OUTDIR}/counts/{{sample}}.json",
+       counts=f"{OUTDIR}/counts/{{sample}}.json",
        singlem=f"{OUTDIR}/singlem/{{sample}}.json",
        nonpareil_reads=f"{OUTDIR}/nonpareil_reads/{{sample}}.json",
        nonpareil_markers=f"{OUTDIR}/nonpareil_markers/{{sample}}.json"
@@ -460,7 +460,7 @@ rule sample_json:
         """
         module load singlem/0.19.0
         python {params.package_dir}/workflow/scripts/sample_json.py \
-            --counts {input.count} \
+            --counts {input.counts} \
             --singlem {input.singlem} \
             --nonpareil_reads {input.nonpareil_reads} \
             --nonpareil_markers {input.nonpareil_markers} \
