@@ -288,12 +288,11 @@ rule mash_distance_markers:
         f"{OUTDIR}/mash/mash_markers.dist"
     threads: 1
     params:
-        seed = SEED,
-        kmer = KMER
+        seed = SEED
     shell:
         """
         module load mash/2.3
-        mash dist -k {params.kmer} -S {params.seed} -p {threads} {input} {input} > {output}
+        mash dist -S {params.seed} -p {threads} {input} {input} > {output}
         """
 
 rule mash_matrix_markers:
@@ -346,7 +345,7 @@ rule mash_sketch_reads:
     shell:
         """
         module load mash/2.3
-        mash dist -k {params.kmer} -S {params.seed} -p {threads} {input} {input} > {output}
+        mash sketch -k {params.kmer} -S {params.seed} -o {params.base} {input}
         """
 
 rule mash_distance_reads:
@@ -356,12 +355,11 @@ rule mash_distance_reads:
         f"{OUTDIR}/mash/mash_reads.dist"
     threads: 1
     params:
-        seed = SEED,
-        kmer = KMER
+        seed = seed
     shell:
         """
         module load mash/2.3
-        mash dist -k {params.kmer} -S {params.seed} -p {threads} {input} {input} > {output}
+        mash dist -S {params.seed} -p {threads} {input} {input} > {output}
         """
 
 rule mash_matrix_reads:
