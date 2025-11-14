@@ -2,7 +2,7 @@
 import argparse
 import json
 from pathlib import Path
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional, Tuple
 import statistics as stats
 
 
@@ -87,7 +87,7 @@ def compute_sequencing_depth(results_json: Dict[str, Any]) -> Dict[str, Any]:
     reads_list: List[int] = []
     for name, sample_data in samples.items():
         count_block = sample_data.get("count", {}) or {}
-        reads = count_block.get("reads")
+        reads = count_block.get("reads", count_block.get("total_reads"))
         if isinstance(reads, (int, float)):
             reads_list.append(int(reads))
 
@@ -359,6 +359,220 @@ def compute_prokaryotic_fraction(results_json: Dict[str, Any]) -> Dict[str, Any]
     }
 
 
+# ---------- 5) Redundancy and LR_reads (Nonpareil kappa_total & LR_*_reads) ----------
+
+def _pick_lr_reads_key(npr_block: Dict[str, Any]) -> Optional[Tuple[str, float]]:
+    """
+    From a nonpareil_reads block, pick one LR_*_reads value (e.g. LR_95_reads).
+    Strategy:
+      - Find all keys of the form 'LR_<pct>_reads'
+      - Use the one with the lowest target percentage (e.g. 95 before 99)
+    Returns (key, value) with value as float or inf, or None if not found/parseable.
+    """
+    lr_keys = []
+    for key in npr_block.keys():
+        if key.startswith("LR_") and key.endswith("_reads"):
+            mid = key[3:-6]  # string between 'LR_' and '_reads'
+            try:
+                pct = float(mid)
+                lr_keys.append((pct, key))
+            except ValueError:
+                continue
+
+    if not lr_keys:
+        return None
+
+    lr_keys.sort(key=lambda x: x[0])  # sort by percentage
+    _, best_key = lr_keys[0]
+    raw_val = npr_block.get(best_key)
+
+    if raw_val is None:
+        return None
+
+    # Convert "inf" or strings to float
+    if isinstance(raw_val, (int, float)):
+        val = float(raw_val)
+    elif isinstance(raw_val, str):
+        if raw_val.lower() == "inf":
+            val = float("inf")
+        else:
+            try:
+                val = float(raw_val)
+            except ValueError:
+                return None
+    else:
+        return None
+
+    return best_key, val
+
+
+def compute_redundancy(results_json: Dict[str, Any]) -> Dict[str, Any]:
+    """
+    Summarise redundancy using Nonpareil kappa_total and LR_*_reads.
+
+    - kappa_total summarises redundancy (0–1 scale).
+      Mean kappa_total → flag_redundancy:
+        > 0.9  → 1
+        > 0.5  → 2
+        <= 0.5 → 3
+
+    - Variation in redundancy based on CV of kappa_total.
+
+    - LR_reads comparison:
+        We use the first LR_*_reads key (e.g., LR_95_reads). For each sample:
+          if LR_reads > total_reads, we count this as "insufficient depth".
+        Summarised into a second flag:
+          flag_LR_vs_depth:
+            1 → LR requirement is below or equal to depth for all samples
+            2 → LR exceeds depth in some samples (<50%)
+            3 → LR exceeds depth in many samples (>=50%)
+    """
+
+    samples = results_json.get("samples", {}) or {}
+
+    kappas: List[float] = []
+    lr_exceeds = 0
+    n_with_lr = 0
+    lr_key_used: Optional[str] = None
+
+    for name, sample_data in samples.items():
+        npr = sample_data.get("nonpareil_reads", {}) or {}
+        if not npr:
+            continue
+
+        # kappa_total
+        kappa = npr.get("kappa_total")
+        if isinstance(kappa, str):
+            try:
+                kappa = float(kappa)
+            except ValueError:
+                kappa = None
+        if isinstance(kappa, (int, float)):
+            kappas.append(float(kappa))
+
+        # LR_*_reads comparison
+        lr_info = _pick_lr_reads_key(npr)
+        if lr_info is not None:
+            key, lr_reads = lr_info
+            lr_key_used = lr_key_used or key  # remember one example key
+
+            count_block = sample_data.get("count", {}) or {}
+            total_reads = count_block.get("reads", count_block.get("total_reads"))
+
+            if isinstance(total_reads, str):
+                try:
+                    total_reads = float(total_reads)
+                except ValueError:
+                    total_reads = None
+
+            if isinstance(total_reads, (int, float)) and total_reads > 0:
+                n_with_lr += 1
+                if (lr_reads != float("inf")) and (lr_reads > total_reads):
+                    lr_exceeds += 1
+
+    n_kappa = len(kappas)
+
+    if n_kappa == 0:
+        # No usable Nonpareil kappa_total values
+        msg = (
+            "No Nonpareil-based redundancy estimates (kappa_total) were found; "
+            "redundancy and LR-based effort cannot be assessed."
+        )
+        return {
+            "n_samples_kappa": 0,
+            "mean_kappa_total": None,
+            "median_kappa_total": None,
+            "sd_kappa_total": None,
+            "cv_kappa_total": None,
+            "flag_redundancy": 3,
+            "n_samples_with_lr": n_with_lr,
+            "n_samples_lr_exceeds_depth": lr_exceeds,
+            "flag_LR_vs_depth": 3 if n_with_lr > 0 else None,
+            "lr_reads_key_used": lr_key_used,
+            "message_redundancy": msg,
+        }
+
+    mean_k = stats.mean(kappas)
+    median_k = stats.median(kappas)
+    sd_k = stats.pstdev(kappas) if n_kappa > 1 else 0.0
+    cv_k = sd_k / mean_k if mean_k > 0 else None
+
+    # Mean-based redundancy flag
+    if mean_k > 0.9:
+        flag_redundancy = 1
+    elif mean_k > 0.5:
+        flag_redundancy = 2
+    else:
+        flag_redundancy = 3
+
+    # Variation message
+    if cv_k is None:
+        var_msg = "Variation in redundancy cannot be evaluated."
+    else:
+        if cv_k < 0.10:
+            var_msg = f"Redundancy (kappa_total) is consistent across samples (CV = {cv_k:.3f})."
+        elif cv_k < 0.30:
+            var_msg = f"Redundancy (kappa_total) shows moderate variation across samples (CV = {cv_k:.3f})."
+        else:
+            var_msg = (
+                f"Redundancy (kappa_total) is highly variable across samples (CV = {cv_k:.3f}), "
+                "indicating uneven sequencing effort relative to community complexity."
+            )
+
+    # LR vs depth flag
+    if n_with_lr == 0:
+        flag_lr = None
+        lr_msg = (
+            "No LR_*_reads values were available from Nonpareil; "
+            "cannot compare required sequencing effort to observed depth."
+        )
+    else:
+        frac_exceeds = lr_exceeds / n_with_lr
+        if lr_exceeds == 0:
+            flag_lr = 1
+            lr_msg = (
+                f"For all {n_with_lr} samples, the required reads "
+                f"({lr_key_used or 'LR_*_reads'}) are below or equal to the observed depth, "
+                "indicating sufficient sequencing effort for the target coverage."
+            )
+        elif frac_exceeds < 0.5:
+            flag_lr = 2
+            lr_msg = (
+                f"In {lr_exceeds}/{n_with_lr} samples, the required reads "
+                f"({lr_key_used or 'LR_*_reads'}) exceed the observed depth. "
+                "Some libraries may be under-sequenced relative to the target coverage."
+            )
+        else:
+            flag_lr = 3
+            lr_msg = (
+                f"In many samples ({lr_exceeds}/{n_with_lr}), the required reads "
+                f"({lr_key_used or 'LR_*_reads'}) exceed the observed depth. "
+                "A substantial fraction of the dataset appears under-sequenced given the "
+                "desired coverage; consider increasing depth or relaxing the target coverage."
+            )
+
+    message = (
+        f"Mean Nonpareil redundancy (kappa_total) is {mean_k:.3f} across {n_kappa} samples "
+        f"(flag = {flag_redundancy}). "
+        + var_msg + " "
+        + lr_msg
+    )
+
+    return {
+        "n_samples_kappa": n_kappa,
+        "mean_kappa_total": mean_k,
+        "median_kappa_total": median_k,
+        "sd_kappa_total": sd_k,
+        "cv_kappa_total": cv_k,
+        "flag_redundancy": flag_redundancy,
+        "n_samples_with_lr": n_with_lr,
+        "n_samples_lr_exceeds_depth": lr_exceeds,
+        "flag_LR_vs_depth": flag_lr,
+        "lr_reads_key_used": lr_key_used,
+        "message_redundancy": message,
+    }
+
+
 # ---------- Main ----------
 
 def main():
@@ -366,7 +580,7 @@ def main():
         description=(
             "Distill ScreenM outputs (data.json + results.json) into a summary JSON.\n"
             "Includes: screening threshold coverage, sequencing depth, low-quality reads, "
-            "and prokaryotic fraction."
+            "prokaryotic fraction, and redundancy (Nonpareil kappa_total & LR_reads)."
         )
     )
     ap.add_argument(
@@ -397,6 +611,7 @@ def main():
     sequencing_depth = compute_sequencing_depth(results_json)
     low_quality = compute_low_quality(results_json)
     prok_fraction = compute_prokaryotic_fraction(results_json)
+    redundancy = compute_redundancy(results_json)
 
     distilled: Dict[str, Any] = {
         "meta": {
@@ -411,6 +626,7 @@ def main():
             "sequencing_depth": sequencing_depth,
             "low_quality_reads": low_quality,
             "prokaryotic_fraction": prok_fraction,
+            "redundancy": redundancy,
         },
     }
 
