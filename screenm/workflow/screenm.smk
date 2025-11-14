@@ -462,7 +462,7 @@ rule sample_json:
         python {params.package_dir}/workflow/scripts/sample_json.py \
             --count {input.counts} \
             --singlem {input.singlem} \
-            --nonpareil_reads {input.nonpareil_reads} \
-            --nonpareil_markers {input.nonpareil_markers} \
+            --nonpareil-reads {input.nonpareil_reads} \
+            --nonpareil-markers {input.nonpareil_markers} \
             --output {output} 
         """
