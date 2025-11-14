@@ -243,7 +243,7 @@ rule nonpareil_reads:
     shell:
         """
         module load singlem/0.19.0
-        nonpareil -s {input} -T kmer -l -f fastq -b {params.workdir} -k {params.kmer} -t {threads}
+        nonpareil -s {input} -T kmer -f fastq -b {params.workdir} -k {params.kmer} -t {threads}
         """
 
 rule nonpareil_reads_out:
