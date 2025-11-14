@@ -304,7 +304,8 @@ rule mash_matrix_markers:
     threads: 1
     params:
         base = f"{OUTDIR}/mash/mash_reads",
-        dpi = DPI
+        dpi = DPI,
+        package_dir=PACKAGE_DIR
     shell:
         """
         module load singlem/0.19.0
@@ -321,7 +322,8 @@ rule mash_medoids_markers:
         f"{OUTDIR}/mash/mash_markers.med"
     threads: 1
     params:
-        kmax = len(SAMPLES_MAP)
+        kmax = len(SAMPLES_MAP),
+        package_dir=PACKAGE_DIR
     shell:
         """
         module load singlem/0.19.0
@@ -371,7 +373,8 @@ rule mash_matrix_reads:
     threads: 1
     params:
         base = f"{OUTDIR}/mash/mash_reads",
-        dpi = DPI
+        dpi = DPI,
+        package_dir=PACKAGE_DIR
     shell:
         """
         module load singlem/0.19.0
@@ -388,7 +391,8 @@ rule mash_medoids_reads:
         f"{OUTDIR}/mash/mash_reads.med"
     threads: 1
     params:
-        kmax = len(SAMPLES_MAP)
+        kmax = len(SAMPLES_MAP),
+        package_dir=PACKAGE_DIR
     shell:
         """
         module load singlem/0.19.0
