@@ -41,7 +41,7 @@ END = "\033[1;92m"
 # Snakemake launcher
 ###
 
-def run_screenm_pipeline(input, output, reads, threads, kmer, seed, dpi):
+def run_screenm_pipeline(input, output, reads, threads, kmer, seed, completeness, dpi):
     snakemake_command = [
         "/bin/bash", "-c",
         "snakemake "
@@ -50,7 +50,7 @@ def run_screenm_pipeline(input, output, reads, threads, kmer, seed, dpi):
         f"--cores {threads} "
         #f"--quiet 2>/dev/null "
         f"--configfile {CONFIG_PATH} "
-        f"--config package_dir={PACKAGE_DIR} input={input} output={output} reads={reads} kmer={kmer} seed={seed} dpi={dpi}"
+        f"--config package_dir={PACKAGE_DIR} input={input} output={output} reads={reads} kmer={kmer} seed={seed} completeness={completeness} dpi={dpi}"
     ]
     subprocess.run(snakemake_command, shell=False, check=True)
 
@@ -68,6 +68,7 @@ def main():
     parser.add_argument("-r", "--reads", required=False, type=int, default=1000000, help="Number of reads per sample to be used for screening (Default: 1 million).")   
     parser.add_argument("-k", "--kmer", required=False, type=int, default=21, help="K-mer length used for the calculations (Default: 21).")   
     parser.add_argument("-s", "--seed", required=False, type=int, default=random.randint(0, 9999), help="Random seed for reproducibility. If not set, results will vary across runs.")   
+    parser.add_argument("-c", "--completeness", required=False, type=int, default=95, help="Completeness target to estimate suitable sequencing depth (Default: 95).")   
     parser.add_argument("-t", "--threads", required=False, type=int, default=1, help="Number of threads to use (Default: 1).")   
     parser.add_argument("-d", "--dpi", required=False, type=int, default=150, help="Resolution of ploted imaged (Default: 150).")   
 
@@ -87,4 +88,5 @@ def main():
                 args.threads, 
                 args.kmer,
                 args.seed,
+                args.completeness,
                 args.dpi)

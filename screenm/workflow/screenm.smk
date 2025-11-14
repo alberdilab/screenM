@@ -8,6 +8,7 @@ INPUT_JSON  = config["input"]
 OUTDIR      = config["output"]
 READS       = config["reads"]
 KMER        = config["kmer"]
+COMPLETENESS     = config["completeness"]
 DPI         = config["dpi"]
 SEED        = config["seed"]
 
@@ -23,8 +24,8 @@ rule all:
         [f"{OUTDIR}/counts/{sample}.json" for sample in SAMPLES],
         [f"{OUTDIR}/fastp/{sample}.html" for sample in SAMPLES],
         [f"{OUTDIR}/singlem/{sample}.fraction" for sample in SAMPLES],
-        [f"{OUTDIR}/nonpareil_markers/{sample}.tsv" for sample in SAMPLES],
-        [f"{OUTDIR}/nonpareil_reads/{sample}.tsv" for sample in SAMPLES],
+        [f"{OUTDIR}/nonpareil_markers/{sample}.json" for sample in SAMPLES],
+        [f"{OUTDIR}/nonpareil_reads/{sample}.json" for sample in SAMPLES],
         f"{OUTDIR}/mash/mash_markers.tsv",
         f"{OUTDIR}/mash/mash_reads.tsv"
 
@@ -201,10 +202,12 @@ rule nonpareil_markers_out:
         npo=f"{OUTDIR}/nonpareil_markers/{{sample}}.npo",
         counts = f"{OUTDIR}/counts/{{sample}}.json"
     output:
-        f"{OUTDIR}/nonpareil_markers/{{sample}}.tsv"
+        tsv=f"{OUTDIR}/nonpareil_markers/{{sample}}.tsv",
+        json=f"{OUTDIR}/nonpareil_markers/{{sample}}.json"
     threads: 1
     params:
-        subset=READS,
+        subset=READS * 2,
+        completeness = COMPLETENESS,
         package_dir=PACKAGE_DIR
     shell:
         """
@@ -212,7 +215,9 @@ rule nonpareil_markers_out:
         python {params.package_dir}/workflow/scripts/nonpareil_project.py {input.npo} \
             --subset-reads {params.subset} \
             --total-reads $(python -c "import json; print(json.load(open('{input.counts}'))['total_reads'])") \
-            -o {output}
+            --tsv-out {output.tsv} \
+            --json-out {output.json} \
+            --targets {params.completeness}
         """
 
 rule merge_reads:
@@ -251,10 +256,12 @@ rule nonpareil_reads_out:
         npo=f"{OUTDIR}/nonpareil_reads/{{sample}}.npo",
         counts = f"{OUTDIR}/counts/{{sample}}.json"
     output:
-        f"{OUTDIR}/nonpareil_reads/{{sample}}.tsv"
+        tsv=f"{OUTDIR}/nonpareil_reads/{{sample}}.tsv",
+        json=f"{OUTDIR}/nonpareil_reads/{{sample}}.json"
     threads: 1
     params:
-        subset=READS,
+        subset=READS * 2,
+        completeness = COMPLETENESS,
         package_dir=PACKAGE_DIR
     shell:
         """
@@ -262,7 +269,9 @@ rule nonpareil_reads_out:
         python {params.package_dir}/workflow/scripts/nonpareil_project.py {input.npo} \
             --subset-reads {params.subset} \
             --total-reads $(python -c "import json; print(json.load(open('{input.counts}'))['total_reads'])") \
-            -o {output}
+            --tsv-out {output.tsv} \
+            --json-out {output.json} \
+            --targets {params.completeness}
         """
 
 rule mash_sketch_markers:
