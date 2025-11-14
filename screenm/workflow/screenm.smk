@@ -30,11 +30,10 @@ rule all:
         [f"{OUTDIR}/nonpareil_markers/{sample}.json" for sample in SAMPLES],
         [f"{OUTDIR}/nonpareil_reads/{sample}.json" for sample in SAMPLES],
         [f"{OUTDIR}/json/{sample}.json" for sample in SAMPLES],
-        f"{OUTDIR}/mash/mash_markers.tsv",
-        f"{OUTDIR}/mash/mash_reads.tsv",
-        f"{OUTDIR}/distill.json",
         f"{OUTDIR}/mash/mash_reads.json",
-        f"{OUTDIR}/mash/mash_markers.json"
+        f"{OUTDIR}/mash/mash_markers.json",
+        f"{OUTDIR}/results.json",
+        f"{OUTDIR}/distill.json"
 
 rule counts:
     input:
