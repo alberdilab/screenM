@@ -41,7 +41,7 @@ END = "\033[1;92m"
 # Snakemake launcher
 ###
 
-def run_screenm_pipeline(input, output, reads, threads, kmer, seed):
+def run_screenm_pipeline(input, output, reads, threads, kmer, seed, dpi):
     snakemake_command = [
         "/bin/bash", "-c",
         "snakemake "
@@ -50,7 +50,7 @@ def run_screenm_pipeline(input, output, reads, threads, kmer, seed):
         f"--cores {threads} "
         #f"--quiet 2>/dev/null "
         f"--configfile {CONFIG_PATH} "
-        f"--config package_dir={PACKAGE_DIR} input={input} output={output} reads={reads} kmer={kmer} seed={seed}"
+        f"--config package_dir={PACKAGE_DIR} input={input} output={output} reads={reads} kmer={kmer} seed={seed} dpi={dpi}"
     ]
     subprocess.run(snakemake_command, shell=False, check=True)
 
@@ -86,4 +86,5 @@ def main():
                 args.reads,
                 args.threads, 
                 args.kmer,
-                args.seed)
+                args.seed,
+                args.dpi)
