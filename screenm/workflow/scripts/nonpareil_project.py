@@ -229,8 +229,5 @@ def main():
     with open(args.json_out, "w") as jf:
         json.dump(summary, jf, indent=2)
 
-    print(f"[✓] TSV written → {args.tsv_out}")
-    print(f"[✓] JSON written → {args.json_out}")
-
 if __name__ == "__main__":
     main()

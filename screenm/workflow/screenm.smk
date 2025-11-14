@@ -32,7 +32,7 @@ rule all:
         [f"{OUTDIR}/json/{sample}.json" for sample in SAMPLES],
         f"{OUTDIR}/mash/mash_markers.tsv",
         f"{OUTDIR}/mash/mash_reads.tsv",
-        f"{OUTDIR}/screenm.json"
+        f"{OUTDIR}/distill.json"
 
 rule counts:
     input:
@@ -491,7 +491,7 @@ rule merge_json:
     input:
        expand(f"{OUTDIR}/json/{{sample}}.json", sample=SAMPLES)
     output:
-        f"{OUTDIR}/screenm.json"
+        f"{OUTDIR}/results.json"
     threads: 1
     params:
         package_dir=PACKAGE_DIR
@@ -500,5 +500,23 @@ rule merge_json:
         module load singlem/0.19.0
         python {params.package_dir}/workflow/scripts/merge_json.py \
             -i {input} \
+            -o {output} 
+        """
+
+rule distill_results:
+    input:
+       data=f"{OUTDIR}/data.json",
+       results=f"{OUTDIR}/results.json"
+    output:
+        f"{OUTDIR}/distill.json"
+    threads: 1
+    params:
+        package_dir=PACKAGE_DIR
+    shell:
+        """
+        module load singlem/0.19.0
+        python {params.package_dir}/workflow/scripts/distill_results.py \
+            --data-json {input.data} \
+            --results-json {input.results} \
             -o {output} 
         """

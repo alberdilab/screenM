@@ -45,7 +45,5 @@ def main():
     with open(args.output, "w") as out:
         json.dump(output_json, out, indent=2)
 
-    print(f"[✓] Wrote JSON → {args.output}")
-
 if __name__ == "__main__":
     main()
