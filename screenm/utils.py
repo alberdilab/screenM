@@ -117,6 +117,7 @@ def dir_to_files(input: str, output: str, min_reads: int, threads: Optional[int]
     reads_per_sample: Dict[str, int] = {}
     with ProcessPoolExecutor(max_workers=threads) as exe:
         for sample, reads in exe.map(_count_reads_job, jobs):
+            print(f"[{ts()}] Staging sample {sample}", flush=True)
             reads_per_sample[sample] = reads
 
     # Bucket into above / below and attach reads
