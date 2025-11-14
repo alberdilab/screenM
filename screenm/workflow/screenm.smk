@@ -460,7 +460,7 @@ rule sample_json:
         """
         module load singlem/0.19.0
         python {params.package_dir}/workflow/scripts/sample_json.py \
-            --counts {input.counts} \
+            --count {input.counts} \
             --singlem {input.singlem} \
             --nonpareil_reads {input.nonpareil_reads} \
             --nonpareil_markers {input.nonpareil_markers} \
