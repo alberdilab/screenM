@@ -21,5 +21,5 @@ setup(
             "screenm=screenm.cli:main",
         ],
     },
-    python_requires=">=3.13",
+    python_requires=">=3.12",
 )
