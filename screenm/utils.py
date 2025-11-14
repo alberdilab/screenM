@@ -144,8 +144,8 @@ def dir_to_files(input: str, output: str, min_reads: int, threads: Optional[int]
         json.dump(result, f, indent=2)
 
     print(f"[✓] Found {len(samples)} samples.")
-    print(f"[✓] {len(above)} samples ≥ {min_reads} reads (above).")
-    print(f"[✓] {len(below)} samples < {min_reads} reads (below).")
+    print(f"[✓] {len(above)} samples ≥ {min_reads} reads (screening size).")
+    print(f"[✓] {len(below)} samples < {min_reads} reads (screening size).")
     print(f"[✓] Wrote JSON to {output_path.resolve()}")
 
     return result

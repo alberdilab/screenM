@@ -78,8 +78,12 @@ def main():
         parser.print_help()
         sys.exit(1)
 
+    # 1. Count the number of reads per sample and generate the input JSON for screenM
+
     DATA_JSON =  "data.json"
     dir_to_files(input=args.input, output=args.output / DATA_JSON, min_reads=args.reads, threads=args.threads)
+
+    # 2. Run the screenM Snakemake pipeline
 
     run_screenm_pipeline(
                 DATA_JSON,

@@ -36,48 +36,35 @@ rule all:
 
 rule counts:
     input:
-        r1 = lambda wc: SAMPLES_MAP[wc.sample]["forward"],
-        r2 = lambda wc: SAMPLES_MAP[wc.sample].get("reverse", "")
+        data
     output:
         json = f"{OUTDIR}/counts/{{sample}}.json"
     threads: 1
-    message:
-        "Counting reads for {wildcards.sample}..."
     run:
-        import json, subprocess, shlex
+        import json
         from pathlib import Path
 
-        def count_reads_fastq(path: str) -> int:
-            if not path or not Path(path).exists():
-                return 0
-            cmd = f"zcat {shlex.quote(path)} | wc -l" if path.endswith(".gz") \
-                  else f"wc -l < {shlex.quote(path)}"
-            lines = int(subprocess.check_output(cmd, shell=True, text=True).strip())
-            return lines // 4
+        sample = wildcards.sample
 
-        r1_reads = count_reads_fastq(input.r1)
-        has_r2 = bool(input.r2) and Path(input.r2).exists()
-        reverse_reads = r1_reads if has_r2 else 0
-        total_reads = r1_reads * 2 if has_r2 else r1_reads
+        above = data.get("above", {}) or {}
+
+        # Only ABOVE samples should be produced
+        if sample not in above:
+            raise ValueError(
+                f"Sample {sample!r} is not listed in 'above'; "
+                f"this rule should never run for it."
+            )
+
+        entry = above[sample]
 
         result = {
-            "sample": wildcards.sample,
-            "forward": input.r1,
-            "reverse": input.r2,
-            "forward_reads": r1_reads,
-            "reverse_reads": reverse_reads,
-            "total_reads": total_reads,
-            "paired_end": has_r2,
-            "note": "R2 reads inferred to equal R1"
+            "sample": sample,
+            "reads": entry.get("reads", 0)
         }
 
         Path(output.json).parent.mkdir(parents=True, exist_ok=True)
         with open(output.json, "w") as f:
             json.dump(result, f, indent=2)
-
-        print(f"[✓] {wildcards.sample}: R1={r1_reads:,} | "
-              f"R2={'inferred '+str(reverse_reads) if has_r2 else 'absent'} | "
-              f"total={total_reads:,} → {output.json}")
 
 rule seqtk:
     input: 
