@@ -497,7 +497,7 @@ def compute_redundancy_reads(results_json: Dict[str, Any]) -> Dict[str, Any]:
         mean_k_msg = "Variation in redundancy cannot be evaluated."
     else:
         if mean_k > 0.9:
-            mean_k_msg = c(
+            mean_k_msg = (
                 f"Average estimated read redundancy is high ({mean_k:.3f}), "
                 "indicating that the sequencing data captures most of the "
                 "metagenomic diversity estimated in the samples."
@@ -677,7 +677,7 @@ def compute_redundancy_markers(results_json: Dict[str, Any]) -> Dict[str, Any]:
         mean_k_msg = "Variation in redundancy cannot be evaluated."
     else:
         if mean_k > 0.9:
-            mean_k_msg = c(
+            mean_k_msg = (
                 f"Average estimated marker redundancy is high ({mean_k:.3f}), "
                 "indicating that the sequencing data captures most of the "
                 "microbial diversity estimated in the samples."
