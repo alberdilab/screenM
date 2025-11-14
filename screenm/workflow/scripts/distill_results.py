@@ -205,15 +205,15 @@ def compute_low_quality(results_json: Dict[str, Any]) -> Dict[str, Any]:
         100.0 * total_removed_all / total_reads_all if total_reads_all > 0 else 0.0
     )
 
-    # Heuristic: <=10% very good, 10–30% moderate, >30% problematic.
-    if mean_frac <= 0.10:
+    # Heuristic: <=10% very good, 10–20% moderate, >20% problematic.
+    if mean_frac <= 0.05:
         flag = 1
         message = (
             f"On average {mean_frac*100:.1f}% of reads are removed by quality filtering, "
             "indicating generally high read quality. Sequencing quality is not likely to "
             "be a limiting factor for downstream analyses."
         )
-    elif mean_frac <= 0.30:
+    elif mean_frac <= 0.20:
         flag = 2
         message = (
             f"On average {mean_frac*100:.1f}% of reads are removed by quality filtering. "
@@ -300,25 +300,50 @@ def compute_prokaryotic_fraction(results_json: Dict[str, Any]) -> Dict[str, Any]
     else:
         flag_mean = 3
 
+    if mean_frac is None:
+        mean_frac_msg = "Prokaryotic fraction cannot be evaluated."
+    else:
+        if mean_frac > 90:
+            mean_frac_msg = (
+                f"Average prokaryotic fraction of the dataset is high ({mean_frac:.3f}), "
+                "indicating that marginal amounts of host and other non-prokaryotic DNA are unlikely to affect the analyses. "
+            )
+        elif mean_frac > 50:
+            mean_frac_msg = (
+                f"Average prokaryotic fraction of the dataset is moderate ({mean_frac:.3f}), "
+                "indicating that samples may contain significant amounts of host or other non-prokaryotic DNA "
+                "that could affect the analyses (e.g., slow down or disrupt assembly, reduce binning efficacy etc.). "
+                "If the host genome is available, consider removing host reads prior to assembly, but bear in mind that the resulting "
+                "effective sequencing depth for prokaryotes will be lower. "
+            )
+        else:
+            mean_frac_msg = (
+                f"Average prokaryotic fraction of the dataset is low ({mean_frac:.3f}), "
+                "indicating that samples likely contain high amounts of host or other non-prokaryotic (e.g., dietary remains) DNA. "
+                "This could severely affect downstream analyses, by affecting assembly quality and binning success. "
+                "If the host genome is available, remove host reads prior to assembly, but bear in mind that the resulting "
+                "effective sequencing depth for prokaryotes will be very low. "
+            )
+
     if cv_frac is None:
         var_msg = "Variation in prokaryotic fraction cannot be evaluated."
     else:
         if cv_frac < 0.10:
             var_msg = (
                 f"Prokaryotic fraction is consistent across samples (CV = {cv_frac:.3f}), "
-                "so average estimates should be representative of the dataset."
+                "so average estimates should be representative of the dataset. "
             )
         elif cv_frac < 0.30:
             var_msg = (
                 f"Prokaryotic fraction shows moderate variation across samples (CV = {cv_frac:.3f}), "
                 "so some samples may differ from the average estimate. Consider looking at individual sample values "
-                "to assess whether any samples deviate significantly from the average patterns."
+                "to assess whether any samples deviate significantly from the average patterns. "
             )
         else:
             var_msg = (
                 f"Prokaryotic fraction is highly variable across samples (CV = {cv_frac:.3f}), "
                 "so average estimates may not reflect individual sample compositions. Have a look at the per-sample "
-                "prokaryotic fractions to understand the variation in microbial content across your dataset."
+                "prokaryotic fractions to understand the variation in microbial content across your dataset. "
             )
 
     warning_ratio = warnings_count / n_samples if n_samples > 0 else 0.0
@@ -326,20 +351,20 @@ def compute_prokaryotic_fraction(results_json: Dict[str, Any]) -> Dict[str, Any]
         warn_msg = ""
     elif warning_ratio >= 0.5:
         warn_msg = (
-            f"Many samples ({warnings_count}/{n_samples}) contain warnings in prokaryotic fraction estimation, "
+            f"Note that many samples ({warnings_count}/{n_samples}) contain warnings in prokaryotic fraction estimation, "
             "indicating that the reliability of the estimated prokaryotic fractions is low across the dataset. "
             "If sequencing depth is high enough, consider increasing the number of reads used for estimation "
-            "through the -r parameter to improve these estimates."
+            "through the -r parameter to improve these estimates. "
         )
     else:
         warn_msg = (
-            f"Some samples ({warnings_count}/{n_samples}) contain warnings in prokaryotic fraction estimation, "
+            f"Note that some samples ({warnings_count}/{n_samples}) contain warnings in prokaryotic fraction estimation, "
             "indicating that the reliability of the estimated prokaryotic fractions is low for some samples. "
-            "Consider checking those samples individually."
+            "Consider checking those samples individually. "
         )
 
     message = (
-        f"Mean prokaryotic fraction across {n_samples} samples is {mean_frac:.1f}%. "
+        mean_frac_msg + " "
         + var_msg + " "
         + warn_msg
     )
@@ -500,13 +525,13 @@ def compute_redundancy_reads(results_json: Dict[str, Any]) -> Dict[str, Any]:
             mean_k_msg = (
                 f"Average estimated read redundancy is high ({mean_k:.3f}), "
                 "indicating that the sequencing data captures most of the "
-                "metagenomic diversity estimated in the samples."
+                "metagenomic diversity estimated in the samples. "
             )
         elif mean_k > 0.5:
             mean_k_msg = (
                 f"Average estimated read redundancy is moderate ({mean_k:.3f}), "
                 "indicating that a significant portion of the metagenomic diversity is "
-                "likely not to be captured by the sequencing data."
+                "likely not to be captured by the sequencing data. "
                 ""
             )
         else:
@@ -524,19 +549,19 @@ def compute_redundancy_reads(results_json: Dict[str, Any]) -> Dict[str, Any]:
         if cv_k < 0.10:
             var_msg = (
                 f"Read redundancy is consistent across samples (CV = {cv_k:.3f}), "
-                "indicating that average estimates should be applicable to most samples."
+                "indicating that average estimates should be applicable to most samples. "
             )
         elif cv_k < 0.30:
             var_msg = (
                 f"Marker redundancy shows moderate variation across samples (CV = {cv_k:.3f}), "
                 "indicating that average estimates may not fully reflect all samples. "
-                "Consider looking at individual sample redundancy estimates to assess the variation."
+                "Consider looking at individual sample redundancy estimates to assess the variation. "
             )
         else:
             var_msg = (
                 f"Marker redundancy is highly variable across samples (CV = {cv_k:.3f}), "
                 "indicating that average estimates may be misleading for some libraries. "
-                "Look at individual sample redundancy estimates to assess the variation."
+                "Look at individual sample redundancy estimates to assess the variation. "
             )
 
     if n_with_lr == 0:
@@ -550,21 +575,21 @@ def compute_redundancy_reads(results_json: Dict[str, Any]) -> Dict[str, Any]:
         if lr_exceeds == 0:
             flag_lr = 1
             lr_msg = (
-                f"For all {n_with_lr} samples, the sequencing depth estimated to be needed to capture {lr_target_used}% "
-                "of the metagenomic diversity is below the conducted sequencing depth, "
-                "indicating sufficient sequencing effort."
+                f"For all {n_with_lr} samples, the sequencing depth required to capture {lr_target_used}% "
+                "of the metagenomic diversity is lower than the depth achieved, "
+                "indicating that the sequencing effort was most likely sufficient. "
             )
         elif frac_exceeds < 0.5:
             flag_lr = 2
             lr_msg = (
-                f"In {lr_exceeds}/{n_with_lr} samples, the sequencing depth estimated to be needed to capture {lr_target_used}% "
+                f"In {lr_exceeds}/{n_with_lr} samples, he sequencing depth required to capture {lr_target_used}% "
                 "of the metagenomic diversity is above the conducted sequencing depth, indicating that these samples "
-                "may not be able to represent the complexity of the samples adequately."
+                "may not be able to represent the complexity of the samples adequately. "
             )
         else:
             flag_lr = 3
             lr_msg = (
-                f"In most ({lr_exceeds}/{n_with_lr}) samples, the sequencing depth estimated to be needed to capture {lr_target_used}% "
+                f"In most ({lr_exceeds}/{n_with_lr}) samples, the sequencing depth required to capture {lr_target_used}% "
                 "of the metagenomic diversity is above the conducted sequencing depth, indicating that a substantial fraction of "
                 "the dataset will likely be unable to represent the complexity of the samples adequately. "
             )
