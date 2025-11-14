@@ -542,7 +542,6 @@ def compute_redundancy_reads(results_json: Dict[str, Any]) -> Dict[str, Any]:
                 "capture the diversity. "
             )
 
-
     if cv_k is None:
         var_msg = "Variation in redundancy cannot be evaluated."
     else:
@@ -816,6 +815,10 @@ def _summarise_mash_cluster_block(
       1 = well separated clusters (good candidates for coassembly)
       2 = moderate separation
       3 = weak/no separation or missing information
+
+    Additionally, considers absolute within-cluster Mash distances:
+      - if the worst mean within-cluster distance > 0.15 → strong warning
+      - if 0.05 < distance ≤ 0.15 → mild warning
     """
     if not mash_block:
         return {
@@ -931,6 +934,44 @@ def _summarise_mash_cluster_block(
                     f"of {total} samples), so coassemblies may be dominated by a single "
                     "large group."
                 )
+
+    # Additional warning based on absolute within-cluster Mash distances
+    # We look at the worst (maximum) mean distance across clusters, and
+    # fall back to the global mean_within_distance if needed.
+    worst_mean_within = None
+    for c in cluster_list:
+        d = c.get("mean_distance")
+        if isinstance(d, (int, float)):
+            if worst_mean_within is None or d > worst_mean_within:
+                worst_mean_within = d
+
+    global_mean_within = (
+        mean_within if isinstance(mean_within, (int, float)) else None
+    )
+
+    # Prefer the worst per-cluster value; if not available, use global mean
+    ref_within = worst_mean_within if worst_mean_within is not None else global_mean_within
+
+    if ref_within is not None:
+        if ref_within > 0.15:
+            # Strong warning: within-cluster distances high in absolute terms
+            if flag == 1:
+                flag = 2  # demote slightly: not as ideal as ratio alone suggests
+            msg += (
+                f" However, within-cluster Mash distances are high in absolute terms "
+                f"(mean up to {ref_within:.3f}), so even samples grouped together can "
+                "be quite dissimilar. Consider splitting large clusters or using "
+                "single-sample assemblies for the most divergent samples."
+            )
+        elif ref_within > 0.05:
+            # Mild warning
+            if flag < 2:
+                flag = 2
+            msg += (
+                f" Note that within-cluster Mash distances are moderate in absolute "
+                f"terms (mean up to {ref_within:.3f}), so coassemblies may mix "
+                "communities that are not extremely similar."
+            )
 
     return {
         "n_clusters": n_clusters,
