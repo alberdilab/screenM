@@ -134,9 +134,7 @@ rule fastp_json:
     shell:
         """
         module load singlem/0.19.0
-        python {params.package_dir}/workflow/scripts/fastp_json.py \    
-            -i {input} \
-            -o {output}
+        python {params.package_dir}/workflow/scripts/fastp_json.py -i {input} -o {output}
         """
 
 rule singlem:
