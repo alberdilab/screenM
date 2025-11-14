@@ -179,7 +179,6 @@ def compute_low_quality(results_json: Dict[str, Any]) -> Dict[str, Any]:
         too_long = fastp.get("too_long_reads", 0) or 0
 
         removed = low_q + too_n + low_complex + too_short + too_long
-        # Guard against pathological cases
         removed = max(0, min(removed, total))
 
         frac_removed = removed / total if total > 0 else 0.0
@@ -246,13 +245,128 @@ def compute_low_quality(results_json: Dict[str, Any]) -> Dict[str, Any]:
     }
 
 
+# ---------- 4) Prokaryotic fraction (SingleM read_fraction) ----------
+
+def compute_prokaryotic_fraction(results_json: Dict[str, Any]) -> Dict[str, Any]:
+    """
+    Summarise the prokaryotic fraction (read_fraction) from SingleM-based results.
+
+    - Classification for mean prokaryotic fraction (interpreted as %):
+        > 90%   → flag = 1
+        > 50%   → flag = 2
+        <= 50%  → flag = 3
+
+    - Variation based on CV (coefficient of variation):
+        CV < 0.10  → very consistent
+        CV < 0.30  → moderate variation
+        CV >= 0.30 → inconsistent
+
+    - If many samples contain 'warning' (non-null), mention it explicitly.
+    """
+
+    samples = results_json.get("samples", {}) or {}
+
+    fractions: List[float] = []
+    warnings_count = 0
+
+    for name, sample_data in samples.items():
+        singlem = sample_data.get("singlem", {}) or {}
+        frac = singlem.get("read_fraction")
+        warn = singlem.get("warning")
+
+        if isinstance(frac, (int, float)):
+            fractions.append(float(frac))
+
+        if warn not in (None, "", "null"):
+            warnings_count += 1
+
+    n_samples = len(fractions)
+
+    if n_samples == 0:
+        return {
+            "n_samples": 0,
+            "mean_prokaryotic_fraction": None,
+            "median_prokaryotic_fraction": None,
+            "sd_prokaryotic_fraction": None,
+            "cv_prokaryotic_fraction": None,
+            "n_warnings": None,
+            "flag_prokaryotic_fraction": 3,
+            "message_prokaryotic_fraction": (
+                "No usable prokaryotic fraction values were found; "
+                "microbial composition cannot be assessed."
+            ),
+        }
+
+    mean_frac = stats.mean(fractions)
+    median_frac = stats.median(fractions)
+    sd_frac = stats.pstdev(fractions) if n_samples > 1 else 0.0
+    cv_frac = sd_frac / mean_frac if mean_frac > 0 else None
+
+    # ----- Classification of the average fraction -----
+    if mean_frac > 90:
+        flag_mean = 1
+    elif mean_frac > 50:
+        flag_mean = 2
+    else:
+        flag_mean = 3
+
+    # ----- Variation message -----
+    if cv_frac is None:
+        var_msg = "Variation in prokaryotic fraction cannot be evaluated."
+    else:
+        if cv_frac < 0.10:
+            var_msg = f"Prokaryotic fraction is consistent across samples (CV = {cv_frac:.3f})."
+        elif cv_frac < 0.30:
+            var_msg = f"Prokaryotic fraction shows moderate variation across samples (CV = {cv_frac:.3f})."
+        else:
+            var_msg = (
+                f"Prokaryotic fraction is highly variable across samples (CV = {cv_frac:.3f}), "
+                "indicating inconsistent microbial loads between libraries."
+            )
+
+    # ----- Warnings -----
+    warning_ratio = warnings_count / n_samples if n_samples > 0 else 0.0
+    if warnings_count == 0:
+        warn_msg = "No warnings were reported for prokaryotic fraction estimation."
+    elif warning_ratio >= 0.5:
+        warn_msg = (
+            f"Many samples ({warnings_count}/{n_samples}) contain warnings in marker detection. "
+            "This may indicate systematic issues with marker coverage or sample quality."
+        )
+    else:
+        warn_msg = (
+            f"{warnings_count}/{n_samples} samples contain warnings in marker detection. "
+            "These samples may have reduced marker coverage or quality issues."
+        )
+
+    # ----- Combined message -----
+    message = (
+        f"Mean prokaryotic fraction: {mean_frac:.1f}% across {n_samples} samples "
+        f"(flag = {flag_mean}). "
+        + var_msg + " "
+        + warn_msg
+    )
+
+    return {
+        "n_samples": n_samples,
+        "mean_prokaryotic_fraction": mean_frac,
+        "median_prokaryotic_fraction": median_frac,
+        "sd_prokaryotic_fraction": sd_frac,
+        "cv_prokaryotic_fraction": cv_frac,
+        "n_warnings": warnings_count,
+        "flag_prokaryotic_fraction": flag_mean,
+        "message_prokaryotic_fraction": message,
+    }
+
+
 # ---------- Main ----------
 
 def main():
     ap = argparse.ArgumentParser(
         description=(
             "Distill ScreenM outputs (data.json + results.json) into a summary JSON.\n"
-            "Includes: screening threshold coverage, sequencing depth, and low-quality read metrics."
+            "Includes: screening threshold coverage, sequencing depth, low-quality reads, "
+            "and prokaryotic fraction."
         )
     )
     ap.add_argument(
@@ -282,6 +396,7 @@ def main():
     screening_threshold = compute_screening_threshold(data_json)
     sequencing_depth = compute_sequencing_depth(results_json)
     low_quality = compute_low_quality(results_json)
+    prok_fraction = compute_prokaryotic_fraction(results_json)
 
     distilled: Dict[str, Any] = {
         "meta": {
@@ -295,6 +410,7 @@ def main():
             "screening_threshold": screening_threshold,
             "sequencing_depth": sequencing_depth,
             "low_quality_reads": low_quality,
+            "prokaryotic_fraction": prok_fraction,
         },
     }
 
