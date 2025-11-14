@@ -147,7 +147,7 @@ rule singlem:
         r2=f"{OUTDIR}/singlem/{{sample}}/prefilter_reverse/{{sample}}_2.fna",
         profile=f"{OUTDIR}/singlem/{{sample}}.profile"
     params:
-        siglemdir = f"{OUTDIR}/singlem/"
+        siglemdir = f"{OUTDIR}/singlem/",
         workdir = lambda wc: f"{OUTDIR}/singlem/{wc.sample}"
     threads: 1
     message: "Profiling {wildcards.sample} with SingleM..."
