@@ -6,15 +6,25 @@ from typing import Dict, List, Any, Tuple
 import statistics as stats
 
 
-def parse_clusters(path: Path) -> Tuple[Dict[str, str], Dict[str, List[str]]]:
+# ---------------------------------------------------------
+# NEW: unify sample names by removing directories AND extensions
+# ---------------------------------------------------------
+def clean_sample_name(name: str) -> str:
     """
-    Parse cluster file (TSV) with at least two columns:
-      sample_id<TAB>cluster_id
+    Normalise Mash sample names by:
+    - Removing directories
+    - Removing ALL extensions (.fna, .fa, .fastq.gz, .fq.gz, .msh, etc.)
+      Example:
+        /path/to/Sample10_1.fastq.gz -> Sample10_1
+        Sample2.fna                  -> Sample2
+    """
+    return Path(name).stem   # <-- removes extension
 
-    Returns:
-      sample_to_cluster: {sample -> cluster}
-      cluster_to_samples: {cluster -> [samples]}
-    """
+
+# ---------------------------------------------------------
+# Parse clusters
+# ---------------------------------------------------------
+def parse_clusters(path: Path) -> Tuple[Dict[str, str], Dict[str, List[str]]]:
     sample_to_cluster: Dict[str, str] = {}
     cluster_to_samples: Dict[str, List[str]] = {}
 
@@ -23,21 +33,27 @@ def parse_clusters(path: Path) -> Tuple[Dict[str, str], Dict[str, List[str]]]:
             line = line.strip()
             if not line:
                 continue
+
             parts = line.split("\t")
             if len(parts) < 2:
                 continue
 
-            # Skip header-like lines
+            # Skip header lines
             if parts[0].lower() in ("sample", "genome") or parts[1].lower().startswith("cluster"):
                 continue
 
-            sample, cluster = parts[0], parts[1]
+            raw_sample, cluster = parts[0], parts[1]
+            sample = clean_sample_name(raw_sample)
+
             sample_to_cluster[sample] = cluster
             cluster_to_samples.setdefault(cluster, []).append(sample)
 
     return sample_to_cluster, cluster_to_samples
 
 
+# ---------------------------------------------------------
+# Parse Mash distances
+# ---------------------------------------------------------
 def parse_mash_dist(
     path: Path,
     sample_to_cluster: Dict[str, str],
@@ -47,19 +63,7 @@ def parse_mash_dist(
     Dict[str, List[float]],
     Dict[Tuple[str, str], List[float]],
 ]:
-    """
-    Parse Mash .dist file and collect:
 
-      - pairwise entries (list of dicts)
-      - all distances (list of float)
-      - distances per cluster (cluster_id -> list of float),
-        only for pairs whose two samples are in the same cluster
-      - distances between clusters ( (c1,c2) -> list of float ),
-        for c1 != c2 (using sorted cluster pair keys)
-
-    Assumes Mash format:
-      ref<TAB>query<TAB>distance<TAB>p-value<TAB>shared-hashes
-    """
     pairwise: List[Dict[str, Any]] = []
     all_distances: List[float] = []
     within_distances: Dict[str, List[float]] = {}
@@ -75,13 +79,16 @@ def parse_mash_dist(
             if len(parts) < 3:
                 continue
 
-            ref = parts[0]
-            query = parts[1]
+            raw_ref = parts[0]
+            raw_query = parts[1]
             dist_str = parts[2]
             p_val_str = parts[3] if len(parts) > 3 else None
             shared_hashes = parts[4] if len(parts) > 4 else None
 
-            # skip self distances if present
+            # CLEAN sample names
+            ref = clean_sample_name(raw_ref)
+            query = clean_sample_name(raw_query)
+
             if ref == query:
                 continue
 
@@ -90,20 +97,18 @@ def parse_mash_dist(
             except ValueError:
                 continue
 
-            p_val = None
-            if p_val_str is not None:
-                try:
-                    p_val = float(p_val_str)
-                except ValueError:
-                    p_val = None
-
-            entry: Dict[str, Any] = {
+            entry = {
                 "sample1": ref,
                 "sample2": query,
                 "distance": dist,
             }
-            if p_val is not None:
-                entry["p_value"] = p_val
+
+            if p_val_str:
+                try:
+                    entry["p_value"] = float(p_val_str)
+                except ValueError:
+                    pass
+
             if shared_hashes is not None:
                 entry["shared_hashes"] = shared_hashes
 
@@ -117,26 +122,24 @@ def parse_mash_dist(
             if c1 is not None and c1 == c2:
                 within_distances.setdefault(c1, []).append(dist)
 
-            # Between-cluster distances
+            # Between clusters
             if c1 is not None and c2 is not None and c1 != c2:
-                pair_key = tuple(sorted((c1, c2)))
-                between_distances.setdefault(pair_key, []).append(dist)
+                key = tuple(sorted((c1, c2)))
+                between_distances.setdefault(key, []).append(dist)
 
     return pairwise, all_distances, within_distances, between_distances
 
 
+# ---------------------------------------------------------
+# Summary stats helper
+# ---------------------------------------------------------
 def summarize_distances(distances: List[float]) -> Dict[str, Any]:
-    """
-    Compute basic summary statistics for a list of distances.
-    Returns: n_pairs, mean_distance, median_distance.
-    """
     if not distances:
         return {
             "n_pairs": 0,
             "mean_distance": None,
             "median_distance": None,
         }
-
     return {
         "n_pairs": len(distances),
         "mean_distance": stats.mean(distances),
@@ -144,35 +147,37 @@ def summarize_distances(distances: List[float]) -> Dict[str, Any]:
     }
 
 
+# ---------------------------------------------------------
+# Main
+# ---------------------------------------------------------
 def main():
     ap = argparse.ArgumentParser(
         description=(
-            "Create a JSON summary from Mash pairwise distances and cluster assignments.\n"
-            "Keeps all pairwise distances and computes average distance overall, within clusters, "
-            "and between clusters."
+            "Create a JSON summary from Mash pairwise distances and clusters.\n"
+            "Sample names are cleaned (paths + extensions removed)."
         )
     )
+
     ap.add_argument(
         "--dist",
         required=True,
-        help="Mash pairwise distance file (e.g. mash_markers.dist or mash_reads.dist).",
+        help="Mash pairwise distance file.",
     )
     ap.add_argument(
         "--clusters",
         required=True,
-        help="Cluster file (TSV) with columns: sample_id<TAB>cluster_id (e.g. mash_markers.tsv).",
+        help="Cluster TSV: sample<TAB>cluster",
     )
     ap.add_argument(
         "--kind",
         choices=["markers", "reads"],
         default="markers",
-        help="Type of Mash data: 'markers' (default) or 'reads'. Used to name the top-level key.",
+        help="Use 'markers' or 'reads' as top-level key.",
     )
     ap.add_argument(
-        "-o",
-        "--output",
+        "-o", "--output",
         required=True,
-        help="Output JSON file to write Mash summary.",
+        help="Output JSON file.",
     )
     args = ap.parse_args()
 
@@ -180,29 +185,24 @@ def main():
     clusters_path = Path(args.clusters)
     out_path = Path(args.output)
 
-    # Parse cluster info
     sample_to_cluster, cluster_to_samples = parse_clusters(clusters_path)
 
-    # Parse Mash distances and collect within- and between-cluster distances
     pairwise, all_distances, within_distances, between_distances = parse_mash_dist(
         dist_path, sample_to_cluster
     )
 
-    # Overall summary
     overall_summary = summarize_distances(all_distances)
 
-    # Within-cluster summaries
-    clusters_summary: Dict[str, Any] = {}
-    for cluster_id, members in cluster_to_samples.items():
-        dists = within_distances.get(cluster_id, [])
-        clusters_summary[cluster_id] = {
+    clusters_summary = {}
+    for cid, members in cluster_to_samples.items():
+        d = within_distances.get(cid, [])
+        clusters_summary[cid] = {
             "members": sorted(members),
             "n_members": len(members),
-            **summarize_distances(dists),
+            **summarize_distances(d),
         }
 
-    # Between-cluster summaries
-    between_summary: Dict[str, Any] = {}
+    between_summary = {}
     for (c1, c2), dists in between_distances.items():
         key = f"{c1}__vs__{c2}"
         between_summary[key] = {
@@ -212,21 +212,23 @@ def main():
 
     top_key = f"mash_{args.kind}"
 
-    mash_json: Dict[str, Any] = {
+    mash_json = {
         top_key: {
             "pairwise": pairwise,
             "summary": {
                 "overall": overall_summary,
-                "clusters": clusters_summary,          # within-cluster
-                "between_clusters": between_summary,   # between-cluster
+                "clusters": clusters_summary,
+                "between_clusters": between_summary,
             },
         }
     }
 
-    # Write output
     out_path.parent.mkdir(parents=True, exist_ok=True)
-    with out_path.open("w") as fh:
-        json.dump(mash_json, fh, indent=2)
+    with out_path.open("w") as f:
+        json.dump(mash_json, f, indent=2)
+
+    print(f"[✓] Wrote Mash summary → {out_path}")
+
 
 if __name__ == "__main__":
     main()
