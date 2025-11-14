@@ -205,8 +205,11 @@ rule merge_markers:
         f"{OUTDIR}/nonpareil_markers/{{sample}}.fna"
     message: "Merging markers gene reads of {wildcards.sample}..."
     shell:
-        """
-        cat {input.r1} {input.r2} > {output}
+        r"""
+        (
+          awk 'BEGIN{OFS=""} /^>/{print $0,"_R1"; next} {print}' {input.r1}
+          awk 'BEGIN{OFS=""} /^>/{print $0,"_R2"; next} {print}' {input.r2}
+        ) > {output}
         """
 
 rule nonpareil_markers:
