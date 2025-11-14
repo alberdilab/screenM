@@ -7,6 +7,7 @@ PACKAGE_DIR = config["package_dir"]
 INPUT_JSON  = config["input"]
 OUTDIR      = config["output"]
 READS       = config["reads"]
+KMER        = config["kmer"]
 SEED        = config["seed"]
 
 # Load data keys and paths
@@ -22,7 +23,9 @@ rule all:
         [f"{OUTDIR}/fastp/{sample}.html" for sample in SAMPLES],
         [f"{OUTDIR}/singlem/{sample}.fraction" for sample in SAMPLES],
         [f"{OUTDIR}/nonpareil_markers/{sample}.tsv" for sample in SAMPLES],
-        [f"{OUTDIR}/nonpareil_reads/{sample}.tsv" for sample in SAMPLES]
+        [f"{OUTDIR}/nonpareil_reads/{sample}.tsv" for sample in SAMPLES],
+        f"{OUTDIR}/mash/mash_markers.med",
+        f"{OUTDIR}/mash/mash_reads.med"
 
 rule counts:
     input:
@@ -183,12 +186,13 @@ rule nonpareil_markers:
         npo=f"{OUTDIR}/nonpareil_markers/{{sample}}.npo"
     threads: 1
     params:
-        workdir = lambda wc: f"{OUTDIR}/nonpareil_markers/{wc.sample}"
+        workdir = lambda wc: f"{OUTDIR}/nonpareil_markers/{wc.sample}",
+        kmer = KMER
     message: "Calculating marker gene redundancy of {wildcards.sample}..."
     shell:
         """
         module load singlem/0.19.0
-        nonpareil -s {input} -T kmer -f fasta -b {params.workdir}
+        nonpareil -s {input} -T kmer -f fasta -b {params.workdir} -k {params.kmer} -t {threads}
         """
 
 rule nonpareil_markers_out:
@@ -232,12 +236,13 @@ rule nonpareil_reads:
         npo=f"{OUTDIR}/nonpareil_reads/{{sample}}.npo"
     threads: 1
     params:
-        workdir = lambda wc: f"{OUTDIR}/nonpareil_reads/{wc.sample}"
+        workdir = lambda wc: f"{OUTDIR}/nonpareil_reads/{wc.sample}",
+        kmer = KMER
     message: "Calculating marker gene redundancy of {wildcards.sample}..."
     shell:
         """
         module load singlem/0.19.0
-        nonpareil -s {input} -T kmer -f fastq -b {params.workdir}
+        nonpareil -s {input} -T kmer -l -f fastq -b {params.workdir} -k {params.kmer} -t {threads}
         """
 
 rule nonpareil_reads_out:
@@ -257,4 +262,140 @@ rule nonpareil_reads_out:
             --subset-reads {params.subset} \
             --total-reads $(python -c "import json; print(json.load(open('{input.counts}'))['total_reads'])") \
             -o {output}
+        """
+
+rule mash_sketch_markers:
+    input:
+        expand(f"{OUTDIR}/nonpareil_markers/{{sample}}.fna", sample=SAMPLES)
+    output:
+        f"{OUTDIR}/mash/mash_markers.msh"
+    threads: 1
+    params:
+        base = f"{OUTDIR}/mash/mash_markers",
+        seed = SEED,
+        kmer = KMER
+    shell:
+        """
+        module load mash/2.3
+        mash sketch -k {params.kmer} -s {seed} -o {params.base} {input}
+        """
+
+rule mash_distance_markers:
+    input:
+        f"{OUTDIR}/mash/mash_markers.msh"
+    output:
+        f"{OUTDIR}/mash/mash_markers.dist"
+    threads: 1
+    params:
+        seed = SEED,
+        kmer = KMER
+    shell:
+        """
+        module load mash/2.3
+        mash dist -k {params.kmer} -S {params.seed} -p {threads} {input} {input} > {output}
+        """
+
+rule mash_matrix_markers:
+    input:
+        f"{OUTDIR}/mash/mash_markers.dist"
+    output:
+        matrix=f"{OUTDIR}/mash/mash_markers.mat",
+        plot=f"{OUTDIR}/mash/mash_markers.png"
+    threads: 1
+    params:
+        base = f"{OUTDIR}/mash/mash_reads",
+        dpi = DPI
+    shell:
+        """
+        module load singlem/0.19.0
+        python {params.package_dir}/workflow/scripts/mash_heatmap.py {input} \
+            -o {output.plot} \
+            -m {output.matrix} \
+            --dpi {params.dpi}
+        """
+
+rule mash_medoids_markers:
+    input:
+        f"{OUTDIR}/mash/mash_markers.mat"
+    output:
+        f"{OUTDIR}/mash/mash_markers.med"
+    threads: 1
+    params:
+        kmax = len(SAMPLES_MAP)
+    shell:
+        """
+        module load singlem/0.19.0
+        python {params.package_dir}/workflow/scripts/kmedoids.py \
+            -i {input} \
+            -o {output} \
+            --kmin 2 \
+            --kmax {params.kmax}
+        """
+
+rule mash_sketch_reads:
+    input:
+        expand(f"{OUTDIR}/nonpareil_reads/{{sample}}.fq", sample=SAMPLES)
+    output:
+        f"{OUTDIR}/mash/mash_reads.msh"
+    threads: 1
+    params:
+        base = f"{OUTDIR}/mash/mash_reads",
+        seed = SEED,
+        kmer = KMER
+    shell:
+        """
+        module load mash/2.3
+        mash dist -k {params.kmer} -S {params.seed} -p {threads} {input} {input} > {output}
+        """
+
+rule mash_distance_reads:
+    input:
+        f"{OUTDIR}/mash/mash_reads.msh"
+    output:
+        f"{OUTDIR}/mash/mash_reads.dist"
+    threads: 1
+    params:
+        seed = SEED,
+        kmer = KMER
+    shell:
+        """
+        module load mash/2.3
+        mash dist -k {params.kmer} -S {params.seed} -p {threads} {input} {input} > {output}
+        """
+
+rule mash_matrix_reads:
+    input:
+        f"{OUTDIR}/mash/mash_reads.dist"
+    output:
+        matrix=f"{OUTDIR}/mash/mash_reads.mat",
+        plot=f"{OUTDIR}/mash/mash_reads.png"
+    threads: 1
+    params:
+        base = f"{OUTDIR}/mash/mash_reads",
+        dpi = DPI
+    shell:
+        """
+        module load singlem/0.19.0
+        python {params.package_dir}/workflow/scripts/mash_heatmap.py {input} \
+            -o {output.plot} \
+            -m {output.matrix} \
+            --dpi {params.dpi}
+        """
+
+rule mash_medoids_reads:
+    input:
+        f"{OUTDIR}/mash/mash_reads.mat"
+    output:
+        f"{OUTDIR}/mash/mash_reads.med"
+    threads: 1
+    params:
+        kmax = len(SAMPLES_MAP)
+    shell:
+        """
+        module load singlem/0.19.0
+        python {params.package_dir}/workflow/scripts/kmedoids.py \
+            -i {input} \
+            -o {output} \
+            --kmin 2 \
+            --kmax {params.kmax}
         """
