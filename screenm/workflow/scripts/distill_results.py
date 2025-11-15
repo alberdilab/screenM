@@ -165,7 +165,7 @@ def compute_sequencing_depth(results_json: Dict[str, Any]) -> Dict[str, Any]:
         elif cv_reads < THRESH_CV_MODERATE:
             flag = 2
             message = (
-                f"Sequencing depth shows moderate variation across samples (CV = {cv_reads:.3f}),"
+                f"Sequencing depth shows moderate variation across samples (CV = {cv_reads:.3f}), "
                 f"so average estimates may not fully reflect all samples."
             )
         else:

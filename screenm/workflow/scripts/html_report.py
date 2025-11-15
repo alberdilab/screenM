@@ -154,7 +154,7 @@ HTML_TEMPLATE = r"""<!DOCTYPE html>
     .clusters-heatmap-svg {
         display: block;
         width: 100%;
-        height: 190px; /* more vertical room for labels */
+        height: 210px; /* more vertical room for labels */
     }
 
     /* Tooltip for interactive charts */
@@ -478,8 +478,8 @@ function addSequencingDepthSection(parent, data, depthPerSample) {
     }
 }
 
-/* Sequencing quality (fastp) */
-function addLowQualitySection(parent, data) {
+/* Sequencing quality (fastp) – per-sample barplot */
+function addLowQualitySection(parent, data, depthPerSample) {
     if (!data) return;
     const div = document.createElement("div");
     div.className = "section " + flagClass(data.flag_low_quality);
@@ -513,11 +513,12 @@ function addLowQualitySection(parent, data) {
                     </div>
                 </div>
                 <div class="quality-plot-container">
-                    <svg id="quality-svg" class="quality-svg" viewBox="0 0 1000 220" preserveAspectRatio="none"></svg>
+                    <svg id="quality-svg" class="quality-svg" viewBox="0 0 1000 320" preserveAspectRatio="none"></svg>
                 </div>
                 <p class="small-note">
-                    The bar shows the overall fraction of reads removed by quality filtering. Dashed vertical
-                    lines mark 5% (yellow-orange) and 20% (red) thresholds. Hover over the bar for exact values.
+                    X axis: samples; Y axis: fraction of reads removed by quality filtering (fastp).
+                    Bars show per-sample removed fractions. Horizontal dashed lines mark 5% (yellow-orange)
+                    and 20% (red) thresholds. Hover over bars for exact values.
                 </p>
             </div>
         </details>
@@ -525,149 +526,173 @@ function addLowQualitySection(parent, data) {
     parent.appendChild(div);
 
     const svg = div.querySelector("#quality-svg");
+    const perSample = (depthPerSample || [])
+        .filter(d => d.fraction_low_quality_of_total !== null &&
+                     d.fraction_low_quality_of_total !== undefined);
 
-    const percentOverall = Number(overall) || 0;
+    if (!perSample.length) {
+        svg.outerHTML = `<div class="small-note">Per-sample removed fractions not available for sequencing quality plot.</div>`;
+        return;
+    }
+
     const width = 1000;
-    const height = 220;
-    const margin = {left: 70, right: 30, top: 30, bottom: 60};
+    const height = 320;
+    const margin = {left: 60, right: 20, top: 20, bottom: 80};
     const plotW = width - margin.left - margin.right;
     const plotH = height - margin.top - margin.bottom;
     const svgns = "http://www.w3.org/2000/svg";
 
     const x0 = margin.left;
-    const yBase = margin.top + plotH / 2;
+    const y0 = height - margin.bottom;
 
-    // X scale in %; ensure thresholds fit comfortably
-    const maxPct = Math.max(25, percentOverall * 1.5, 20);
-    const xMax = maxPct;
+    // Determine max fraction; ensure thresholds visible.
+    let maxFrac = 0;
+    perSample.forEach(d => {
+        const f = Number(d.fraction_low_quality_of_total) || 0;
+        if (f > maxFrac) maxFrac = f;
+    });
+    maxFrac = Math.max(maxFrac * 1.1, 0.25, 0.22); // at least 25% so 20% line is well inside
 
-    function xForPct(p) {
-        const clamped = Math.max(0, Math.min(xMax, p));
-        return x0 + (clamped / xMax) * plotW;
+    function yForFrac(f) {
+        const frac = Math.max(0, Math.min(maxFrac, f));
+        return y0 - (frac / maxFrac) * plotH;
     }
 
-    // Axis
     const xAxis = document.createElementNS(svgns, "line");
     xAxis.setAttribute("x1", x0);
-    xAxis.setAttribute("y1", yBase);
+    xAxis.setAttribute("y1", y0);
     xAxis.setAttribute("x2", x0 + plotW);
-    xAxis.setAttribute("y2", yBase);
+    xAxis.setAttribute("y2", y0);
     xAxis.setAttribute("stroke", "#555");
     svg.appendChild(xAxis);
 
-    // Ticks every 5%
-    for (let p = 0; p <= xMax + 0.1; p += 5) {
-        const x = xForPct(p);
+    const yAxis = document.createElementNS(svgns, "line");
+    yAxis.setAttribute("x1", x0);
+    yAxis.setAttribute("y1", y0);
+    yAxis.setAttribute("x2", x0);
+    yAxis.setAttribute("y2", margin.top);
+    yAxis.setAttribute("stroke", "#555");
+    svg.appendChild(yAxis);
+
+    // Y ticks at 0, 5, 10, 15, 20, 25% (or up to maxFrac)
+    const tickPercs = [0, 0.05, 0.10, 0.15, 0.20, 0.25].filter(p => p <= maxFrac + 1e-9);
+    tickPercs.forEach(frac => {
+        const y = yForFrac(frac);
         const tick = document.createElementNS(svgns, "line");
-        tick.setAttribute("x1", x);
-        tick.setAttribute("y1", yBase - 6);
-        tick.setAttribute("x2", x);
-        tick.setAttribute("y2", yBase + 6);
+        tick.setAttribute("x1", x0 - 4);
+        tick.setAttribute("y1", y);
+        tick.setAttribute("x2", x0);
+        tick.setAttribute("y2", y);
         tick.setAttribute("stroke", "#555");
         svg.appendChild(tick);
 
         const lab = document.createElementNS(svgns, "text");
-        lab.setAttribute("x", x);
-        lab.setAttribute("y", yBase + 18);
+        lab.setAttribute("x", x0 - 6);
+        lab.setAttribute("y", y + 3);
         lab.setAttribute("font-size", "10");
-        lab.setAttribute("text-anchor", "middle");
-        lab.textContent = p.toString() + "%";
+        lab.setAttribute("text-anchor", "end");
+        lab.textContent = (frac * 100).toFixed(0) + "%";
         svg.appendChild(lab);
-    }
+    });
 
-    // Axis label
+    const ylabel = document.createElementNS(svgns, "text");
+    ylabel.setAttribute("x", 16);
+    ylabel.setAttribute("y", margin.top + plotH / 2);
+    ylabel.setAttribute("text-anchor", "middle");
+    ylabel.setAttribute("font-size", "11");
+    ylabel.setAttribute("transform", `rotate(-90 16 ${margin.top + plotH / 2})`);
+    ylabel.textContent = "Reads removed by fastp (%)";
+    svg.appendChild(ylabel);
+
     const xlabel = document.createElementNS(svgns, "text");
     xlabel.setAttribute("x", margin.left + plotW / 2);
-    xlabel.setAttribute("y", height - 20);
+    xlabel.setAttribute("y", height - 8);
     xlabel.setAttribute("text-anchor", "middle");
     xlabel.setAttribute("font-size", "11");
-    xlabel.textContent = "Overall fraction of reads removed (%)";
+    xlabel.textContent = "Samples";
     svg.appendChild(xlabel);
 
     const tooltip = getOrCreateTooltip();
 
-    // Overall bar
-    const xStart = xForPct(0);
-    const xEnd = xForPct(percentOverall);
-    const barWidth = Math.max(0, xEnd - xStart);
-    const barHeight = 30;
-    const barY = yBase - barHeight / 2;
+    const n = perSample.length;
+    const step = plotW / n;
+    const barWidth = Math.min(16, step * 0.8);
 
-    const bar = document.createElementNS(svgns, "rect");
-    bar.setAttribute("x", xStart);
-    bar.setAttribute("y", barY);
-    bar.setAttribute("width", barWidth);
-    bar.setAttribute("height", barHeight);
-    bar.setAttribute("fill", "#1976d2");
-    bar.setAttribute("fill-opacity", "0.9");
-    bar.style.cursor = "pointer";
+    perSample.forEach((d, i) => {
+        const frac = Number(d.fraction_low_quality_of_total) || 0;
+        const xCenter = x0 + step * i + step / 2;
+        const x = xCenter - barWidth / 2;
+        const y = yForFrac(frac);
+        const hBar = y0 - y;
 
-    const tooltipText =
-        `Overall removed: ${percentOverall.toFixed(2)}%\n` +
-        `Mean per-sample: ${(meanFrac * 100).toFixed(2)}%\n` +
-        `Median per-sample: ${(medianFrac * 100).toFixed(2)}%`;
+        const rect = document.createElementNS(svgns, "rect");
+        rect.setAttribute("x", x);
+        rect.setAttribute("y", y);
+        rect.setAttribute("width", barWidth);
+        rect.setAttribute("height", hBar);
+        rect.setAttribute("fill", "#1976d2");
+        rect.setAttribute("fill-opacity", "0.9");
+        rect.style.cursor = "pointer";
 
-    bar.addEventListener("mouseenter", (evt) => {
-        bar.setAttribute("fill", "#0d47a1");
-        tooltip.style.display = "block";
-        tooltip.textContent = tooltipText;
-        tooltip.style.left = evt.clientX + "px";
-        tooltip.style.top = evt.clientY + "px";
+        const tooltipText =
+            `${d.sample}\n` +
+            `Removed: ${(frac * 100).toFixed(2)}%`;
+
+        rect.addEventListener("mouseenter", (evt) => {
+            rect.setAttribute("fill", "#0d47a1");
+            tooltip.style.display = "block";
+            tooltip.textContent = tooltipText;
+            tooltip.style.left = evt.clientX + "px";
+            tooltip.style.top = evt.clientY + "px";
+        });
+        rect.addEventListener("mousemove", (evt) => {
+            tooltip.style.left = evt.clientX + "px";
+            tooltip.style.top = evt.clientY + "px";
+        });
+        rect.addEventListener("mouseleave", () => {
+            rect.setAttribute("fill", "#1976d2");
+            tooltip.style.display = "none";
+        });
+
+        svg.appendChild(rect);
+
+        const showAll = n <= 40;
+        const show = showAll || (i % 5 === 0);
+        if (show) {
+            const lab = document.createElementNS(svgns, "text");
+            lab.setAttribute("x", xCenter);
+            lab.setAttribute("y", y0 + 10);
+            lab.setAttribute("font-size", "9");
+            lab.setAttribute("text-anchor", "end");
+            lab.setAttribute("transform", `rotate(-60 ${xCenter} ${y0 + 10})`);
+            lab.textContent = d.sample;
+            svg.appendChild(lab);
+        }
     });
-    bar.addEventListener("mousemove", (evt) => {
-        tooltip.style.left = evt.clientX + "px";
-        tooltip.style.top = evt.clientY + "px";
-    });
-    bar.addEventListener("mouseleave", () => {
-        bar.setAttribute("fill", "#1976d2");
-        tooltip.style.display = "none";
-    });
 
-    svg.appendChild(bar);
-
-    // Marker at the end of the bar
-    const markerLine = document.createElementNS(svgns, "line");
-    markerLine.setAttribute("x1", xEnd);
-    markerLine.setAttribute("y1", barY - 8);
-    markerLine.setAttribute("x2", xEnd);
-    markerLine.setAttribute("y2", barY + barHeight + 8);
-    markerLine.setAttribute("stroke", "#1976d2");
-    markerLine.setAttribute("stroke-width", "1.2");
-    svg.appendChild(markerLine);
-
-    const markerLabel = document.createElementNS(svgns, "text");
-    markerLabel.setAttribute("x", xEnd);
-    markerLabel.setAttribute("y", barY - 10);
-    markerLabel.setAttribute("font-size", "10");
-    markerLabel.setAttribute("text-anchor", "middle");
-    markerLabel.setAttribute("fill", "#1976d2");
-    markerLabel.textContent = `${percentOverall.toFixed(1)}% overall`;
-    svg.appendChild(markerLabel);
-
-    // Threshold lines at 5% (yellow-orange) and 20% (red)
+    // Horizontal threshold lines at 5% and 20%
     const thresholds = [
-        {pct: 5,  color: "#ffb300", label: "5%"},
-        {pct: 20, color: "#d32f2f", label: "20%"}
+        {frac: 0.05, color: "#ffb300", label: "5%"},
+        {frac: 0.20, color: "#d32f2f", label: "20%"}
     ];
-
     thresholds.forEach(t => {
-        if (t.pct > xMax) return;
-        const x = xForPct(t.pct);
+        if (t.frac > maxFrac + 1e-9) return;
+        const y = yForFrac(t.frac);
         const line = document.createElementNS(svgns, "line");
-        line.setAttribute("x1", x);
-        line.setAttribute("y1", yBase - 40);
-        line.setAttribute("x2", x);
-        line.setAttribute("y2", yBase + 40);
+        line.setAttribute("x1", x0);
+        line.setAttribute("y1", y);
+        line.setAttribute("x2", x0 + plotW);
+        line.setAttribute("y2", y);
         line.setAttribute("stroke", t.color);
         line.setAttribute("stroke-width", "1.4");
         line.setAttribute("stroke-dasharray", "4,2");
         svg.appendChild(line);
 
         const lab = document.createElementNS(svgns, "text");
-        lab.setAttribute("x", x);
-        lab.setAttribute("y", yBase - 46);
+        lab.setAttribute("x", x0 + plotW - 4);
+        lab.setAttribute("y", y - 2);
         lab.setAttribute("font-size", "10");
-        lab.setAttribute("text-anchor", "middle");
+        lab.setAttribute("text-anchor", "end");
         lab.setAttribute("fill", t.color);
         lab.textContent = t.label;
         svg.appendChild(lab);
@@ -1481,7 +1506,7 @@ function addClustersSection(parent, clusters) {
                     so cluster IDs are not directly comparable between the two.
                 </p>
                 <div class="clusters-heatmap-scroll">
-                    <svg id="clusters-heatmap-svg" class="clusters-heatmap-svg" viewBox="0 0 1000 190" preserveAspectRatio="none"></svg>
+                    <svg id="clusters-heatmap-svg" class="clusters-heatmap-svg" viewBox="0 0 1000 210" preserveAspectRatio="none"></svg>
                 </div>
                 <p class="small-note">
                     Hover over tiles for exact cluster assignments. Samples without an assignment in a given
@@ -1563,8 +1588,8 @@ function addClustersSection(parent, clusters) {
     const markerColors = buildClusterColorMap(markersMap, markerPalette);
     const readColors = buildClusterColorMap(readsMap, readPalette);
 
-    const height = 190;  // more vertical space
-    const margin = {left: 80, right: 20, top: 20, bottom: 60};
+    const height = 210;  // more vertical space for labels
+    const margin = {left: 80, right: 20, top: 20, bottom: 80};
     const rows = 2;
     const cellH = (height - margin.top - margin.bottom) / rows;
     const baseCellW = 20;
@@ -1636,12 +1661,12 @@ function addClustersSection(parent, clusters) {
                 if (show) {
                     const lab = document.createElementNS(svgns, "text");
                     lab.setAttribute("x", x + cellW / 2);
-                    lab.setAttribute("y", height - 15);
+                    lab.setAttribute("y", height - 22);  // closer to tiles, further from bottom edge
                     lab.setAttribute("font-size", "9");
                     lab.setAttribute("text-anchor", "end");
                     lab.setAttribute(
                         "transform",
-                        `rotate(-60 ${x + cellW / 2} ${height - 15})`
+                        `rotate(-60 ${x + cellW / 2} ${height - 22})`
                     );
                     lab.textContent = sampleName;
                     svg.appendChild(lab);
@@ -1675,7 +1700,7 @@ function main() {
 
     addScreeningSection(summaryDiv, S.screening_threshold);
     addSequencingDepthSection(summaryDiv, S.sequencing_depth, depthPerSample);
-    addLowQualitySection(summaryDiv, S.low_quality_reads);
+    addLowQualitySection(summaryDiv, S.low_quality_reads, depthPerSample);
     addProkFractionSection(summaryDiv, S.prokaryotic_fraction, depthPerSample);
     addRedundancyReadsSection(summaryDiv, S.redundancy_reads, depthPerSample);
     addRedundancyMarkersSection(summaryDiv, S.redundancy_markers, redBiplotPerSample);
