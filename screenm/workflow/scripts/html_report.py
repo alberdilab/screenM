@@ -42,15 +42,14 @@ HTML_TEMPLATE = r"""<!DOCTYPE html>
         margin-bottom: 8px;
     }
 
-    /* Flag-based background colours */
     .flag-1 {
-        background-color: #d7f5dd; /* greenish */
+        background-color: #d7f5dd;
     }
     .flag-2 {
-        background-color: #fff9c4; /* yellow */
+        background-color: #fff9c4;
     }
     .flag-3 {
-        background-color: #ffd2d2; /* red/pink */
+        background-color: #ffd2d2;
     }
 
     .summary-message {
@@ -63,7 +62,6 @@ HTML_TEMPLATE = r"""<!DOCTYPE html>
         margin-top: 8px;
     }
 
-    /* Generic highlight tiles (for stats) */
     .screen-overview-stats,
     .seq-depth-stats,
     .prok-stats,
@@ -143,7 +141,6 @@ HTML_TEMPLATE = r"""<!DOCTYPE html>
         height: 320px;
     }
 
-    /* Clusters heatmap */
     .clusters-heatmap-scroll {
         overflow-x: auto;
         margin-top: 10px;
@@ -154,10 +151,9 @@ HTML_TEMPLATE = r"""<!DOCTYPE html>
     .clusters-heatmap-svg {
         display: block;
         width: 100%;
-        height: 210px; /* more vertical room for labels */
+        height: 210px;
     }
 
-    /* Tooltip for interactive charts */
     .chart-tooltip {
         position: fixed;
         pointer-events: none;
@@ -180,7 +176,6 @@ HTML_TEMPLATE = r"""<!DOCTYPE html>
 <div id="summary-sections"></div>
 
 <script>
-// Embedded data from Python.
 const DISTILL_DATA = __DISTILL_JSON__;
 const FIGURES_DATA = __FIGURES_JSON__;
 
@@ -189,8 +184,6 @@ function flagClass(flag) {
     if (flag === 2) return "flag-2";
     return "flag-3";
 }
-
-/* ---------- Formatting helpers ---------- */
 
 function fmtInt(x) {
     if (x === null || x === undefined) return "NA";
@@ -212,7 +205,6 @@ function fmtMillions(x) {
     return v.toString();
 }
 
-/* Shared tooltip for charts */
 function getOrCreateTooltip() {
     let tooltip = document.querySelector(".chart-tooltip");
     if (!tooltip) {
@@ -225,7 +217,6 @@ function getOrCreateTooltip() {
 }
 
 /* ---------- Screening overview (merged) ---------- */
-
 function addScreeningOverviewSection(parent, data, depthPerSample) {
     if (!data) return;
     const div = document.createElement("div");
@@ -381,8 +372,8 @@ function addScreeningOverviewSection(parent, data, depthPerSample) {
     const step = plotW / n;
     const barWidth = Math.min(16, step * 0.8);
 
-    const colorAbove = "#2e7d32"; // green
-    const colorBelow = "#c62828"; // red
+    const colorAbove = "#2e7d32";
+    const colorBelow = "#c62828";
 
     perSample.forEach((d, i) => {
         const val = Number(d.total_reads) || 0;
@@ -391,7 +382,7 @@ function addScreeningOverviewSection(parent, data, depthPerSample) {
         const y = yForValue(val);
         const hBar = y0 - y;
 
-        let barColor = "#1976d2"; // fallback
+        let barColor = "#1976d2";
         if (thresholdReads && thresholdReads > 0) {
             barColor = val >= thresholdReads ? colorAbove : colorBelow;
         }
@@ -496,7 +487,7 @@ function addScreeningOverviewSection(parent, data, depthPerSample) {
     }
 }
 
-/* Sequencing quality (fastp) – per-sample barplot */
+/* Sequencing quality */
 function addLowQualitySection(parent, data, depthPerSample) {
     if (!data) return;
     const div = document.createElement("div");
@@ -564,8 +555,8 @@ function addLowQualitySection(parent, data, depthPerSample) {
     const x0 = margin.left;
     const y0 = height - margin.bottom;
 
-    const THRESH_GOOD = 0.05;  // 5%
-    const THRESH_MOD  = 0.20;  // 20%
+    const THRESH_GOOD = 0.05;
+    const THRESH_MOD  = 0.20;
 
     let maxFrac = 0;
     perSample.forEach(d => {
@@ -647,11 +638,11 @@ function addLowQualitySection(parent, data, depthPerSample) {
 
         let color;
         if (frac <= THRESH_GOOD) {
-            color = "#2e7d32"; // green
+            color = "#2e7d32";
         } else if (frac <= THRESH_MOD) {
-            color = "#f9a825"; // yellow
+            color = "#f9a825";
         } else {
-            color = "#c62828"; // red
+            color = "#c62828";
         }
 
         const rect = document.createElementNS(svgns, "rect");
@@ -752,7 +743,7 @@ function addLowQualitySection(parent, data, depthPerSample) {
     }
 }
 
-/* Prokaryotic fraction + depth components */
+/* Prokaryotic fraction & depth components */
 function addProkFractionSection(parent, data, depthPerSample) {
     if (!data) return;
     const div = document.createElement("div");
@@ -821,8 +812,8 @@ function addProkFractionSection(parent, data, depthPerSample) {
     const x0 = margin.left;
     const y0 = height - margin.bottom;
 
-    const THRESH_PROK_MOD = 0.50; // 50%
-    const THRESH_PROK_HIGH = 0.90; // 90%
+    const THRESH_PROK_MOD = 0.50;
+    const THRESH_PROK_HIGH = 0.90;
 
     function yForFrac(frac) {
         const f = Math.max(0, Math.min(1, frac));
@@ -926,11 +917,11 @@ function addProkFractionSection(parent, data, depthPerSample) {
 
         let prokColor;
         if (fracProk >= THRESH_PROK_HIGH) {
-            prokColor = "#2e7d32"; // green
+            prokColor = "#2e7d32";
         } else if (fracProk >= THRESH_PROK_MOD) {
-            prokColor = "#f9a825"; // yellow
+            prokColor = "#f9a825";
         } else {
-            prokColor = "#c62828"; // red
+            prokColor = "#c62828";
         }
         const segProk = makeSeg(hProk, prokColor);
 
@@ -1029,7 +1020,7 @@ function addProkFractionSection(parent, data, depthPerSample) {
     }
 }
 
-/* Overall metagenomic coverage (reads Nonpareil) */
+/* ---------- Overall metagenomic coverage (reads Nonpareil) ---------- */
 function addRedundancyReadsSection(parent, data, depthPerSample) {
     if (!data) return;
     const div = document.createElement("div");
@@ -1076,9 +1067,10 @@ function addRedundancyReadsSection(parent, data, depthPerSample) {
                 </div>
                 <p class="small-note">
                     X axis: samples; Y axis: sequenced depth relative to the LR_reads 95% target.
-                    The red dashed midline corresponds to the LR target (1×). Bars projecting above the
-                    line indicate how many times more than necessary has been sequenced; bars projecting
-                    below the line indicate how many times more sequencing would be needed to reach the target.
+                    The black dashed midline corresponds to the LR target. Tick labels above
+                    start at 1×, showing how many times more than necessary has been sequenced;
+                    ticks below show -1×, -2×, -3× etc. Bars more than 3× short of the target
+                    are shown in red.
                 </p>
             </div>
         </details>
@@ -1120,8 +1112,8 @@ function addRedundancyReadsSection(parent, data, depthPerSample) {
     const baselineY = yTop + plotH / 2;
 
     function transformRatio(r) {
-        if (r >= 1) return r - 1;
-        return -(1 / r - 1);
+        if (r >= 1) return r - 1;          // extra above target
+        return -(1 / r - 1);               // times more needed as negative
     }
 
     const values = combined.map(d => transformRatio(d.ratio));
@@ -1130,8 +1122,9 @@ function addRedundancyReadsSection(parent, data, depthPerSample) {
         const a = Math.abs(v);
         if (a > maxAbs) maxAbs = a;
     });
-    if (maxAbs <= 0) maxAbs = 1;
-    maxAbs *= 1.1;
+    // Always allow at least ±3× scale so -3× threshold is visible
+    maxAbs = Math.max(maxAbs, 3);
+    maxAbs *= 1.05;
 
     function yForVal(v) {
         const f = v / maxAbs;
@@ -1154,12 +1147,13 @@ function addRedundancyReadsSection(parent, data, depthPerSample) {
     yAxis.setAttribute("stroke", "#555");
     svg.appendChild(yAxis);
 
+    // Baseline: LR target – black dashed
     const baseLine = document.createElementNS(svgns, "line");
     baseLine.setAttribute("x1", x0);
     baseLine.setAttribute("y1", baselineY);
     baseLine.setAttribute("x2", x0 + plotW);
     baseLine.setAttribute("y2", baselineY);
-    baseLine.setAttribute("stroke", "#e53935");
+    baseLine.setAttribute("stroke", "#000000");
     baseLine.setAttribute("stroke-width", "1.4");
     baseLine.setAttribute("stroke-dasharray", "4,2");
     svg.appendChild(baseLine);
@@ -1169,11 +1163,11 @@ function addRedundancyReadsSection(parent, data, depthPerSample) {
     baseLabel.setAttribute("y", baselineY - 4);
     baseLabel.setAttribute("font-size", "10");
     baseLabel.setAttribute("text-anchor", "end");
-    baseLabel.setAttribute("fill", "#e53935");
-    baseLabel.textContent = "LR target (1×)";
+    baseLabel.setAttribute("fill", "#000000");
+    baseLabel.textContent = "LR target";
     svg.appendChild(baseLabel);
 
-    const maxTick = Math.max(1, Math.ceil(maxAbs));
+    const maxTick = Math.max(3, Math.ceil(maxAbs));
     for (let v = -maxTick; v <= maxTick; v++) {
         const y = yForVal(v);
         const tick = document.createElementNS(svgns, "line");
@@ -1184,6 +1178,11 @@ function addRedundancyReadsSection(parent, data, depthPerSample) {
         tick.setAttribute("stroke", "#555");
         svg.appendChild(tick);
 
+        if (v === 0) {
+            // Middle line: no Y-axis label
+            continue;
+        }
+
         const lab = document.createElementNS(svgns, "text");
         lab.setAttribute("x", x0 - 6);
         lab.setAttribute("y", y + 3);
@@ -1191,15 +1190,38 @@ function addRedundancyReadsSection(parent, data, depthPerSample) {
         lab.setAttribute("text-anchor", "end");
 
         let labelStr;
-        if (v === 0) {
-            labelStr = "1×";
-        } else if (v > 0) {
-            labelStr = (1 + v).toFixed(0) + "×";
+        if (v > 0) {
+            // Above target: 1×, 2×, ...
+            labelStr = v.toFixed(0) + "×";
         } else {
+            // Below target: -1×, -2×, -3×, ...
             labelStr = "-" + Math.abs(v).toFixed(0) + "×";
         }
         lab.textContent = labelStr;
         svg.appendChild(lab);
+    }
+
+    // Horizontal dashed line at -3× threshold
+    if (maxAbs >= 3) {
+        const yThr = yForVal(-3);
+        const thrLine = document.createElementNS(svgns, "line");
+        thrLine.setAttribute("x1", x0);
+        thrLine.setAttribute("y1", yThr);
+        thrLine.setAttribute("x2", x0 + plotW);
+        thrLine.setAttribute("y2", yThr);
+        thrLine.setAttribute("stroke", "#c62828");
+        thrLine.setAttribute("stroke-width", "1.4");
+        thrLine.setAttribute("stroke-dasharray", "4,2");
+        svg.appendChild(thrLine);
+
+        const thrLabel = document.createElementNS(svgns, "text");
+        thrLabel.setAttribute("x", x0 + plotW - 4);
+        thrLabel.setAttribute("y", yThr - 2);
+        thrLabel.setAttribute("font-size", "10");
+        thrLabel.setAttribute("text-anchor", "end");
+        thrLabel.setAttribute("fill", "#c62828");
+        thrLabel.textContent = "-3×";
+        svg.appendChild(thrLabel);
     }
 
     const ylabel = document.createElementNS(svgns, "text");
@@ -1208,7 +1230,7 @@ function addRedundancyReadsSection(parent, data, depthPerSample) {
     ylabel.setAttribute("text-anchor", "middle");
     ylabel.setAttribute("font-size", "11");
     ylabel.setAttribute("transform", `rotate(-90 16 ${margin.top + plotH / 2})`);
-    ylabel.textContent = "Sequenced depth relative to LR target (95%)";
+    ylabel.textContent = "Sequenced depth vs LR target (extra / missing ×)";
     svg.appendChild(ylabel);
 
     const xlabel = document.createElementNS(svgns, "text");
@@ -1243,12 +1265,21 @@ function addRedundancyReadsSection(parent, data, depthPerSample) {
         }
         hRect = Math.abs(hRect);
 
+        let fillColor;
+        if (v >= 0) {
+            fillColor = "#4caf50";
+        } else if (v >= -3) {
+            fillColor = "#ffa000"; // up to -3× short
+        } else {
+            fillColor = "#c62828"; // more than -3× short
+        }
+
         const rect = document.createElementNS(svgns, "rect");
         rect.setAttribute("x", x);
         rect.setAttribute("y", yRect);
         rect.setAttribute("width", barWidth);
         rect.setAttribute("height", hRect);
-        rect.setAttribute("fill", v >= 0 ? "#4caf50" : "#ffa000");
+        rect.setAttribute("fill", fillColor);
         rect.setAttribute("fill-opacity", "0.9");
         rect.style.cursor = "pointer";
 
@@ -1297,7 +1328,7 @@ function addRedundancyReadsSection(parent, data, depthPerSample) {
     });
 }
 
-/* Prokaryotic coverage (markers Nonpareil) */
+/* ---------- Prokaryotic coverage (markers Nonpareil) ---------- */
 function addRedundancyMarkersSection(parent, data, redBiplotPerSample) {
     if (!data) return;
     const div = document.createElement("div");
@@ -1344,9 +1375,9 @@ function addRedundancyMarkersSection(parent, data, redBiplotPerSample) {
                 </div>
                 <p class="small-note">
                     X axis: samples; Y axis: estimated marker coverage relative to the 95% target.
-                    The red dashed midline corresponds to the 95% coverage target (1×). Bars projecting above the
-                    line indicate samples exceeding the target; bars projecting below indicate how many times more
-                    coverage would be needed to reach it.
+                    The black dashed midline corresponds to the 95% coverage target. Bars above it show excess
+                    coverage (1×, 2×, ...), while bars below show how many times more coverage would be needed
+                    (-1×, -2×, -3× etc.). Bars more than 3× short of the target are shown in red.
                 </p>
             </div>
         </details>
@@ -1396,8 +1427,8 @@ function addRedundancyMarkersSection(parent, data, redBiplotPerSample) {
         const a = Math.abs(v);
         if (a > maxAbs) maxAbs = a;
     });
-    if (maxAbs <= 0) maxAbs = 1;
-    maxAbs *= 1.1;
+    maxAbs = Math.max(maxAbs, 3);
+    maxAbs *= 1.05;
 
     function yForVal(v) {
         const f = v / maxAbs;
@@ -1425,7 +1456,7 @@ function addRedundancyMarkersSection(parent, data, redBiplotPerSample) {
     baseLine.setAttribute("y1", baselineY);
     baseLine.setAttribute("x2", x0 + plotW);
     baseLine.setAttribute("y2", baselineY);
-    baseLine.setAttribute("stroke", "#e53935");
+    baseLine.setAttribute("stroke", "#000000");
     baseLine.setAttribute("stroke-width", "1.4");
     baseLine.setAttribute("stroke-dasharray", "4,2");
     svg.appendChild(baseLine);
@@ -1435,11 +1466,11 @@ function addRedundancyMarkersSection(parent, data, redBiplotPerSample) {
     baseLabel.setAttribute("y", baselineY - 4);
     baseLabel.setAttribute("font-size", "10");
     baseLabel.setAttribute("text-anchor", "end");
-    baseLabel.setAttribute("fill", "#e53935");
-    baseLabel.textContent = "95% coverage target (1×)";
+    baseLabel.setAttribute("fill", "#000000");
+    baseLabel.textContent = "95% coverage target";
     svg.appendChild(baseLabel);
 
-    const maxTick = Math.max(1, Math.ceil(maxAbs));
+    const maxTick = Math.max(3, Math.ceil(maxAbs));
     for (let v = -maxTick; v <= maxTick; v++) {
         const y = yForVal(v);
         const tick = document.createElementNS(svgns, "line");
@@ -1450,6 +1481,8 @@ function addRedundancyMarkersSection(parent, data, redBiplotPerSample) {
         tick.setAttribute("stroke", "#555");
         svg.appendChild(tick);
 
+        if (v === 0) continue; // no Y-axis label for middle line
+
         const lab = document.createElementNS(svgns, "text");
         lab.setAttribute("x", x0 - 6);
         lab.setAttribute("y", y + 3);
@@ -1457,15 +1490,35 @@ function addRedundancyMarkersSection(parent, data, redBiplotPerSample) {
         lab.setAttribute("text-anchor", "end");
 
         let labelStr;
-        if (v === 0) {
-            labelStr = "1×";
-        } else if (v > 0) {
-            labelStr = (1 + v).toFixed(0) + "×";
+        if (v > 0) {
+            labelStr = v.toFixed(0) + "×";
         } else {
             labelStr = "-" + Math.abs(v).toFixed(0) + "×";
         }
         lab.textContent = labelStr;
         svg.appendChild(lab);
+    }
+
+    if (maxAbs >= 3) {
+        const yThr = yForVal(-3);
+        const thrLine = document.createElementNS(svgns, "line");
+        thrLine.setAttribute("x1", x0);
+        thrLine.setAttribute("y1", yThr);
+        thrLine.setAttribute("x2", x0 + plotW);
+        thrLine.setAttribute("y2", yThr);
+        thrLine.setAttribute("stroke", "#c62828");
+        thrLine.setAttribute("stroke-width", "1.4");
+        thrLine.setAttribute("stroke-dasharray", "4,2");
+        svg.appendChild(thrLine);
+
+        const thrLabel = document.createElementNS(svgns, "text");
+        thrLabel.setAttribute("x", x0 + plotW - 4);
+        thrLabel.setAttribute("y", yThr - 2);
+        thrLabel.setAttribute("font-size", "10");
+        thrLabel.setAttribute("text-anchor", "end");
+        thrLabel.setAttribute("fill", "#c62828");
+        thrLabel.textContent = "-3×";
+        svg.appendChild(thrLabel);
     }
 
     const ylabel = document.createElementNS(svgns, "text");
@@ -1474,7 +1527,7 @@ function addRedundancyMarkersSection(parent, data, redBiplotPerSample) {
     ylabel.setAttribute("text-anchor", "middle");
     ylabel.setAttribute("font-size", "11");
     ylabel.setAttribute("transform", `rotate(-90 16 ${margin.top + plotH / 2})`);
-    ylabel.textContent = "Marker coverage relative to 95% target";
+    ylabel.textContent = "Marker coverage vs 95% target (extra / missing ×)";
     svg.appendChild(ylabel);
 
     const xlabel = document.createElementNS(svgns, "text");
@@ -1509,12 +1562,21 @@ function addRedundancyMarkersSection(parent, data, redBiplotPerSample) {
         }
         hRect = Math.abs(hRect);
 
+        let fillColor;
+        if (v >= 0) {
+            fillColor = "#4caf50";
+        } else if (v >= -3) {
+            fillColor = "#ffa000";
+        } else {
+            fillColor = "#c62828";
+        }
+
         const rect = document.createElementNS(svgns, "rect");
         rect.setAttribute("x", x);
         rect.setAttribute("y", yRect);
         rect.setAttribute("width", barWidth);
         rect.setAttribute("height", hRect);
-        rect.setAttribute("fill", v >= 0 ? "#4caf50" : "#ffa000");
+        rect.setAttribute("fill", fillColor);
         rect.setAttribute("fill-opacity", "0.9");
         rect.style.cursor = "pointer";
 
@@ -1562,7 +1624,7 @@ function addRedundancyMarkersSection(parent, data, redBiplotPerSample) {
     });
 }
 
-/* Sample clusters (Mash-based) */
+/* Sample clusters section stays unchanged */
 function addClustersSection(parent, clusters) {
     if (!clusters) return;
     const div = document.createElement("div");
@@ -1803,7 +1865,6 @@ main();
 </html>
 """
 
-
 def main():
     parser = argparse.ArgumentParser(
         description=(
@@ -1853,7 +1914,6 @@ def main():
     out_path.parent.mkdir(parents=True, exist_ok=True)
     with out_path.open("w", encoding="utf-8") as f:
         f.write(html)
-
 
 if __name__ == "__main__":
     main()
