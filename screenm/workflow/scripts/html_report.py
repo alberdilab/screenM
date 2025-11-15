@@ -173,14 +173,31 @@ HTML_TEMPLATE = r"""<!DOCTYPE html>
     }
 
     .seq-depth-plot-container {
-        overflow-x: auto;
+        width: 100%;
         border: 1px solid #ddd;
         border-radius: 4px;
         background: #fcfcfc;
         padding: 4px 4px 0 4px;
+        box-sizing: border-box;
     }
     .seq-depth-svg {
         display: block;
+        width: 100%;
+        height: 320px;
+    }
+
+    /* Tooltip for interactive depth chart */
+    .seq-depth-tooltip {
+        position: fixed;
+        pointer-events: none;
+        background: rgba(0,0,0,0.85);
+        color: #fff;
+        padding: 4px 8px;
+        border-radius: 4px;
+        font-size: 0.8em;
+        z-index: 1000;
+        white-space: nowrap;
+        transform: translate(8px, -20px);
     }
 </style>
 
@@ -259,7 +276,6 @@ function addSequencingDepthSection(parent, data, depthPerSample) {
 
     const msg = data.message_sequencing_depth || "";
 
-    // container with stats + plot placeholder
     div.innerHTML = `
         <details>
             <summary>Sequencing Depth</summary>
@@ -283,45 +299,33 @@ function addSequencingDepthSection(parent, data, depthPerSample) {
                     </div>
                 </div>
                 <div class="seq-depth-plot-container">
-                    <svg id="seq-depth-svg" class="seq-depth-svg" width="600" height="320"></svg>
+                    <svg id="seq-depth-svg" class="seq-depth-svg" viewBox="0 0 1000 320" preserveAspectRatio="none"></svg>
                 </div>
                 <p class="small-note">
                     X axis: samples; Y axis: sequencing depth in reads. Bars show per-sample total read counts.
                     Horizontal dashed lines indicate mean and median sequencing depth across samples.
+                    Hover over bars for exact values.
                 </p>
             </div>
         </details>
     `;
     parent.appendChild(div);
 
-    // Build barplot using depthPerSample (from figures.json)
     const svg = div.querySelector("#seq-depth-svg");
     const perSample = (depthPerSample || [])
         .filter(d => d.total_reads !== null && d.total_reads !== undefined);
 
     if (!perSample.length) {
-        // show message in place of the plot
-        const msgNode = document.createElement("text");
-        msgNode.textContent = "Per-sample read counts not available for barplot.";
-        // quick hack: use foreignObject-like display via innerHTML
         svg.outerHTML = `<div class="small-note">Per-sample read counts not available for sequencing depth barplot.</div>`;
         return;
     }
 
-    // If many samples, make SVG wider; container will scroll horizontally
-    const n = perSample.length;
-    const margin = {left: 60, right: 10, top: 20, bottom: 80};
-    const baseWidth = 400;
-    const barWidth = 14;
-    const minPlotWidth = n * (barWidth + 4);
-    const width = Math.max(baseWidth, margin.left + margin.right + minPlotWidth);
+    // Logical drawing size (viewBox); SVG will scale to full width via CSS.
+    const width = 1000;
     const height = 320;
-    svg.setAttribute("width", width);
-    svg.setAttribute("height", height);
-
+    const margin = {left: 60, right: 20, top: 20, bottom: 80};
     const plotW = width - margin.left - margin.right;
     const plotH = height - margin.top - margin.bottom;
-
     const svgns = "http://www.w3.org/2000/svg";
 
     // Determine max depth for scaling
@@ -332,7 +336,6 @@ function addSequencingDepthSection(parent, data, depthPerSample) {
     });
     if (maxDepth <= 0) maxDepth = 1;
 
-    // y-scale: 0..maxDepth maps to bottom..top
     const x0 = margin.left;
     const y0 = height - margin.bottom;
 
@@ -341,7 +344,7 @@ function addSequencingDepthSection(parent, data, depthPerSample) {
         return y0 - ratio * plotH;
     }
 
-    // Draw axes
+    // Axes
     const xAxis = document.createElementNS(svgns, "line");
     xAxis.setAttribute("x1", x0);
     xAxis.setAttribute("y1", y0);
@@ -358,10 +361,11 @@ function addSequencingDepthSection(parent, data, depthPerSample) {
     yAxis.setAttribute("stroke", "#555");
     svg.appendChild(yAxis);
 
-    // Y-ticks at 0, 25, 50, 75, 100% of max
+    // Y ticks
     [0, 0.25, 0.5, 0.75, 1].forEach(frac => {
         const val = frac * maxDepth;
         const y = yForValue(val);
+
         const tick = document.createElementNS(svgns, "line");
         tick.setAttribute("x1", x0 - 4);
         tick.setAttribute("y1", y);
@@ -398,31 +402,57 @@ function addSequencingDepthSection(parent, data, depthPerSample) {
     svg.appendChild(xlabel);
 
     // Bars
+    const n = perSample.length;
     const step = plotW / n;
-    const barActualWidth = Math.min(barWidth, step * 0.8);
+    const barWidth = Math.min(16, step * 0.8);
+
+    // Tooltip element (shared)
+    let tooltip = document.querySelector(".seq-depth-tooltip");
+    if (!tooltip) {
+        tooltip = document.createElement("div");
+        tooltip.className = "seq-depth-tooltip";
+        tooltip.style.display = "none";
+        document.body.appendChild(tooltip);
+    }
 
     perSample.forEach((d, i) => {
         const val = Number(d.total_reads) || 0;
         const xCenter = x0 + step * i + step / 2;
-        const x = xCenter - barActualWidth / 2;
+        const x = xCenter - barWidth / 2;
         const y = yForValue(val);
         const hBar = y0 - y;
 
         const rect = document.createElementNS(svgns, "rect");
         rect.setAttribute("x", x);
         rect.setAttribute("y", y);
-        rect.setAttribute("width", barActualWidth);
+        rect.setAttribute("width", barWidth);
         rect.setAttribute("height", hBar);
         rect.setAttribute("fill", "#1976d2");
         rect.setAttribute("fill-opacity", "0.85");
+        rect.style.cursor = "pointer";
 
-        const title = document.createElementNS(svgns, "title");
-        title.textContent = `${d.sample}\n${fmtMillions(val)} reads`;
-        rect.appendChild(title);
+        // Hover / tooltip interactivity
+        rect.addEventListener("mouseenter", (evt) => {
+            rect.setAttribute("fill", "#0d47a1");
+            rect.setAttribute("fill-opacity", "1.0");
+            tooltip.style.display = "block";
+            tooltip.textContent = `${d.sample}: ${fmtMillions(val)} reads`;
+            tooltip.style.left = evt.clientX + "px";
+            tooltip.style.top = evt.clientY + "px";
+        });
+        rect.addEventListener("mousemove", (evt) => {
+            tooltip.style.left = evt.clientX + "px";
+            tooltip.style.top = evt.clientY + "px";
+        });
+        rect.addEventListener("mouseleave", () => {
+            rect.setAttribute("fill", "#1976d2");
+            rect.setAttribute("fill-opacity", "0.85");
+            tooltip.style.display = "none";
+        });
 
         svg.appendChild(rect);
 
-        // Sample labels: only show if not too many samples, or every 5th one
+        // Sample labels: show all if <=40, otherwise every 5th
         const showAll = n <= 40;
         const show = showAll || (i % 5 === 0);
         if (show) {
@@ -454,7 +484,7 @@ function addSequencingDepthSection(parent, data, depthPerSample) {
         svg.appendChild(line);
 
         const lab = document.createElementNS(svgns, "text");
-        lab.setAttribute("x", x0 + plotW + (dx || 0));
+        lab.setAttribute("x", x0 + plotW - (dx || 4));
         lab.setAttribute("y", y - 2);
         lab.setAttribute("font-size", "10");
         lab.setAttribute("text-anchor", "end");
@@ -464,10 +494,10 @@ function addSequencingDepthSection(parent, data, depthPerSample) {
     }
 
     if (meanDepth > 0) {
-        addHorizontalLine(meanDepth, "#e53935", "4,2", "mean", -2);
+        addHorizontalLine(meanDepth, "#e53935", "4,2", "mean");
     }
     if (medianDepth > 0) {
-        addHorizontalLine(medianDepth, "#43a047", "3,2", "median", -2);
+        addHorizontalLine(medianDepth, "#43a047", "3,2", "median");
     }
 }
 
@@ -630,7 +660,7 @@ function addFigureDepthFractions(parent, fig) {
                 </div>
                 <div id="depth-bars" class="depth-table"></div>
                 <p class="small-note">
-                    Bars show per-sample relative contributions of low-quality reads, prokaryotic reads, "
+                    Bars show per-sample relative contributions of low-quality reads, prokaryotic reads,
                     and other QC-passing reads. Tooltip values and right-hand text give approximate counts.
                     Nonpareil 95% LR_reads thresholds are indicated in text for use as dashed horizontal
                     lines in custom plots.
