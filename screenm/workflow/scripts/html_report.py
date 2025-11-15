@@ -276,9 +276,9 @@ function addScreeningOverviewSection(parent, data, depthPerSample) {
                     <svg id="seq-depth-svg" class="seq-depth-svg" viewBox="0 0 1000 320" preserveAspectRatio="none"></svg>
                 </div>
                 <p class="small-note">
-                    X axis: samples; Y axis: sequencing depth in reads. Bars show per-sample total read counts.
-                    A horizontal dashed line indicates the median sequencing depth across samples.
-                    Hover over bars for exact values.
+                    X axis: samples; Y axis: sequencing depth in reads. Bars show per-sample total read counts,
+                    coloured green if above the screening threshold and red if below. A horizontal dashed line
+                    indicates the median sequencing depth; another dashed line marks the read threshold.
                 </p>
             </div>
         </details>
@@ -301,11 +301,16 @@ function addScreeningOverviewSection(parent, data, depthPerSample) {
     const plotH = height - margin.top - margin.bottom;
     const svgns = "http://www.w3.org/2000/svg";
 
+    const thresholdReads = Number(data.reads_threshold) || null;
+
     let maxDepth = 0;
     perSample.forEach(d => {
         const v = Number(d.total_reads) || 0;
         if (v > maxDepth) maxDepth = v;
     });
+    if (thresholdReads && thresholdReads > maxDepth) {
+        maxDepth = thresholdReads * 1.05;
+    }
     if (maxDepth <= 0) maxDepth = 1;
 
     const x0 = margin.left;
@@ -376,6 +381,9 @@ function addScreeningOverviewSection(parent, data, depthPerSample) {
     const step = plotW / n;
     const barWidth = Math.min(16, step * 0.8);
 
+    const colorAbove = "#2e7d32"; // green
+    const colorBelow = "#c62828"; // red
+
     perSample.forEach((d, i) => {
         const val = Number(d.total_reads) || 0;
         const xCenter = x0 + step * i + step / 2;
@@ -383,20 +391,36 @@ function addScreeningOverviewSection(parent, data, depthPerSample) {
         const y = yForValue(val);
         const hBar = y0 - y;
 
+        let barColor = "#1976d2"; // fallback
+        if (thresholdReads && thresholdReads > 0) {
+            barColor = val >= thresholdReads ? colorAbove : colorBelow;
+        }
+
         const rect = document.createElementNS(svgns, "rect");
         rect.setAttribute("x", x);
         rect.setAttribute("y", y);
         rect.setAttribute("width", barWidth);
         rect.setAttribute("height", hBar);
-        rect.setAttribute("fill", "#1976d2");
-        rect.setAttribute("fill-opacity", "0.85");
+        rect.setAttribute("fill", barColor);
+        rect.setAttribute("fill-opacity", "0.9");
         rect.style.cursor = "pointer";
 
+        const tooltipLines = [
+            `${d.sample}`,
+            `Depth: ${fmtMillions(val)} reads`
+        ];
+        if (thresholdReads && thresholdReads > 0) {
+            tooltipLines.push(`Threshold: ${fmtMillions(thresholdReads)} reads`);
+            tooltipLines.push(
+                val >= thresholdReads ? "Above threshold" : "Below threshold"
+            );
+        }
+
         rect.addEventListener("mouseenter", (evt) => {
-            rect.setAttribute("fill", "#0d47a1");
-            rect.setAttribute("fill-opacity", "1.0");
+            rect.setAttribute("stroke", "#000");
+            rect.setAttribute("stroke-width", "1");
             tooltip.style.display = "block";
-            tooltip.textContent = `${d.sample}: ${fmtMillions(val)} reads`;
+            tooltip.textContent = tooltipLines.join("\n");
             tooltip.style.left = evt.clientX + "px";
             tooltip.style.top = evt.clientY + "px";
         });
@@ -405,8 +429,8 @@ function addScreeningOverviewSection(parent, data, depthPerSample) {
             tooltip.style.top = evt.clientY + "px";
         });
         rect.addEventListener("mouseleave", () => {
-            rect.setAttribute("fill", "#1976d2");
-            rect.setAttribute("fill-opacity", "0.85");
+            rect.removeAttribute("stroke");
+            rect.removeAttribute("stroke-width");
             tooltip.style.display = "none";
         });
 
@@ -427,7 +451,6 @@ function addScreeningOverviewSection(parent, data, depthPerSample) {
     });
 
     const medianDepth = Number(medianReads) || 0;
-
     if (medianDepth > 0) {
         const y = yForValue(medianDepth);
         const line = document.createElementNS(svgns, "line");
@@ -435,7 +458,7 @@ function addScreeningOverviewSection(parent, data, depthPerSample) {
         line.setAttribute("y1", y);
         line.setAttribute("x2", x0 + plotW);
         line.setAttribute("y2", y);
-        line.setAttribute("stroke", "#43a047");
+        line.setAttribute("stroke", "#1976d2");
         line.setAttribute("stroke-width", "1.2");
         line.setAttribute("stroke-dasharray", "3,2");
         svg.appendChild(line);
@@ -445,8 +468,30 @@ function addScreeningOverviewSection(parent, data, depthPerSample) {
         lab.setAttribute("y", y - 2);
         lab.setAttribute("font-size", "10");
         lab.setAttribute("text-anchor", "end");
-        lab.setAttribute("fill", "#43a047");
+        lab.setAttribute("fill", "#1976d2");
         lab.textContent = `median (${fmtMillions(medianDepth)})`;
+        svg.appendChild(lab);
+    }
+
+    if (thresholdReads && thresholdReads > 0) {
+        const y = yForValue(thresholdReads);
+        const line = document.createElementNS(svgns, "line");
+        line.setAttribute("x1", x0);
+        line.setAttribute("y1", y);
+        line.setAttribute("x2", x0 + plotW);
+        line.setAttribute("y2", y);
+        line.setAttribute("stroke", "#424242");
+        line.setAttribute("stroke-width", "1.2");
+        line.setAttribute("stroke-dasharray", "4,2");
+        svg.appendChild(line);
+
+        const lab = document.createElementNS(svgns, "text");
+        lab.setAttribute("x", x0 + plotW - 4);
+        lab.setAttribute("y", y - 2);
+        lab.setAttribute("font-size", "10");
+        lab.setAttribute("text-anchor", "end");
+        lab.setAttribute("fill", "#424242");
+        lab.textContent = `threshold (${fmtMillions(thresholdReads)})`;
         svg.appendChild(lab);
     }
 }
@@ -490,8 +535,9 @@ function addLowQualitySection(parent, data, depthPerSample) {
                 </div>
                 <p class="small-note">
                     X axis: samples; Y axis: fraction of reads removed by quality filtering (fastp).
-                    Bars show per-sample removed fractions. Horizontal dashed lines mark 5% (yellow-orange)
-                    and 20% (red) thresholds. Hover over bars for exact values.
+                    Bars show per-sample removed fractions, coloured green (&le; 5%), yellow (5–20%) or
+                    red (&gt; 20%). Horizontal dashed lines mark 5% and 20% thresholds, and the median
+                    removed fraction is shown as a blue dashed line.
                 </p>
             </div>
         </details>
@@ -518,13 +564,15 @@ function addLowQualitySection(parent, data, depthPerSample) {
     const x0 = margin.left;
     const y0 = height - margin.bottom;
 
-    // Determine max fraction; ensure thresholds visible.
+    const THRESH_GOOD = 0.05;  // 5%
+    const THRESH_MOD  = 0.20;  // 20%
+
     let maxFrac = 0;
     perSample.forEach(d => {
         const f = Number(d.fraction_low_quality_of_total) || 0;
         if (f > maxFrac) maxFrac = f;
     });
-    maxFrac = Math.max(maxFrac * 1.1, 0.25, 0.22); // at least 25% so 20% line is well inside
+    maxFrac = Math.max(maxFrac * 1.1, 0.25, 0.22);
 
     function yForFrac(f) {
         const frac = Math.max(0, Math.min(maxFrac, f));
@@ -547,7 +595,6 @@ function addLowQualitySection(parent, data, depthPerSample) {
     yAxis.setAttribute("stroke", "#555");
     svg.appendChild(yAxis);
 
-    // Y ticks at 0, 5, 10, 15, 20, 25% (or up to maxFrac)
     const tickPercs = [0, 0.05, 0.10, 0.15, 0.20, 0.25].filter(p => p <= maxFrac + 1e-9);
     tickPercs.forEach(frac => {
         const y = yForFrac(frac);
@@ -598,12 +645,21 @@ function addLowQualitySection(parent, data, depthPerSample) {
         const y = yForFrac(frac);
         const hBar = y0 - y;
 
+        let color;
+        if (frac <= THRESH_GOOD) {
+            color = "#2e7d32"; // green
+        } else if (frac <= THRESH_MOD) {
+            color = "#f9a825"; // yellow
+        } else {
+            color = "#c62828"; // red
+        }
+
         const rect = document.createElementNS(svgns, "rect");
         rect.setAttribute("x", x);
         rect.setAttribute("y", y);
         rect.setAttribute("width", barWidth);
         rect.setAttribute("height", hBar);
-        rect.setAttribute("fill", "#1976d2");
+        rect.setAttribute("fill", color);
         rect.setAttribute("fill-opacity", "0.9");
         rect.style.cursor = "pointer";
 
@@ -612,7 +668,8 @@ function addLowQualitySection(parent, data, depthPerSample) {
             `Removed: ${(frac * 100).toFixed(2)}%`;
 
         rect.addEventListener("mouseenter", (evt) => {
-            rect.setAttribute("fill", "#0d47a1");
+            rect.setAttribute("stroke", "#000");
+            rect.setAttribute("stroke-width", "1");
             tooltip.style.display = "block";
             tooltip.textContent = tooltipText;
             tooltip.style.left = evt.clientX + "px";
@@ -623,7 +680,8 @@ function addLowQualitySection(parent, data, depthPerSample) {
             tooltip.style.top = evt.clientY + "px";
         });
         rect.addEventListener("mouseleave", () => {
-            rect.setAttribute("fill", "#1976d2");
+            rect.removeAttribute("stroke");
+            rect.removeAttribute("stroke-width");
             tooltip.style.display = "none";
         });
 
@@ -643,10 +701,9 @@ function addLowQualitySection(parent, data, depthPerSample) {
         }
     });
 
-    // Horizontal threshold lines at 5% and 20%
     const thresholds = [
-        {frac: 0.05, color: "#ffb300", label: "5%"},
-        {frac: 0.20, color: "#d32f2f", label: "20%"}
+        {frac: THRESH_GOOD, color: "#2e7d32", label: "5%"},
+        {frac: THRESH_MOD,  color: "#c62828", label: "20%"}
     ];
     thresholds.forEach(t => {
         if (t.frac > maxFrac + 1e-9) return;
@@ -670,6 +727,29 @@ function addLowQualitySection(parent, data, depthPerSample) {
         lab.textContent = t.label;
         svg.appendChild(lab);
     });
+
+    const medianRemoved = Number(medianFrac) || 0;
+    if (medianRemoved > 0) {
+        const y = yForFrac(medianRemoved);
+        const line = document.createElementNS(svgns, "line");
+        line.setAttribute("x1", x0);
+        line.setAttribute("y1", y);
+        line.setAttribute("x2", x0 + plotW);
+        line.setAttribute("y2", y);
+        line.setAttribute("stroke", "#1976d2");
+        line.setAttribute("stroke-width", "1.2");
+        line.setAttribute("stroke-dasharray", "3,2");
+        svg.appendChild(line);
+
+        const lab = document.createElementNS(svgns, "text");
+        lab.setAttribute("x", x0 + plotW - 4);
+        lab.setAttribute("y", y - 2);
+        lab.setAttribute("font-size", "10");
+        lab.setAttribute("text-anchor", "end");
+        lab.setAttribute("fill", "#1976d2");
+        lab.textContent = `median (${(medianRemoved * 100).toFixed(1)}%)`;
+        svg.appendChild(lab);
+    }
 }
 
 /* Prokaryotic fraction + depth components */
@@ -711,9 +791,9 @@ function addProkFractionSection(parent, data, depthPerSample) {
                 </div>
                 <p class="small-note">
                     X axis: samples; Y axis: fraction of total reads. Bars are stacked into low-quality (red),
-                    prokaryotic (green), and other QC-passing reads (grey). Hover over bars for exact fractions
-                    and estimated read counts of each component. A dashed horizontal line indicates the median
-                    prokaryotic fraction across samples.
+                    prokaryotic (green/yellow/red depending on the fraction), and other QC-passing reads (grey).
+                    Horizontal dashed lines mark 50% (yellow) and 90% (green) prokaryotic fraction; the blue dashed line
+                    shows the median prokaryotic fraction. Hover over bars for exact fractions and estimated read counts.
                 </p>
             </div>
         </details>
@@ -740,6 +820,9 @@ function addProkFractionSection(parent, data, depthPerSample) {
 
     const x0 = margin.left;
     const y0 = height - margin.bottom;
+
+    const THRESH_PROK_MOD = 0.50; // 50%
+    const THRESH_PROK_HIGH = 0.90; // 90%
 
     function yForFrac(frac) {
         const f = Math.max(0, Math.min(1, frac));
@@ -840,7 +923,17 @@ function addProkFractionSection(parent, data, depthPerSample) {
         }
 
         const segLow = makeSeg(hLow, "#f44336");
-        const segProk = makeSeg(hProk, "#4caf50");
+
+        let prokColor;
+        if (fracProk >= THRESH_PROK_HIGH) {
+            prokColor = "#2e7d32"; // green
+        } else if (fracProk >= THRESH_PROK_MOD) {
+            prokColor = "#f9a825"; // yellow
+        } else {
+            prokColor = "#c62828"; // red
+        }
+        const segProk = makeSeg(hProk, prokColor);
+
         const segOther = makeSeg(hOther, "#9e9e9e");
 
         const tooltipText =
@@ -886,6 +979,32 @@ function addProkFractionSection(parent, data, depthPerSample) {
         }
     });
 
+    const thresholds = [
+        {frac: THRESH_PROK_MOD,  color: "#f9a825", label: "50%"},
+        {frac: THRESH_PROK_HIGH, color: "#2e7d32", label: "90%"}
+    ];
+    thresholds.forEach(t => {
+        const y = yForFrac(t.frac);
+        const line = document.createElementNS(svgns, "line");
+        line.setAttribute("x1", x0);
+        line.setAttribute("y1", y);
+        line.setAttribute("x2", x0 + plotW);
+        line.setAttribute("y2", y);
+        line.setAttribute("stroke", t.color);
+        line.setAttribute("stroke-width", "1.4");
+        line.setAttribute("stroke-dasharray", "4,2");
+        svg.appendChild(line);
+
+        const lab = document.createElementNS(svgns, "text");
+        lab.setAttribute("x", x0 + plotW - 4);
+        lab.setAttribute("y", y - 2);
+        lab.setAttribute("font-size", "10");
+        lab.setAttribute("text-anchor", "end");
+        lab.setAttribute("fill", t.color);
+        lab.textContent = t.label;
+        svg.appendChild(lab);
+    });
+
     const medianProkFrac = (Number(data.median_prokaryotic_fraction) || 0) / 100;
     if (medianProkFrac > 0) {
         const y = yForFrac(medianProkFrac);
@@ -894,7 +1013,7 @@ function addProkFractionSection(parent, data, depthPerSample) {
         line.setAttribute("y1", y);
         line.setAttribute("x2", x0 + plotW);
         line.setAttribute("y2", y);
-        line.setAttribute("stroke", "#43a047");
+        line.setAttribute("stroke", "#1976d2");
         line.setAttribute("stroke-width", "1.2");
         line.setAttribute("stroke-dasharray", "3,2");
         svg.appendChild(line);
@@ -904,7 +1023,7 @@ function addProkFractionSection(parent, data, depthPerSample) {
         lab.setAttribute("y", y - 2);
         lab.setAttribute("font-size", "10");
         lab.setAttribute("text-anchor", "end");
-        lab.setAttribute("fill", "#43a047");
+        lab.setAttribute("fill", "#1976d2");
         lab.textContent = `median prok (${fmtFloat(data.median_prokaryotic_fraction, 1)}%)`;
         svg.appendChild(lab);
     }
@@ -1494,7 +1613,6 @@ function addClustersSection(parent, clusters) {
     const svgns = "http://www.w3.org/2000/svg";
     const tooltip = getOrCreateTooltip();
 
-    // Build sample->cluster maps from clusters[].members
     const markersPS = (markers.clusters || []).flatMap(cl => {
         const cid = cl.cluster_id;
         const members = cl.members || [];
@@ -1530,7 +1648,6 @@ function addClustersSection(parent, clusters) {
 
     const nSamples = samples.length;
 
-    /* High-contrast palettes: cold blues/teals for markers, warm reds/oranges/magentas for reads */
     const markerPalette = [
         "#08306b", "#08519c", "#2171b5", "#4292c6",
         "#41b6c4", "#1d91c0", "#2c7fb8", "#7fcdbb",
@@ -1561,7 +1678,7 @@ function addClustersSection(parent, clusters) {
     const markerColors = buildClusterColorMap(markersMap, markerPalette);
     const readColors = buildClusterColorMap(readsMap, readPalette);
 
-    const height = 210;  // more vertical space for labels
+    const height = 210;
     const margin = {left: 80, right: 20, top: 20, bottom: 80};
     const rows = 2;
     const cellH = (height - margin.top - margin.bottom) / rows;
@@ -1634,7 +1751,7 @@ function addClustersSection(parent, clusters) {
                 if (show) {
                     const lab = document.createElementNS(svgns, "text");
                     lab.setAttribute("x", x + cellW / 2);
-                    lab.setAttribute("y", height - 22);  // closer to tiles, further from bottom edge
+                    lab.setAttribute("y", height - 22);
                     lab.setAttribute("font-size", "9");
                     lab.setAttribute("text-anchor", "end");
                     lab.setAttribute(
@@ -1723,7 +1840,6 @@ def main():
     distill_json_str = json.dumps(distill_data, indent=2)
     figures_json_str = json.dumps(figures_data, indent=2)
 
-    # Avoid breaking the <script> tag if JSON contains "</script>"
     distill_json_str = distill_json_str.replace("</script>", "<\\/script>")
     figures_json_str = figures_json_str.replace("</script>", "<\\/script>")
 
