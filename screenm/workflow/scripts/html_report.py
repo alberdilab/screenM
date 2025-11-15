@@ -92,49 +92,7 @@ HTML_TEMPLATE = r"""<!DOCTYPE html>
     }
     .seg-lowq   { background: #f44336; }  /* red */
     .seg-prok   { background: #4caf50; }  /* green */
-    .seg-other  { background: #9e9e9e; }  /* grey, as requested */
-
-    .depth-table {
-        max-height: 350px;
-        overflow-y: auto;
-        border: 1px solid #ddd;
-        border-radius: 4px;
-        padding: 4px 6px;
-        background: #fcfcfc;
-    }
-    .depth-row {
-        display: flex;
-        align-items: center;
-        padding: 3px 0;
-        font-size: 0.9em;
-    }
-    .depth-label {
-        width: 120px;
-        flex-shrink: 0;
-        font-weight: 500;
-    }
-    .depth-bar-wrapper {
-        flex: 1;
-        margin: 0 8px;
-    }
-    .depth-bar {
-        position: relative;
-        height: 12px;
-        width: 100%;
-        background: #eee;
-        border-radius: 6px;
-        overflow: hidden;
-    }
-    .depth-bar-seg {
-        height: 100%;
-        display: inline-block;
-    }
-    .depth-info {
-        width: 200px;
-        flex-shrink: 0;
-        font-size: 0.8em;
-        text-align: right;
-    }
+    .seg-other  { background: #9e9e9e; }  /* grey */
 
     /* Redundancy biplot */
     .biplot-container {
@@ -172,7 +130,7 @@ HTML_TEMPLATE = r"""<!DOCTYPE html>
         margin-top: 2px;
     }
 
-    .seq-depth-plot-container, .prok-depth-plot-container {
+    .seq-depth-plot-container, .prok-depth-plot-container, .lr-target-plot-container {
         width: 100%;
         border: 1px solid #ddd;
         border-radius: 4px;
@@ -180,7 +138,7 @@ HTML_TEMPLATE = r"""<!DOCTYPE html>
         padding: 4px 4px 0 4px;
         box-sizing: border-box;
     }
-    .seq-depth-svg, .prok-depth-svg {
+    .seq-depth-svg, .prok-depth-svg, .lr-target-svg {
         display: block;
         width: 100%;
         height: 320px;
@@ -315,7 +273,7 @@ function addSequencingDepthSection(parent, data, depthPerSample) {
                 </div>
                 <p class="small-note">
                     X axis: samples; Y axis: sequencing depth in reads. Bars show per-sample total read counts.
-                    Horizontal dashed lines indicate mean and median sequencing depth across samples.
+                    A horizontal dashed line indicates the median sequencing depth across samples.
                     Hover over bars for exact values.
                 </p>
             </div>
@@ -471,11 +429,10 @@ function addSequencingDepthSection(parent, data, depthPerSample) {
         }
     });
 
-    // Mean & median lines
-    const meanDepth = Number(data.mean_reads) || 0;
+    // Median line only (mean removed as requested)
     const medianDepth = Number(data.median_reads) || 0;
 
-    function addHorizontalLine(val, color, dash, labelText, dx) {
+    function addHorizontalLine(val, color, dash, labelText) {
         const y = yForValue(val);
         const line = document.createElementNS(svgns, "line");
         line.setAttribute("x1", x0);
@@ -488,7 +445,7 @@ function addSequencingDepthSection(parent, data, depthPerSample) {
         svg.appendChild(line);
 
         const lab = document.createElementNS(svgns, "text");
-        lab.setAttribute("x", x0 + plotW - (dx || 4));
+        lab.setAttribute("x", x0 + plotW - 4);
         lab.setAttribute("y", y - 2);
         lab.setAttribute("font-size", "10");
         lab.setAttribute("text-anchor", "end");
@@ -497,9 +454,6 @@ function addSequencingDepthSection(parent, data, depthPerSample) {
         svg.appendChild(lab);
     }
 
-    if (meanDepth > 0) {
-        addHorizontalLine(meanDepth, "#e53935", "4,2", "mean");
-    }
     if (medianDepth > 0) {
         addHorizontalLine(medianDepth, "#43a047", "3,2", "median");
     }
@@ -570,7 +524,8 @@ function addProkFractionSection(parent, data, depthPerSample) {
                 <p class="small-note">
                     X axis: samples; Y axis: fraction of total reads. Bars are stacked into low-quality (red),
                     prokaryotic (green), and other QC-passing reads (grey). Hover over bars for exact fractions
-                    and estimated read counts of each component.
+                    and estimated read counts of each component. A dashed horizontal line indicates the median
+                    prokaryotic fraction across samples.
                 </p>
             </div>
         </details>
@@ -667,7 +622,6 @@ function addProkFractionSection(parent, data, depthPerSample) {
         const fracLow = d.fraction_low_quality_of_total || 0;
         const fracProk = d.fraction_prokaryotic_of_total || 0;
         const fracOther = d.fraction_non_prokaryotic_of_total || 0;
-        const sumFrac = Math.min(1, fracLow + fracProk + fracOther);
 
         const totalReads = d.total_reads || 0;
         const lowReads = d.low_quality_reads_est || 0;
@@ -677,14 +631,13 @@ function addProkFractionSection(parent, data, depthPerSample) {
         const xCenter = x0 + step * i + step / 2;
         const x = xCenter - barWidth / 2;
 
-        // Stacked from bottom: low-q, prok, other
         const hLow = fracLow * plotH;
         const hProk = fracProk * plotH;
         const hOther = fracOther * plotH;
 
         let currentTop = y0;
 
-        function makeSeg(height, colorClass, tooltipLabel) {
+        function makeSeg(height, color, tooltipLabel) {
             if (height <= 0) return null;
             const y = currentTop - height;
             currentTop = y;
@@ -694,7 +647,7 @@ function addProkFractionSection(parent, data, depthPerSample) {
             rect.setAttribute("y", y);
             rect.setAttribute("width", barWidth);
             rect.setAttribute("height", height);
-            rect.setAttribute("fill", colorClass);
+            rect.setAttribute("fill", color);
             rect.setAttribute("fill-opacity", "0.9");
             rect.style.cursor = "pointer";
             return rect;
@@ -733,7 +686,6 @@ function addProkFractionSection(parent, data, depthPerSample) {
             svg.appendChild(seg);
         });
 
-        // Sample labels: show all if <=40, otherwise every 5th
         const showAll = n <= 40;
         const show = showAll || (i % 5 === 0);
         if (show) {
@@ -747,9 +699,33 @@ function addProkFractionSection(parent, data, depthPerSample) {
             svg.appendChild(lab);
         }
     });
+
+    // Dashed median line for prokaryotic fraction (as fraction 0–1)
+    const medianProkFrac = (Number(data.median_prokaryotic_fraction) || 0) / 100;
+    if (medianProkFrac > 0) {
+        const y = yForFrac(medianProkFrac);
+        const line = document.createElementNS(svgns, "line");
+        line.setAttribute("x1", x0);
+        line.setAttribute("y1", y);
+        line.setAttribute("x2", x0 + plotW);
+        line.setAttribute("y2", y);
+        line.setAttribute("stroke", "#43a047");
+        line.setAttribute("stroke-width", "1.2");
+        line.setAttribute("stroke-dasharray", "3,2");
+        svg.appendChild(line);
+
+        const lab = document.createElementNS(svgns, "text");
+        lab.setAttribute("x", x0 + plotW - 4);
+        lab.setAttribute("y", y - 2);
+        lab.setAttribute("font-size", "10");
+        lab.setAttribute("text-anchor", "end");
+        lab.setAttribute("fill", "#43a047");
+        lab.textContent = `median prok (${fmtFloat(data.median_prokaryotic_fraction, 1)}%)`;
+        svg.appendChild(lab);
+    }
 }
 
-function addRedundancyReadsSection(parent, data) {
+function addRedundancyReadsSection(parent, data, depthPerSample, redBiplotPerSample) {
     if (!data) return;
     const div = document.createElement("div");
     div.className = "section " + flagClass(data.flag_redundancy);
@@ -771,10 +747,226 @@ function addRedundancyReadsSection(parent, data) {
                     <li>Samples where LR_reads &gt; observed depth: ${fmtInt(data.n_samples_lr_exceeds_depth)}</li>
                     <li>LR target used (if any): ${data.lr_target_used || "NA"}%</li>
                 </ul>
+                <div class="lr-target-plot-container">
+                    <svg id="lr-target-svg" class="lr-target-svg" viewBox="0 0 1000 320" preserveAspectRatio="none"></svg>
+                </div>
+                <p class="small-note">
+                    X axis: samples; Y axis: sequenced depth relative to the LR_reads 95% target (100% = required depth).
+                    Bars show the ratio (sequenced reads / LR_reads target). The red dashed line at 100% indicates the
+                    estimated sequencing effort needed to reach the 95% Nonpareil coverage target.
+                </p>
             </div>
         </details>
     `;
     parent.appendChild(div);
+
+    const svg = div.querySelector("#lr-target-svg");
+    const depthBySample = {};
+    (depthPerSample || []).forEach(d => {
+        depthBySample[d.sample] = d;
+    });
+
+    const combined = (redBiplotPerSample || []).map(r => {
+        const name = r.sample;
+        const depthRec = depthBySample[name];
+        const observed = depthRec && depthRec.total_reads != null ? Number(depthRec.total_reads) : null;
+        let target = null;
+        if (r.target_reads_95_LR_reads != null) {
+            target = Number(r.target_reads_95_LR_reads);
+        } else if (depthRec && depthRec.target_reads_95_LR_reads != null) {
+            target = Number(depthRec.target_reads_95_LR_reads);
+        }
+        let ratio = null;
+        if (observed != null && target && target > 0) {
+            ratio = observed / target;
+        }
+        return {
+            sample: name,
+            observed,
+            target,
+            ratio
+        };
+    }).filter(d => d.ratio != null);
+
+    if (!combined.length) {
+        svg.outerHTML = `<div class="small-note">No per-sample LR_reads and depth information available to compare against LR targets.</div>`;
+        return;
+    }
+
+    const width = 1000;
+    const height = 320;
+    const margin = {left: 60, right: 20, top: 20, bottom: 80};
+    const plotW = width - margin.left - margin.right;
+    const plotH = height - margin.top - margin.bottom;
+    const svgns = "http://www.w3.org/2000/svg";
+
+    const x0 = margin.left;
+    const y0 = height - margin.bottom;
+
+    let maxRatio = 0;
+    combined.forEach(d => {
+        if (d.ratio > maxRatio) maxRatio = d.ratio;
+    });
+    if (maxRatio <= 0) maxRatio = 1;
+
+    // Top of axis: at least 1.0, tops at 2.0 with steps of 0.5
+    let topRatio = Math.max(1.0, maxRatio);
+    if (topRatio > 2.0) {
+        topRatio = 2.0;
+    } else {
+        topRatio = Math.ceil(topRatio * 2) / 2; // step 0.5
+    }
+
+    function yForRatio(r) {
+        const f = Math.max(0, Math.min(1, r / topRatio));
+        return y0 - f * plotH;
+    }
+
+    // Axes
+    const xAxis = document.createElementNS(svgns, "line");
+    xAxis.setAttribute("x1", x0);
+    xAxis.setAttribute("y1", y0);
+    xAxis.setAttribute("x2", x0 + plotW);
+    xAxis.setAttribute("y2", y0);
+    xAxis.setAttribute("stroke", "#555");
+    svg.appendChild(xAxis);
+
+    const yAxis = document.createElementNS(svgns, "line");
+    yAxis.setAttribute("x1", x0);
+    yAxis.setAttribute("y1", y0);
+    yAxis.setAttribute("x2", x0);
+    yAxis.setAttribute("y2", margin.top);
+    yAxis.setAttribute("stroke", "#555");
+    svg.appendChild(yAxis);
+
+    // Y ticks in % (0–topRatio)
+    const ticks = [];
+    const step = topRatio >= 1.5 ? 0.5 : 0.25;
+    for (let t = 0; t <= topRatio + 1e-9; t += step) {
+        ticks.push(t);
+    }
+
+    ticks.forEach(r => {
+        const y = yForRatio(r);
+
+        const tick = document.createElementNS(svgns, "line");
+        tick.setAttribute("x1", x0 - 4);
+        tick.setAttribute("y1", y);
+        tick.setAttribute("x2", x0);
+        tick.setAttribute("y2", y);
+        tick.setAttribute("stroke", "#555");
+        svg.appendChild(tick);
+
+        const lab = document.createElementNS(svgns, "text");
+        lab.setAttribute("x", x0 - 6);
+        lab.setAttribute("y", y + 3);
+        lab.setAttribute("font-size", "10");
+        lab.setAttribute("text-anchor", "end");
+        lab.textContent = (r * 100).toFixed(0) + "%";
+        svg.appendChild(lab);
+    });
+
+    const ylabel = document.createElementNS(svgns, "text");
+    ylabel.setAttribute("x", 16);
+    ylabel.setAttribute("y", margin.top + plotH / 2);
+    ylabel.setAttribute("text-anchor", "middle");
+    ylabel.setAttribute("font-size", "11");
+    ylabel.setAttribute("transform", `rotate(-90 16 ${margin.top + plotH / 2})`);
+    ylabel.textContent = "Sequenced depth / LR target (95%)";
+    svg.appendChild(ylabel);
+
+    const xlabel = document.createElementNS(svgns, "text");
+    xlabel.setAttribute("x", margin.left + plotW / 2);
+    xlabel.setAttribute("y", height - 8);
+    xlabel.setAttribute("text-anchor", "middle");
+    xlabel.setAttribute("font-size", "11");
+    xlabel.textContent = "Samples";
+    svg.appendChild(xlabel);
+
+    const tooltip = getOrCreateTooltip();
+
+    const n = combined.length;
+    const stepX = plotW / n;
+    const barWidth = Math.min(16, stepX * 0.8);
+
+    combined.forEach((d, i) => {
+        const ratio = d.ratio;
+        const xCenter = x0 + stepX * i + stepX / 2;
+        const x = xCenter - barWidth / 2;
+        const y = yForRatio(ratio);
+        const hBar = y0 - y;
+
+        const rect = document.createElementNS(svgns, "rect");
+        rect.setAttribute("x", x);
+        rect.setAttribute("y", y);
+        rect.setAttribute("width", barWidth);
+        rect.setAttribute("height", hBar);
+        rect.setAttribute("fill", ratio >= 1 ? "#4caf50" : "#ffa000");
+        rect.setAttribute("fill-opacity", "0.9");
+        rect.style.cursor = "pointer";
+
+        const tooltipText =
+            `${d.sample}\n` +
+            `Sequenced: ${fmtMillions(d.observed)} reads\n` +
+            `Target (95% LR): ${fmtMillions(d.target)} reads\n` +
+            `Relative depth: ${(ratio * 100).toFixed(1)}%`;
+
+        rect.addEventListener("mouseenter", (evt) => {
+            rect.setAttribute("stroke", "#000");
+            rect.setAttribute("stroke-width", "1");
+            tooltip.style.display = "block";
+            tooltip.textContent = tooltipText;
+            tooltip.style.left = evt.clientX + "px";
+            tooltip.style.top = evt.clientY + "px";
+        });
+        rect.addEventListener("mousemove", (evt) => {
+            tooltip.style.left = evt.clientX + "px";
+            tooltip.style.top = evt.clientY + "px";
+        });
+        rect.addEventListener("mouseleave", () => {
+            rect.removeAttribute("stroke");
+            rect.removeAttribute("stroke-width");
+            tooltip.style.display = "none";
+        });
+
+        svg.appendChild(rect);
+
+        const showAll = n <= 40;
+        const show = showAll || (i % 5 === 0);
+        if (show) {
+            const lab = document.createElementNS(svgns, "text");
+            lab.setAttribute("x", xCenter);
+            lab.setAttribute("y", y0 + 10);
+            lab.setAttribute("font-size", "9");
+            lab.setAttribute("text-anchor", "end");
+            lab.setAttribute("transform", `rotate(-60 ${xCenter} ${y0 + 10})`);
+            lab.textContent = d.sample;
+            svg.appendChild(lab);
+        }
+    });
+
+    // 100% target line (ratio = 1)
+    if (1 <= topRatio) {
+        const y = yForRatio(1);
+        const line = document.createElementNS(svgns, "line");
+        line.setAttribute("x1", x0);
+        line.setAttribute("y1", y);
+        line.setAttribute("x2", x0 + plotW);
+        line.setAttribute("y2", y);
+        line.setAttribute("stroke", "#e53935");
+        line.setAttribute("stroke-width", "1.4");
+        line.setAttribute("stroke-dasharray", "4,2");
+        svg.appendChild(line);
+
+        const lab = document.createElementNS(svgns, "text");
+        lab.setAttribute("x", x0 + plotW - 4);
+        lab.setAttribute("y", y - 2);
+        lab.setAttribute("font-size", "10");
+        lab.setAttribute("text-anchor", "end");
+        lab.setAttribute("fill", "#e53935");
+        lab.textContent = "LR target (100%)";
+        svg.appendChild(lab);
+    }
 }
 
 function addRedundancyMarkersSection(parent, data) {
@@ -989,17 +1181,22 @@ function main() {
         : null;
     const depthPerSample = depthFig ? (depthFig.per_sample || []) : [];
 
+    const redBiplot = figures.figures && figures.figures.redundancy_biplot
+        ? figures.figures.redundancy_biplot
+        : null;
+    const redBiplotPerSample = redBiplot ? (redBiplot.per_sample || []) : [];
+
     addScreeningSection(summaryDiv, S.screening_threshold);
     addSequencingDepthSection(summaryDiv, S.sequencing_depth, depthPerSample);
     addLowQualitySection(summaryDiv, S.low_quality_reads);
     addProkFractionSection(summaryDiv, S.prokaryotic_fraction, depthPerSample);
-    addRedundancyReadsSection(summaryDiv, S.redundancy_reads);
+    addRedundancyReadsSection(summaryDiv, S.redundancy_reads, depthPerSample, redBiplotPerSample);
     addRedundancyMarkersSection(summaryDiv, S.redundancy_markers);
     addClustersSection(summaryDiv, S.clusters);
 
-    // Figures section now only holds the redundancy biplot.
-    if (figures.figures && figures.figures.redundancy_biplot) {
-        addFigureRedundancyBiplot(figureDiv, figures.figures.redundancy_biplot);
+    // Figures section: keep the biplot here
+    if (redBiplot) {
+        addFigureRedundancyBiplot(figureDiv, redBiplot);
     }
 }
 
