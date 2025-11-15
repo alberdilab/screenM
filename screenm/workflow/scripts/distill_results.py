@@ -5,43 +5,30 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 import statistics as stats
 
-# ---------- Global thresholds (tune here) ----------
+# ---------- 0) Thresholds (centralised) ----------
 
-# Screening threshold: fraction of samples above read cutoff
-THRESH_PCT_ABOVE_ALL = 100.0  # "all samples above"
-THRESH_PCT_ABOVE_GOOD = 80.0  # "most samples above"
-
-# Coefficient of variation (CV) thresholds for "balanced / moderate / uneven"
+# Screening / sequencing depth
 THRESH_CV_BALANCED = 0.10
 THRESH_CV_MODERATE = 0.30
 
-# Low-quality read fraction thresholds (fastp)
-THRESH_LOWQ_GOOD = 0.05   # <= 5% removed → very good
-THRESH_LOWQ_MODERATE = 0.20  # 5–20% → moderate, >20% → problematic
+# Low-quality reads (fastp)
+THRESH_LOWQ_GOOD = 0.05       # 5%
+THRESH_LOWQ_MODERATE = 0.20   # 20%
 
-# Prokaryotic fraction (%)
-THRESH_PROK_HIGH = 90.0
+# Prokaryotic fraction (% of reads)
+THRESH_PROK_GOOD = 90.0
 THRESH_PROK_MODERATE = 50.0
 
-# Redundancy (Nonpareil kappa_total)
-THRESH_KAPPA_HIGH = 0.9
-THRESH_KAPPA_MODERATE = 0.5
+# Cluster separation (between/within Mash distance ratio)
+THRESH_CLUSTER_RATIO_GOOD = 2.0
+THRESH_CLUSTER_RATIO_MODERATE = 1.5
 
-# Fractions used for "many" warnings or LR_exceeds
-THRESH_WARNINGS_HIGH_FRACTION = 0.5
-THRESH_LR_EXCEEDS_FRACTION = 0.5
+# Within-cluster absolute Mash distances (mean)
+THRESH_CLUSTER_WITHIN_SOFT = 0.05
+THRESH_CLUSTER_WITHIN_STRONG = 0.15
 
-# Mash clustering – separation ratio (between / within)
-THRESH_CLUSTER_RATIO_GOOD = 1.20
-THRESH_CLUSTER_RATIO_MODERATE = 1.05
-
-# Mash clustering – absolute within-cluster Mash distances
-# reference value = worst (max) mean distance across clusters, or global mean_within_distance
-THRESH_CLUSTER_WITHIN_MILD = 0.05   # >0.05 → mild warning
-THRESH_CLUSTER_WITHIN_STRONG = 0.15  # >0.15 → strong warning
-
-# Mash clustering – imbalance in cluster sizes
-THRESH_CLUSTER_SIZE_UNBALANCED_FACTOR = 2.0  # largest >= 2× mean size → unbalanced
+# Cluster size imbalance
+THRESH_CLUSTER_SIZE_UNBALANCED_FACTOR = 2.0
 
 
 def load_json(path: Path) -> Dict[str, Any]:
@@ -81,26 +68,27 @@ def compute_screening_threshold(data_json: Dict[str, Any]) -> Dict[str, Any]:
             "No samples were found in the input data; cannot evaluate read threshold."
         )
     else:
-        if percent_above == THRESH_PCT_ABOVE_ALL:
+        if percent_above == 100.0:
             flag = 1
             message = (
                 f"All samples ({n_above}/{n_total}, {percent_above:.1f}%) are above the "
                 f"read threshold ({min_reads} reads)."
             )
-        elif percent_above >= THRESH_PCT_ABOVE_GOOD:
+        elif percent_above >= 80.0:
             flag = 2
             message = (
                 f"Most samples ({n_above}/{n_total}, {percent_above:.1f}%) are above the "
                 f"read threshold ({min_reads} reads), but some are below. "
                 "If you want to include more samples for the estimations consider lowering "
-                "the read threshold using the -r flag; but note that this will make the estimations less accurate."
+                "the read threshold using the -r flag; but note that this will make the "
+                "estimations less accurate."
             )
         else:
             flag = 3
             message = (
                 f"Only {n_above}/{n_total} samples ({percent_above:.1f}%) are above the "
                 f"read threshold ({min_reads} reads). "
-                f"As less than {THRESH_PCT_ABOVE_GOOD:.0f}% of the samples are above the number of reads used for "
+                "As less than 80% of the samples are above the number of reads used for "
                 "the estimations, a lower threshold should be chosen using the -r flag; "
                 "note that this will make the estimations less accurate."
             )
@@ -125,7 +113,7 @@ def compute_sequencing_depth(results_json: Dict[str, Any]) -> Dict[str, Any]:
     samples = results_json.get("samples", {}) or {}
 
     reads_list: List[int] = []
-    for name, sample_data in samples.items():
+    for _, sample_data in samples.items():
         count_block = sample_data.get("count", {}) or {}
         reads = count_block.get("reads", count_block.get("total_reads"))
         if isinstance(reads, (int, float)):
@@ -160,13 +148,13 @@ def compute_sequencing_depth(results_json: Dict[str, Any]) -> Dict[str, Any]:
             flag = 1
             message = (
                 f"Sequencing depth is well balanced across samples (CV = {cv_reads:.3f}), "
-                f"so average estimates should be applicable to most samples."
+                "so average estimates should be applicable to most samples."
             )
         elif cv_reads < THRESH_CV_MODERATE:
             flag = 2
             message = (
                 f"Sequencing depth shows moderate variation across samples (CV = {cv_reads:.3f}), "
-                f"so average estimates may not fully reflect all samples."
+                "so average estimates may not fully reflect all samples."
             )
         else:
             flag = 3
@@ -199,11 +187,6 @@ def compute_screening_overview(
 
     The returned section is called 'screening_overview' and contains
     the key metrics from both aspects plus a combined flag/message.
-
-    Combined flag:
-      - based on the "worst" (max) of flag_reads_threshold and flag_sequencing_depth
-        whenever both are available,
-      - falls back gracefully when one of them cannot be evaluated.
     """
     st = compute_screening_threshold(data_json)
     sd = compute_sequencing_depth(results_json)
@@ -211,7 +194,7 @@ def compute_screening_overview(
     reads_flag = st.get("flag_reads_threshold", 3)
     depth_flag = sd.get("flag_sequencing_depth", 3)
 
-    # Combined flag logic
+    # Combined flag logic (worst of the two when both are available)
     if sd.get("n_samples", 0) == 0 and st.get("n_samples_total", 0) == 0:
         combined_flag = 3
     elif sd.get("n_samples", 0) == 0:
@@ -221,7 +204,6 @@ def compute_screening_overview(
     else:
         combined_flag = max(reads_flag, depth_flag)
 
-    # Combined message
     msg_parts: List[str] = []
     if st.get("message_reads_threshold"):
         msg_parts.append(st["message_reads_threshold"].strip())
@@ -274,7 +256,7 @@ def compute_low_quality(results_json: Dict[str, Any]) -> Dict[str, Any]:
     total_removed_all = 0
     n_samples_with_fastp = 0
 
-    for name, sample_data in samples.items():
+    for _, sample_data in samples.items():
         fastp = sample_data.get("fastp", {}) or {}
         total = fastp.get("total_reads")
         if not isinstance(total, (int, float)) or total <= 0:
@@ -340,7 +322,7 @@ def compute_low_quality(results_json: Dict[str, Any]) -> Dict[str, Any]:
             f"On average {mean_frac*100:.1f}% of reads are removed by quality filtering. "
             "A substantial fraction of sequencing effort is lost to low quality, Ns, or "
             "length/complexity filters. These results suggest issues during library preparation or "
-            "sequencing, leading to compromised data quality. Consider revisiting library preparation"
+            "sequencing, leading to compromised data quality. Consider revisiting library preparation "
             "and sequencing protocols. Treat downstream analyses with caution, as results may be affected "
             "by the low-quality data."
         )
@@ -365,16 +347,16 @@ def compute_prokaryotic_fraction(results_json: Dict[str, Any]) -> Dict[str, Any]
     Summarise the prokaryotic fraction (read_fraction) from SingleM-based results.
 
     - Classification for mean prokaryotic fraction (interpreted as %):
-        > THRESH_PROK_HIGH   → flag = 1
-        > THRESH_PROK_MODERATE → flag = 2
-        <= THRESH_PROK_MODERATE  → flag = 3
+        > 90%   → flag = 1
+        > 50%   → flag = 2
+        <= 50%  → flag = 3
     """
     samples = results_json.get("samples", {}) or {}
 
     fractions: List[float] = []
     warnings_count = 0
 
-    for name, sample_data in samples.items():
+    for _, sample_data in samples.items():
         singlem = sample_data.get("singlem", {}) or {}
         frac = singlem.get("read_fraction")
         warn = singlem.get("warning")
@@ -407,7 +389,7 @@ def compute_prokaryotic_fraction(results_json: Dict[str, Any]) -> Dict[str, Any]
     sd_frac = stats.pstdev(fractions) if n_samples > 1 else 0.0
     cv_frac = sd_frac / mean_frac if mean_frac > 0 else None
 
-    if mean_frac > THRESH_PROK_HIGH:
+    if mean_frac > THRESH_PROK_GOOD:
         flag_mean = 1
     elif mean_frac > THRESH_PROK_MODERATE:
         flag_mean = 2
@@ -417,7 +399,7 @@ def compute_prokaryotic_fraction(results_json: Dict[str, Any]) -> Dict[str, Any]
     if mean_frac is None:
         mean_frac_msg = "Prokaryotic fraction cannot be evaluated."
     else:
-        if mean_frac > THRESH_PROK_HIGH:
+        if mean_frac > THRESH_PROK_GOOD:
             mean_frac_msg = (
                 f"Average prokaryotic fraction of the dataset is high ({mean_frac:.3f}), "
                 "indicating that marginal amounts of host and other non-prokaryotic DNA are unlikely to affect the analyses. "
@@ -463,7 +445,7 @@ def compute_prokaryotic_fraction(results_json: Dict[str, Any]) -> Dict[str, Any]
     warning_ratio = warnings_count / n_samples if n_samples > 0 else 0.0
     if warnings_count == 0:
         warn_msg = ""
-    elif warning_ratio >= THRESH_WARNINGS_HIGH_FRACTION:
+    elif warning_ratio >= 0.5:
         warn_msg = (
             f"Note that many samples ({warnings_count}/{n_samples}) contain warnings in prokaryotic fraction estimation, "
             "indicating that the reliability of the estimated prokaryotic fractions is low across the dataset. "
@@ -477,11 +459,7 @@ def compute_prokaryotic_fraction(results_json: Dict[str, Any]) -> Dict[str, Any]
             "Consider checking those samples individually. "
         )
 
-    message = (
-        mean_frac_msg + " "
-        + var_msg + " "
-        + warn_msg
-    )
+    message = mean_frac_msg + " " + var_msg + " " + warn_msg
 
     return {
         "n_samples": n_samples,
@@ -564,7 +542,7 @@ def compute_redundancy_reads(results_json: Dict[str, Any]) -> Dict[str, Any]:
     n_with_lr = 0
     lr_target_used: Optional[str] = None
 
-    for name, sample_data in samples.items():
+    for _, sample_data in samples.items():
         npr = sample_data.get("nonpareil_reads", {}) or {}
         if not npr:
             continue
@@ -625,9 +603,9 @@ def compute_redundancy_reads(results_json: Dict[str, Any]) -> Dict[str, Any]:
     sd_k = stats.pstdev(kappas) if n_kappa > 1 else 0.0
     cv_k = sd_k / mean_k if mean_k > 0 else None
 
-    if mean_k > THRESH_KAPPA_HIGH:
+    if mean_k > 0.9:
         flag_redundancy = 1
-    elif mean_k > THRESH_KAPPA_MODERATE:
+    elif mean_k > 0.5:
         flag_redundancy = 2
     else:
         flag_redundancy = 3
@@ -635,18 +613,17 @@ def compute_redundancy_reads(results_json: Dict[str, Any]) -> Dict[str, Any]:
     if mean_k is None:
         mean_k_msg = "Variation in redundancy cannot be evaluated."
     else:
-        if mean_k > THRESH_KAPPA_HIGH:
+        if mean_k > 0.9:
             mean_k_msg = (
                 f"Average estimated read redundancy is high ({mean_k:.3f}), "
                 "indicating that the sequencing data captures most of the "
                 "metagenomic diversity estimated in the samples. "
             )
-        elif mean_k > THRESH_KAPPA_MODERATE:
+        elif mean_k > 0.5:
             mean_k_msg = (
                 f"Average estimated read redundancy is moderate ({mean_k:.3f}), "
                 "indicating that a significant portion of the metagenomic diversity is "
                 "likely not to be captured by the sequencing data. "
-                ""
             )
         else:
             mean_k_msg = (
@@ -666,13 +643,13 @@ def compute_redundancy_reads(results_json: Dict[str, Any]) -> Dict[str, Any]:
             )
         elif cv_k < THRESH_CV_MODERATE:
             var_msg = (
-                f"Marker redundancy shows moderate variation across samples (CV = {cv_k:.3f}), "
+                f"Read redundancy shows moderate variation across samples (CV = {cv_k:.3f}), "
                 "indicating that average estimates may not fully reflect all samples. "
                 "Consider looking at individual sample redundancy estimates to assess the variation. "
             )
         else:
             var_msg = (
-                f"Marker redundancy is highly variable across samples (CV = {cv_k:.3f}), "
+                f"Read redundancy is highly variable across samples (CV = {cv_k:.3f}), "
                 "indicating that average estimates may be misleading for some libraries. "
                 "Look at individual sample redundancy estimates to assess the variation. "
             )
@@ -692,10 +669,10 @@ def compute_redundancy_reads(results_json: Dict[str, Any]) -> Dict[str, Any]:
                 "of the metagenomic diversity is lower than the depth achieved, "
                 "indicating that the sequencing effort was most likely sufficient. "
             )
-        elif frac_exceeds < THRESH_LR_EXCEEDS_FRACTION:
+        elif frac_exceeds < 0.5:
             flag_lr = 2
             lr_msg = (
-                f"In {lr_exceeds}/{n_with_lr} samples, he sequencing depth required to capture {lr_target_used}% "
+                f"In {lr_exceeds}/{n_with_lr} samples, the sequencing depth required to capture {lr_target_used}% "
                 "of the metagenomic diversity is above the conducted sequencing depth, indicating that these samples "
                 "may not be able to represent the complexity of the samples adequately. "
             )
@@ -707,11 +684,7 @@ def compute_redundancy_reads(results_json: Dict[str, Any]) -> Dict[str, Any]:
                 "the dataset will likely be unable to represent the complexity of the samples adequately. "
             )
 
-    message = (
-        mean_k_msg + " "
-        + var_msg + " "
-        + lr_msg
-    )
+    message = mean_k_msg + " " + var_msg + " " + lr_msg
 
     return {
         "n_samples_kappa": n_kappa,
@@ -743,7 +716,7 @@ def compute_redundancy_markers(results_json: Dict[str, Any]) -> Dict[str, Any]:
     n_with_lr = 0
     lr_target_used: Optional[str] = None
 
-    for name, sample_data in samples.items():
+    for _, sample_data in samples.items():
         npr = sample_data.get("nonpareil_markers", {}) or {}
         if not npr:
             continue
@@ -804,9 +777,9 @@ def compute_redundancy_markers(results_json: Dict[str, Any]) -> Dict[str, Any]:
     sd_k = stats.pstdev(kappas) if n_kappa > 1 else 0.0
     cv_k = sd_k / mean_k if mean_k > 0 else None
 
-    if mean_k > THRESH_KAPPA_HIGH:
+    if mean_k > 0.9:
         flag_redundancy = 1
-    elif mean_k > THRESH_KAPPA_MODERATE:
+    elif mean_k > 0.5:
         flag_redundancy = 2
     else:
         flag_redundancy = 3
@@ -814,18 +787,17 @@ def compute_redundancy_markers(results_json: Dict[str, Any]) -> Dict[str, Any]:
     if mean_k is None:
         mean_k_msg = "Variation in redundancy cannot be evaluated."
     else:
-        if mean_k > THRESH_KAPPA_HIGH:
+        if mean_k > 0.9:
             mean_k_msg = (
                 f"Average estimated marker redundancy is high ({mean_k:.3f}), "
                 "indicating that the sequencing data captures most of the "
                 "microbial diversity estimated in the samples."
             )
-        elif mean_k > THRESH_KAPPA_MODERATE:
+        elif mean_k > 0.5:
             mean_k_msg = (
                 f"Average estimated marker redundancy is moderate ({mean_k:.3f}), "
                 "indicating that a significant portion of the microbial diversity is "
                 "likely not to be captured by the sequencing data."
-                ""
             )
         else:
             mean_k_msg = (
@@ -871,7 +843,7 @@ def compute_redundancy_markers(results_json: Dict[str, Any]) -> Dict[str, Any]:
                 "of the microbial diversity is below the conducted sequencing depth, "
                 "indicating sufficient sequencing effort."
             )
-        elif frac_exceeds < THRESH_LR_EXCEEDS_FRACTION:
+        elif frac_exceeds < 0.5:
             flag_lr = 2
             lr_msg = (
                 f"In {lr_exceeds}/{n_with_lr} samples, the sequencing depth estimated to be needed to capture {lr_target_used}% "
@@ -886,11 +858,7 @@ def compute_redundancy_markers(results_json: Dict[str, Any]) -> Dict[str, Any]:
                 "the dataset will likely be unable to represent the complexity of the communities adequately. "
             )
 
-    message = (
-        mean_k_msg + " "
-        + var_msg + " "
-        + lr_msg
-    )
+    message = mean_k_msg + " " + var_msg + " " + lr_msg
 
     return {
         "n_samples_kappa": n_kappa,
@@ -907,111 +875,65 @@ def compute_redundancy_markers(results_json: Dict[str, Any]) -> Dict[str, Any]:
     }
 
 
-# ---------- 8) Mash-based clusters (potential coassemblies) ----------
+# ---------- 8) Mash-based clusters summary ----------
 
-def _summarise_mash_cluster_block(
-    mash_block: Optional[Dict[str, Any]],
+def _compute_cluster_block(
+    mash_summary: Dict[str, Any],
     label: str,
 ) -> Dict[str, Any]:
     """
-    Summarise clustering structure from a Mash block (markers or reads).
-
-    Uses the precomputed summary.structure fields:
-      - n_clusters
-      - mean_within_distance / mean_between_distance
-      - ratio_between_over_within
-      - pair_ratio_mean / pair_ratio_sd
-
-    and provides a flag + message describing how well-separated the clusters are
-    as candidates for coassemblies.
-
-    Flags:
-      1 = well separated clusters (good candidates for coassembly)
-      2 = moderate separation
-      3 = weak/no separation or missing information
-
-    Additionally, considers absolute within-cluster Mash distances:
-      - if the worst mean within-cluster distance > THRESH_CLUSTER_WITHIN_STRONG → strong warning
-      - if THRESH_CLUSTER_WITHIN_MILD < distance ≤ THRESH_CLUSTER_WITHIN_STRONG → mild warning
+    Helper for both markers- and reads-based Mash cluster summaries.
+    Expects a structure like results_json["mash_*"]["summary"].
     """
-    if not mash_block:
+    if not mash_summary:
         return {
             "n_clusters": None,
-            "n_between_pairs": None,
-            "mean_within_distance": None,
-            "sd_within_distance": None,
-            "mean_between_distance": None,
-            "sd_between_distance": None,
-            "ratio_between_over_within": None,
-            "pair_ratio_mean": None,
-            "pair_ratio_sd": None,
             "clusters": [],
             "between_clusters": {},
-            "flag_cluster_structure": 3,
-            "message_cluster_structure": (
-                f"No Mash-based {label} distances were found; coassembly clusters "
-                "cannot be evaluated."
+            "structure": {},
+            "flag_clusters": 3,
+            "message_clusters": (
+                f"Mash-based clustering of {label} distances is not available."
             ),
         }
 
-    summary = mash_block.get("summary") or {}
-    structure = summary.get("structure") or {}
-    clusters_block = summary.get("clusters") or {}
-    between_block = summary.get("between_clusters") or {}
+    overall = mash_summary.get("overall", {}) or {}
+    clusters = mash_summary.get("clusters", {}) or {}
+    between = mash_summary.get("between_clusters", {}) or {}
+    structure = mash_summary.get("structure", {}) or {}
 
     n_clusters = structure.get("n_clusters")
-    n_between_pairs = structure.get("n_between_pairs")
-    mean_within = structure.get("mean_within_distance")
-    sd_within = structure.get("sd_within_distance")
-    mean_between = structure.get("mean_between_distance")
-    sd_between = structure.get("sd_between_distance")
     ratio = structure.get("ratio_between_over_within")
-    pair_ratio_mean = structure.get("pair_ratio_mean")
-    pair_ratio_sd = structure.get("pair_ratio_sd")
+    mean_within = structure.get("mean_within_distance")
 
-    # Per-cluster info (compact summary)
     cluster_list: List[Dict[str, Any]] = []
-    for cid, c in clusters_block.items():
-        members = c.get("members") or []
-        n_members = c.get("n_members", len(members))
-        mean_d = c.get("mean_distance")
-        median_d = c.get("median_distance")
+    for cid, cinfo in clusters.items():
         cluster_list.append(
             {
                 "cluster_id": cid,
-                "n_members": n_members,
-                "members": members,
-                "mean_distance": mean_d,
-                "median_distance": median_d,
+                "members": cinfo.get("members", []),
+                "n_members": cinfo.get("n_members"),
+                "n_pairs": cinfo.get("n_pairs"),
+                "mean_distance": cinfo.get("mean_distance"),
+                "median_distance": cinfo.get("median_distance"),
             }
         )
 
-    # Sort clusters by within-cluster mean distance (more compact first)
-    cluster_list.sort(
-        key=lambda x: (
-            x["mean_distance"]
-            if isinstance(x.get("mean_distance"), (int, float))
-            else float("inf")
-        )
-    )
-
-    # Flag and message based on separation ratio
-    if not n_clusters or n_clusters <= 1 or ratio is None:
-        if not n_clusters or n_clusters <= 1:
-            msg = (
-                f"Mash-based clustering of {label} distances identifies a single group "
-                "of samples or no clusters, indicating no clear subdivision into "
-                "candidate coassemblies."
-            )
-        else:
+    # Basic message when something is missing
+    if ratio is None or n_clusters is None:
+        if structure:
             msg = (
                 f"Mash-based clustering of {label} distances could not be fully evaluated "
                 "because required summary statistics are missing."
             )
+        else:
+            msg = (
+                f"Mash-based clustering of {label} distances could not be fully evaluated "
+                "because cluster structure statistics are missing."
+            )
         flag = 3
     else:
-        # Interpret ratio = between / within as separation; "magnified" so that
-        # higher ratios correspond to flag = 1, lower to 2 or 3.
+        # Interpret ratio = between / within as separation
         if ratio >= THRESH_CLUSTER_RATIO_GOOD:
             flag = 1
             msg = (
@@ -1054,8 +976,6 @@ def _summarise_mash_cluster_block(
                 )
 
     # Additional warning based on absolute within-cluster Mash distances
-    # We look at the worst (maximum) mean distance across clusters, and
-    # fall back to the global mean_within_distance if needed.
     worst_mean_within = None
     for c in cluster_list:
         d = c.get("mean_distance")
@@ -1066,81 +986,134 @@ def _summarise_mash_cluster_block(
     global_mean_within = (
         mean_within if isinstance(mean_within, (int, float)) else None
     )
-
-    # Prefer the worst per-cluster value; if not available, use global mean
-    ref_within = worst_mean_within if worst_mean_within is not None else global_mean_within
+    ref_within = (
+        worst_mean_within if worst_mean_within is not None else global_mean_within
+    )
 
     if ref_within is not None:
         if ref_within > THRESH_CLUSTER_WITHIN_STRONG:
-            # Strong warning: within-cluster distances high in absolute terms
             if flag == 1:
-                flag = 2  # demote slightly: not as ideal as ratio alone suggests
+                flag = 2  # demote slightly
             msg += (
                 f" However, within-cluster Mash distances are high in absolute terms "
                 f"(mean up to {ref_within:.3f}), so even samples grouped together can "
                 "be quite dissimilar. Consider splitting large clusters or using "
                 "single-sample assemblies for the most divergent samples."
             )
-        elif ref_within > THRESH_CLUSTER_WITHIN_MILD:
-            # Mild warning
-            if flag < 2:
-                flag = 2
+        elif ref_within > THRESH_CLUSTER_WITHIN_SOFT:
             msg += (
-                f" Note that within-cluster Mash distances are moderate in absolute "
-                f"terms (mean up to {ref_within:.3f}), so coassemblies may mix "
-                "communities that are not extremely similar."
+                f" Within-cluster Mash distances reach up to {ref_within:.3f}, which is "
+                "moderately high; coassemblies may still be useful but will mix somewhat "
+                "divergent communities."
             )
 
     return {
         "n_clusters": n_clusters,
-        "n_between_pairs": n_between_pairs,
-        "mean_within_distance": mean_within,
-        "sd_within_distance": sd_within,
-        "mean_between_distance": mean_between,
-        "sd_between_distance": sd_between,
-        "ratio_between_over_within": ratio,
-        "pair_ratio_mean": pair_ratio_mean,
-        "pair_ratio_sd": pair_ratio_sd,
+        "overall": overall,
         "clusters": cluster_list,
-        "between_clusters": between_block,
-        "flag_cluster_structure": flag,
-        "message_cluster_structure": msg,
+        "between_clusters": between,
+        "structure": structure,
+        "flag_clusters": flag,
+        "message_clusters": msg,
     }
 
 
 def compute_clusters(results_json: Dict[str, Any]) -> Dict[str, Any]:
     """
-    Summarise Mash-based clustering (markers and reads) as potential
-    coassembly groups.
-
-    Returns a nested structure with per-distance-type summaries and an
-    overall flag/message (preferring markers if available).
+    Summarise Mash-based clusters for both markers and reads.
     """
-    mash_markers_block = results_json.get("mash_markers")
-    mash_reads_block = results_json.get("mash_reads")
+    mash_markers = results_json.get("mash_markers", {}) or {}
+    mash_reads = results_json.get("mash_reads", {}) or {}
 
-    markers_summary = _summarise_mash_cluster_block(mash_markers_block, "marker")
-    reads_summary = _summarise_mash_cluster_block(mash_reads_block, "read")
+    markers_summary = _compute_cluster_block(
+        mash_markers.get("summary", {}) or {}, "marker-gene"
+    )
+    reads_summary = _compute_cluster_block(
+        mash_reads.get("summary", {}) or {}, "read"
+    )
 
-    # Choose primary view for overall flag/message:
-    #   - Prefer markers when they have at least 2 clusters,
-    #   - otherwise fall back to reads.
-    overall_source = markers_summary
-    if (
-        markers_summary.get("n_clusters") is None
-        or markers_summary.get("n_clusters", 0) <= 1
-    ) and reads_summary.get("n_clusters", 0) > 1:
-        overall_source = reads_summary
+    n_clusters_markers = markers_summary.get("n_clusters")
+    n_clusters_reads = reads_summary.get("n_clusters")
 
-    overall_flag = overall_source.get("flag_cluster_structure")
-    overall_message = overall_source.get("message_cluster_structure")
+    # Aggregate message around number of clusters
+    msg = []
+    if n_clusters_markers is not None:
+        msg.append(f"Marker-based clustering identifies {n_clusters_markers} clusters.")
+    if n_clusters_reads is not None:
+        msg.append(f"Read-based clustering identifies {n_clusters_reads} clusters.")
+    aggregate_msg = " ".join(msg) if msg else ""
 
     return {
         "markers": markers_summary,
         "reads": reads_summary,
-        "flag_clusters": overall_flag,
-        "message_clusters": overall_message,
+        "message_clusters_overall": aggregate_msg,
     }
+
+
+# ---------- 9) Pairwise Mash distances ----------
+
+def compute_mash_pairwise(results_json: Dict[str, Any]) -> Dict[str, Any]:
+    """
+    Extract pairwise Mash distances from results.json for both markers and reads,
+    and prepare a figure-friendly structure:
+
+      {
+        "markers": {
+          "n_pairs": ...,
+          "samples": [...],
+          "pairwise": [
+            {"sample1": "...", "sample2": "...", "distance": float},
+            ...
+          ],
+          "min_distance": float or None,
+          "max_distance": float or None,
+        },
+        "reads": { ... }
+      }
+    """
+    out: Dict[str, Any] = {}
+
+    for label, key in (("markers", "mash_markers"), ("reads", "mash_reads")):
+        block = results_json.get(key, {}) or {}
+        pair_list = block.get("pairwise")
+        if not isinstance(pair_list, list):
+            continue
+
+        simple_list: List[Dict[str, Any]] = []
+        sample_set = set()
+        distances: List[float] = []
+
+        for rec in pair_list:
+            if not isinstance(rec, dict):
+                continue
+            s1 = rec.get("sample1")
+            s2 = rec.get("sample2")
+            dist = rec.get("distance")
+            if s1 is None or s2 is None or not isinstance(dist, (int, float)):
+                continue
+            simple_list.append(
+                {"sample1": s1, "sample2": s2, "distance": float(dist)}
+            )
+            sample_set.add(s1)
+            sample_set.add(s2)
+            distances.append(float(dist))
+
+        if not simple_list:
+            continue
+
+        samples_sorted = sorted(sample_set)
+        min_d = min(distances) if distances else None
+        max_d = max(distances) if distances else None
+
+        out[label] = {
+            "n_pairs": len(simple_list),
+            "samples": samples_sorted,
+            "pairwise": simple_list,
+            "min_distance": min_d,
+            "max_distance": max_d,
+        }
+
+    return out
 
 
 # ---------- Main ----------
@@ -1149,9 +1122,8 @@ def main():
     ap = argparse.ArgumentParser(
         description=(
             "Distill ScreenM outputs (data.json + results.json) into a summary JSON.\n"
-            "Includes: screening overview (threshold coverage + depth balance), "
-            "sequencing quality, prokaryotic fraction, redundancy based on reads and "
-            "marker genes, and Mash-based clustering as potential coassemblies."
+            "Includes: screening overview, sequencing quality, prokaryotic fraction, "
+            "redundancy based on reads and marker genes, Mash clusters, and pairwise Mash distances."
         )
     )
     ap.add_argument(
@@ -1184,6 +1156,7 @@ def main():
     redundancy_reads = compute_redundancy_reads(results_json)
     redundancy_markers = compute_redundancy_markers(results_json)
     clusters = compute_clusters(results_json)
+    mash_pairwise = compute_mash_pairwise(results_json)
 
     distilled: Dict[str, Any] = {
         "meta": {
@@ -1200,6 +1173,7 @@ def main():
             "redundancy_reads": redundancy_reads,
             "redundancy_markers": redundancy_markers,
             "clusters": clusters,
+            "mash_pairwise": mash_pairwise,
         },
     }
 
