@@ -77,7 +77,7 @@ HTML_TEMPLATE = r"""<!DOCTYPE html>
         margin-top: 4px;
     }
 
-    /* Depth fractions figure */
+    /* Depth fractions legend colours */
     .depth-legend {
         font-size: 0.9em;
         margin-bottom: 6px;
@@ -92,7 +92,7 @@ HTML_TEMPLATE = r"""<!DOCTYPE html>
     }
     .seg-lowq   { background: #f44336; }  /* red */
     .seg-prok   { background: #4caf50; }  /* green */
-    .seg-other  { background: #2196f3; }  /* blue */
+    .seg-other  { background: #9e9e9e; }  /* grey, as requested */
 
     .depth-table {
         max-height: 350px;
@@ -145,34 +145,34 @@ HTML_TEMPLATE = r"""<!DOCTYPE html>
         background: #fcfcfc;
     }
 
-    /* Sequencing depth barplot */
-    .seq-depth-stats {
+    /* Summary stat tiles (used by Sequencing Depth and Prok Fraction) */
+    .seq-depth-stats, .prok-stats {
         display: flex;
         gap: 16px;
         justify-content: space-between;
         margin-bottom: 10px;
         flex-wrap: wrap;
     }
-    .seq-depth-stat-item {
+    .seq-depth-stat-item, .prok-stat-item {
         flex: 1;
         min-width: 160px;
     }
-    .seq-depth-stat-label {
+    .seq-depth-stat-label, .prok-stat-label {
         font-size: 0.9em;
         color: #555;
         margin-bottom: 2px;
     }
-    .seq-depth-stat-value {
+    .seq-depth-stat-value, .prok-stat-value {
         font-size: 1.4em;
         font-weight: 600;
     }
-    .seq-depth-stat-note {
+    .seq-depth-stat-note, .prok-stat-note {
         font-size: 0.8em;
         color: #666;
         margin-top: 2px;
     }
 
-    .seq-depth-plot-container {
+    .seq-depth-plot-container, .prok-depth-plot-container {
         width: 100%;
         border: 1px solid #ddd;
         border-radius: 4px;
@@ -180,14 +180,14 @@ HTML_TEMPLATE = r"""<!DOCTYPE html>
         padding: 4px 4px 0 4px;
         box-sizing: border-box;
     }
-    .seq-depth-svg {
+    .seq-depth-svg, .prok-depth-svg {
         display: block;
         width: 100%;
         height: 320px;
     }
 
-    /* Tooltip for interactive depth chart */
-    .seq-depth-tooltip {
+    /* Tooltip for interactive charts */
+    .chart-tooltip {
         position: fixed;
         pointer-events: none;
         background: rgba(0,0,0,0.85);
@@ -242,6 +242,18 @@ function fmtMillions(x) {
     if (v >= 1e6) return (v / 1e6).toFixed(2) + " M";
     if (v >= 1e3) return (v / 1e3).toFixed(1) + " k";
     return v.toString();
+}
+
+/* Shared tooltip for charts */
+function getOrCreateTooltip() {
+    let tooltip = document.querySelector(".chart-tooltip");
+    if (!tooltip) {
+        tooltip = document.createElement("div");
+        tooltip.className = "chart-tooltip";
+        tooltip.style.display = "none";
+        document.body.appendChild(tooltip);
+    }
+    return tooltip;
 }
 
 /* ---------- Summary sections ---------- */
@@ -401,19 +413,13 @@ function addSequencingDepthSection(parent, data, depthPerSample) {
     xlabel.textContent = "Samples";
     svg.appendChild(xlabel);
 
+    // Shared tooltip
+    const tooltip = getOrCreateTooltip();
+
     // Bars
     const n = perSample.length;
     const step = plotW / n;
     const barWidth = Math.min(16, step * 0.8);
-
-    // Tooltip element (shared)
-    let tooltip = document.querySelector(".seq-depth-tooltip");
-    if (!tooltip) {
-        tooltip = document.createElement("div");
-        tooltip.className = "seq-depth-tooltip";
-        tooltip.style.display = "none";
-        document.body.appendChild(tooltip);
-    }
 
     perSample.forEach((d, i) => {
         const val = Number(d.total_reads) || 0;
@@ -431,7 +437,6 @@ function addSequencingDepthSection(parent, data, depthPerSample) {
         rect.setAttribute("fill-opacity", "0.85");
         rect.style.cursor = "pointer";
 
-        // Hover / tooltip interactivity
         rect.addEventListener("mouseenter", (evt) => {
             rect.setAttribute("fill", "#0d47a1");
             rect.setAttribute("fill-opacity", "1.0");
@@ -452,7 +457,6 @@ function addSequencingDepthSection(parent, data, depthPerSample) {
 
         svg.appendChild(rect);
 
-        // Sample labels: show all if <=40, otherwise every 5th
         const showAll = n <= 40;
         const show = showAll || (i % 5 === 0);
         if (show) {
@@ -467,7 +471,7 @@ function addSequencingDepthSection(parent, data, depthPerSample) {
         }
     });
 
-    // Mean & median lines (from distill section data)
+    // Mean & median lines
     const meanDepth = Number(data.mean_reads) || 0;
     const medianDepth = Number(data.median_reads) || 0;
 
@@ -527,7 +531,7 @@ function addLowQualitySection(parent, data) {
     parent.appendChild(div);
 }
 
-function addProkFractionSection(parent, data) {
+function addProkFractionSection(parent, data, depthPerSample) {
     if (!data) return;
     const div = document.createElement("div");
     div.className = "section " + flagClass(data.flag_prokaryotic_fraction);
@@ -536,21 +540,213 @@ function addProkFractionSection(parent, data) {
 
     div.innerHTML = `
         <details>
-            <summary>Prokaryotic Fraction (SingleM)</summary>
+            <summary>Prokaryotic Fraction (SingleM & depth components)</summary>
             <div class="content">
                 <p class="summary-message">${msg}</p>
-                <ul class="summary-metrics">
-                    <li>Samples with SingleM estimates: ${fmtInt(data.n_samples)}</li>
-                    <li>Mean prokaryotic fraction: ${fmtFloat(data.mean_prokaryotic_fraction, 2)}%</li>
-                    <li>Median prokaryotic fraction: ${fmtFloat(data.median_prokaryotic_fraction, 2)}%</li>
-                    <li>Standard deviation: ${fmtFloat(data.sd_prokaryotic_fraction, 2)}</li>
-                    <li>Coefficient of variation (CV): ${fmtFloat(data.cv_prokaryotic_fraction, 3)}</li>
-                    <li>Samples with warnings: ${fmtInt(data.n_warnings)}</li>
-                </ul>
+                <div class="prok-stats">
+                    <div class="prok-stat-item">
+                        <div class="prok-stat-label">Mean prokaryotic fraction</div>
+                        <div class="prok-stat-value">${fmtFloat(data.mean_prokaryotic_fraction, 2)}%</div>
+                        <div class="prok-stat-note">Average prokaryotic share of reads</div>
+                    </div>
+                    <div class="prok-stat-item">
+                        <div class="prok-stat-label">Median prokaryotic fraction</div>
+                        <div class="prok-stat-value">${fmtFloat(data.median_prokaryotic_fraction, 2)}%</div>
+                        <div class="prok-stat-note">Typical prokaryotic share across samples</div>
+                    </div>
+                    <div class="prok-stat-item">
+                        <div class="prok-stat-label">Variation</div>
+                        <div class="prok-stat-value">${fmtFloat(data.cv_prokaryotic_fraction, 3)}</div>
+                        <div class="prok-stat-note">Coefficient of variation (CV)</div>
+                    </div>
+                </div>
+                <p class="small-note">
+                    SingleM warnings in ${fmtInt(data.n_warnings)} samples may indicate reduced reliability
+                    of the estimated prokaryotic fractions in those libraries.
+                </p>
+                <div class="prok-depth-plot-container">
+                    <svg id="prok-depth-svg" class="prok-depth-svg" viewBox="0 0 1000 320" preserveAspectRatio="none"></svg>
+                </div>
+                <p class="small-note">
+                    X axis: samples; Y axis: fraction of total reads. Bars are stacked into low-quality (red),
+                    prokaryotic (green), and other QC-passing reads (grey). Hover over bars for exact fractions
+                    and estimated read counts of each component.
+                </p>
             </div>
         </details>
     `;
     parent.appendChild(div);
+
+    const svg = div.querySelector("#prok-depth-svg");
+    const dataPerSample = (depthPerSample || []).filter(d =>
+        d.total_reads !== null &&
+        d.total_reads !== undefined
+    );
+
+    if (!dataPerSample.length) {
+        svg.outerHTML = `<div class="small-note">Per-sample depth component data not available.</div>`;
+        return;
+    }
+
+    const width = 1000;
+    const height = 320;
+    const margin = {left: 60, right: 20, top: 20, bottom: 80};
+    const plotW = width - margin.left - margin.right;
+    const plotH = height - margin.top - margin.bottom;
+    const svgns = "http://www.w3.org/2000/svg";
+
+    const x0 = margin.left;
+    const y0 = height - margin.bottom;
+
+    function yForFrac(frac) {
+        const f = Math.max(0, Math.min(1, frac));
+        return y0 - f * plotH;
+    }
+
+    // Axes
+    const xAxis = document.createElementNS(svgns, "line");
+    xAxis.setAttribute("x1", x0);
+    xAxis.setAttribute("y1", y0);
+    xAxis.setAttribute("x2", x0 + plotW);
+    xAxis.setAttribute("y2", y0);
+    xAxis.setAttribute("stroke", "#555");
+    svg.appendChild(xAxis);
+
+    const yAxis = document.createElementNS(svgns, "line");
+    yAxis.setAttribute("x1", x0);
+    yAxis.setAttribute("y1", y0);
+    yAxis.setAttribute("x2", x0);
+    yAxis.setAttribute("y2", margin.top);
+    yAxis.setAttribute("stroke", "#555");
+    svg.appendChild(yAxis);
+
+    // Y ticks (0–100%)
+    [0, 0.25, 0.5, 0.75, 1].forEach(frac => {
+        const y = yForFrac(frac);
+        const tick = document.createElementNS(svgns, "line");
+        tick.setAttribute("x1", x0 - 4);
+        tick.setAttribute("y1", y);
+        tick.setAttribute("x2", x0);
+        tick.setAttribute("y2", y);
+        tick.setAttribute("stroke", "#555");
+        svg.appendChild(tick);
+
+        const lab = document.createElementNS(svgns, "text");
+        lab.setAttribute("x", x0 - 6);
+        lab.setAttribute("y", y + 3);
+        lab.setAttribute("font-size", "10");
+        lab.setAttribute("text-anchor", "end");
+        lab.textContent = (frac * 100).toFixed(0) + "%";
+        svg.appendChild(lab);
+    });
+
+    const ylabel = document.createElementNS(svgns, "text");
+    ylabel.setAttribute("x", 16);
+    ylabel.setAttribute("y", margin.top + plotH / 2);
+    ylabel.setAttribute("text-anchor", "middle");
+    ylabel.setAttribute("font-size", "11");
+    ylabel.setAttribute("transform", `rotate(-90 16 ${margin.top + plotH / 2})`);
+    ylabel.textContent = "Fraction of total reads";
+    svg.appendChild(ylabel);
+
+    const xlabel = document.createElementNS(svgns, "text");
+    xlabel.setAttribute("x", margin.left + plotW / 2);
+    xlabel.setAttribute("y", height - 8);
+    xlabel.setAttribute("text-anchor", "middle");
+    xlabel.setAttribute("font-size", "11");
+    xlabel.textContent = "Samples";
+    svg.appendChild(xlabel);
+
+    const tooltip = getOrCreateTooltip();
+
+    const n = dataPerSample.length;
+    const step = plotW / n;
+    const barWidth = Math.min(16, step * 0.8);
+
+    dataPerSample.forEach((d, i) => {
+        const fracLow = d.fraction_low_quality_of_total || 0;
+        const fracProk = d.fraction_prokaryotic_of_total || 0;
+        const fracOther = d.fraction_non_prokaryotic_of_total || 0;
+        const sumFrac = Math.min(1, fracLow + fracProk + fracOther);
+
+        const totalReads = d.total_reads || 0;
+        const lowReads = d.low_quality_reads_est || 0;
+        const prokReads = d.prokaryotic_reads_est || 0;
+        const otherReads = d.non_prokaryotic_reads_est || 0;
+
+        const xCenter = x0 + step * i + step / 2;
+        const x = xCenter - barWidth / 2;
+
+        // Stacked from bottom: low-q, prok, other
+        const hLow = fracLow * plotH;
+        const hProk = fracProk * plotH;
+        const hOther = fracOther * plotH;
+
+        let currentTop = y0;
+
+        function makeSeg(height, colorClass, tooltipLabel) {
+            if (height <= 0) return null;
+            const y = currentTop - height;
+            currentTop = y;
+
+            const rect = document.createElementNS(svgns, "rect");
+            rect.setAttribute("x", x);
+            rect.setAttribute("y", y);
+            rect.setAttribute("width", barWidth);
+            rect.setAttribute("height", height);
+            rect.setAttribute("fill", colorClass);
+            rect.setAttribute("fill-opacity", "0.9");
+            rect.style.cursor = "pointer";
+            return rect;
+        }
+
+        const segLow = makeSeg(hLow, "#f44336", "Low-quality");
+        const segProk = makeSeg(hProk, "#4caf50", "Prokaryotic");
+        const segOther = makeSeg(hOther, "#9e9e9e", "Other");
+
+        const tooltipText =
+            `${d.sample}\n` +
+            `Total: ${fmtMillions(totalReads)} reads\n` +
+            `Low-quality: ${(100*fracLow).toFixed(2)}% (${fmtMillions(lowReads)} reads)\n` +
+            `Prokaryotic: ${(100*fracProk).toFixed(2)}% (${fmtMillions(prokReads)} reads)\n` +
+            `Other: ${(100*fracOther).toFixed(2)}% (${fmtMillions(otherReads)} reads)`;
+
+        [segLow, segProk, segOther].forEach(seg => {
+            if (!seg) return;
+            seg.addEventListener("mouseenter", (evt) => {
+                seg.setAttribute("stroke", "#000");
+                seg.setAttribute("stroke-width", "1");
+                tooltip.style.display = "block";
+                tooltip.textContent = tooltipText;
+                tooltip.style.left = evt.clientX + "px";
+                tooltip.style.top = evt.clientY + "px";
+            });
+            seg.addEventListener("mousemove", (evt) => {
+                tooltip.style.left = evt.clientX + "px";
+                tooltip.style.top = evt.clientY + "px";
+            });
+            seg.addEventListener("mouseleave", () => {
+                seg.removeAttribute("stroke");
+                seg.removeAttribute("stroke-width");
+                tooltip.style.display = "none";
+            });
+            svg.appendChild(seg);
+        });
+
+        // Sample labels: show all if <=40, otherwise every 5th
+        const showAll = n <= 40;
+        const show = showAll || (i % 5 === 0);
+        if (show) {
+            const lab = document.createElementNS(svgns, "text");
+            lab.setAttribute("x", xCenter);
+            lab.setAttribute("y", y0 + 10);
+            lab.setAttribute("font-size", "9");
+            lab.setAttribute("text-anchor", "end");
+            lab.setAttribute("transform", `rotate(-60 ${xCenter} ${y0 + 10})`);
+            lab.textContent = d.sample;
+            svg.appendChild(lab);
+        }
+    });
 }
 
 function addRedundancyReadsSection(parent, data) {
@@ -637,83 +833,6 @@ function addClustersSection(parent, clusters) {
         </details>
     `;
     parent.appendChild(div);
-}
-
-/* ---------- Figures: depth fractions ---------- */
-
-function addFigureDepthFractions(parent, fig) {
-    if (!fig) return;
-    const data = fig.per_sample || [];
-    if (!data.length) return;
-
-    const div = document.createElement("div");
-    div.className = "section";
-
-    div.innerHTML = `
-        <details open>
-            <summary>Sequencing Depth Components</summary>
-            <div class="figure-container">
-                <div class="depth-legend">
-                    <span class="box seg-lowq"></span> low-quality &nbsp;
-                    <span class="box seg-prok"></span> prokaryotic &nbsp;
-                    <span class="box seg-other"></span> other (non-prokaryotic, QC-passing)
-                </div>
-                <div id="depth-bars" class="depth-table"></div>
-                <p class="small-note">
-                    Bars show per-sample relative contributions of low-quality reads, prokaryotic reads,
-                    and other QC-passing reads. Tooltip values and right-hand text give approximate counts.
-                    Nonpareil 95% LR_reads thresholds are indicated in text for use as dashed horizontal
-                    lines in custom plots.
-                </p>
-            </div>
-        </details>
-    `;
-    parent.appendChild(div);
-
-    const container = div.querySelector("#depth-bars");
-
-    const maxSamples = 50; // keep UI manageable
-    const rows = data.slice(0, maxSamples);
-    const truncated = data.length > maxSamples;
-
-    rows.forEach(d => {
-        const row = document.createElement("div");
-        row.className = "depth-row";
-
-        const fracLow = d.fraction_low_quality_of_total || 0;
-        const fracProk = d.fraction_prokaryotic_of_total || 0;
-        const fracOther = d.fraction_non_prokaryotic_of_total || 0;
-
-        const lowPct = (100 * fracLow).toFixed(2);
-        const prokPct = (100 * fracProk).toFixed(2);
-        const otherPct = (100 * fracOther).toFixed(2);
-
-        const totalReads = d.total_reads;
-        const targetReads95 = d.target_reads_95_LR_reads;
-
-        row.innerHTML = `
-            <div class="depth-label">${d.sample}</div>
-            <div class="depth-bar-wrapper">
-                <div class="depth-bar" title="Low-Q: ${lowPct}%, Prok: ${prokPct}%, Other: ${otherPct}%">
-                    <span class="depth-bar-seg seg-lowq" style="width: ${lowPct}%;"></span>
-                    <span class="depth-bar-seg seg-prok" style="width: ${prokPct}%;"></span>
-                    <span class="depth-bar-seg seg-other" style="width: ${otherPct}%;"></span>
-                </div>
-            </div>
-            <div class="depth-info">
-                ${fmtMillions(totalReads)} reads<br/>
-                95% LR (reads): ${fmtMillions(targetReads95)}
-            </div>
-        `;
-        container.appendChild(row);
-    });
-
-    if (truncated) {
-        const note = document.createElement("div");
-        note.className = "small-note";
-        note.textContent = `Showing first ${maxSamples} samples of ${data.length}.`;
-        container.appendChild(note);
-    }
 }
 
 /* ---------- Figures: redundancy biplot ---------- */
@@ -873,14 +992,12 @@ function main() {
     addScreeningSection(summaryDiv, S.screening_threshold);
     addSequencingDepthSection(summaryDiv, S.sequencing_depth, depthPerSample);
     addLowQualitySection(summaryDiv, S.low_quality_reads);
-    addProkFractionSection(summaryDiv, S.prokaryotic_fraction);
+    addProkFractionSection(summaryDiv, S.prokaryotic_fraction, depthPerSample);
     addRedundancyReadsSection(summaryDiv, S.redundancy_reads);
     addRedundancyMarkersSection(summaryDiv, S.redundancy_markers);
     addClustersSection(summaryDiv, S.clusters);
 
-    if (figures.figures && figures.figures.dna_depth_fractions) {
-        addFigureDepthFractions(figureDiv, figures.figures.dna_depth_fractions);
-    }
+    // Figures section now only holds the redundancy biplot.
     if (figures.figures && figures.figures.redundancy_biplot) {
         addFigureRedundancyBiplot(figureDiv, figures.figures.redundancy_biplot);
     }
