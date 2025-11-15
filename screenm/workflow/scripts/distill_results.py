@@ -91,7 +91,7 @@ def compute_screening_threshold(data_json: Dict[str, Any]) -> Dict[str, Any]:
             flag = 2
             message = (
                 f"Most samples ({n_above}/{n_total}, {percent_above:.1f}%) are above the "
-                f"read threshold ({min_reads} reads), but some are below."
+                f"read threshold ({min_reads} reads), but some are below. "
                 "If you want to include more samples for the estimations consider lowering "
                 "the read threshold using the -r flag; but note that this will make the estimations less accurate."
             )
@@ -183,6 +183,81 @@ def compute_sequencing_depth(results_json: Dict[str, Any]) -> Dict[str, Any]:
         "cv_reads": cv_reads,
         "flag_sequencing_depth": flag,
         "message_sequencing_depth": message,
+    }
+
+
+# ---------- 2b) Combined screening overview ----------
+
+def compute_screening_overview(
+    data_json: Dict[str, Any],
+    results_json: Dict[str, Any],
+) -> Dict[str, Any]:
+    """
+    Combined view of:
+      - fraction of samples above the screening read threshold, and
+      - sequencing depth balance across samples.
+
+    The returned section is called 'screening_overview' and contains
+    the key metrics from both aspects plus a combined flag/message.
+
+    Combined flag:
+      - based on the "worst" (max) of flag_reads_threshold and flag_sequencing_depth
+        whenever both are available,
+      - falls back gracefully when one of them cannot be evaluated.
+    """
+    st = compute_screening_threshold(data_json)
+    sd = compute_sequencing_depth(results_json)
+
+    reads_flag = st.get("flag_reads_threshold", 3)
+    depth_flag = sd.get("flag_sequencing_depth", 3)
+
+    # Combined flag logic
+    if sd.get("n_samples", 0) == 0 and st.get("n_samples_total", 0) == 0:
+        combined_flag = 3
+    elif sd.get("n_samples", 0) == 0:
+        combined_flag = reads_flag
+    elif st.get("n_samples_total", 0) == 0:
+        combined_flag = depth_flag
+    else:
+        combined_flag = max(reads_flag, depth_flag)
+
+    # Combined message
+    msg_parts: List[str] = []
+    if st.get("message_reads_threshold"):
+        msg_parts.append(st["message_reads_threshold"].strip())
+    if sd.get("message_sequencing_depth"):
+        msg_parts.append(sd["message_sequencing_depth"].strip())
+
+    if sd.get("n_samples", 0) == 0:
+        msg_parts.append(
+            "Sequencing depth statistics could not be computed because per-sample read counts are missing."
+        )
+    if st.get("n_samples_total", 0) == 0:
+        msg_parts.append(
+            "Read screening could not be evaluated because the number of samples in data.json is zero."
+        )
+
+    combined_message = " ".join(m for m in msg_parts if m)
+
+    return {
+        # Screening threshold side
+        "reads_threshold": st.get("reads_threshold"),
+        "n_samples_total": st.get("n_samples_total"),
+        "n_samples_above_threshold": st.get("n_samples_above_threshold"),
+        "percent_above_threshold": st.get("percent_above_threshold"),
+        "flag_reads_threshold": reads_flag,
+
+        # Sequencing depth side
+        "n_samples_depth": sd.get("n_samples"),
+        "mean_reads": sd.get("mean_reads"),
+        "median_reads": sd.get("median_reads"),
+        "sd_reads": sd.get("sd_reads"),
+        "cv_reads": sd.get("cv_reads"),
+        "flag_sequencing_depth": depth_flag,
+
+        # Combined
+        "flag_screening_overview": combined_flag,
+        "message_screening_overview": combined_message,
     }
 
 
@@ -871,6 +946,7 @@ def _summarise_mash_cluster_block(
             "pair_ratio_mean": None,
             "pair_ratio_sd": None,
             "clusters": [],
+            "between_clusters": {},
             "flag_cluster_structure": 3,
             "message_cluster_structure": (
                 f"No Mash-based {label} distances were found; coassembly clusters "
@@ -1073,9 +1149,9 @@ def main():
     ap = argparse.ArgumentParser(
         description=(
             "Distill ScreenM outputs (data.json + results.json) into a summary JSON.\n"
-            "Includes: screening threshold coverage, sequencing depth, low-quality reads, "
-            "prokaryotic fraction, redundancy based on reads and marker genes, and "
-            "Mash-based clustering as potential coassemblies."
+            "Includes: screening overview (threshold coverage + depth balance), "
+            "sequencing quality, prokaryotic fraction, redundancy based on reads and "
+            "marker genes, and Mash-based clustering as potential coassemblies."
         )
     )
     ap.add_argument(
@@ -1102,8 +1178,7 @@ def main():
     data_json = load_json(data_path)
     results_json = load_json(results_path)
 
-    screening_threshold = compute_screening_threshold(data_json)
-    sequencing_depth = compute_sequencing_depth(results_json)
+    screening_overview = compute_screening_overview(data_json, results_json)
     low_quality = compute_low_quality(results_json)
     prok_fraction = compute_prokaryotic_fraction(results_json)
     redundancy_reads = compute_redundancy_reads(results_json)
@@ -1119,8 +1194,7 @@ def main():
             },
         },
         "summary": {
-            "screening_threshold": screening_threshold,
-            "sequencing_depth": sequencing_depth,
+            "screening_overview": screening_overview,
             "low_quality_reads": low_quality,
             "prokaryotic_fraction": prok_fraction,
             "redundancy_reads": redundancy_reads,
@@ -1133,6 +1207,7 @@ def main():
     out_path.parent.mkdir(parents=True, exist_ok=True)
     with out_path.open("w") as f:
         json.dump(distilled, f, indent=2)
+
 
 if __name__ == "__main__":
     main()

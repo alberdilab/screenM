@@ -224,20 +224,22 @@ function getOrCreateTooltip() {
     return tooltip;
 }
 
-/* ---------- Summary sections ---------- */
+/* ---------- Screening overview (merged) ---------- */
 
-/* Screening overview */
-function addScreeningSection(parent, data) {
+function addScreeningOverviewSection(parent, data, depthPerSample) {
     if (!data) return;
     const div = document.createElement("div");
-    div.className = "section " + flagClass(data.flag_reads_threshold);
+    div.className = "section " + flagClass(data.flag_screening_overview);
 
-    const msg = data.message_reads_threshold || "";
+    const msg = data.message_screening_overview || "";
 
     const total = data.n_samples_total;
     const above = data.n_samples_above_threshold;
     const perc = data.percent_above_threshold;
     const thr  = data.reads_threshold;
+
+    const medianReads = data.median_reads;
+    const cvReads = data.cv_reads;
 
     div.innerHTML = `
         <details open>
@@ -262,41 +264,12 @@ function addScreeningSection(parent, data) {
                         <div class="screen-overview-stat-value">${fmtMillions(thr)}</div>
                         <div class="screen-overview-stat-note">Minimum reads used for screening</div>
                     </div>
-                </div>
-            </div>
-        </details>
-    `;
-    parent.appendChild(div);
-}
-
-/* Sequencing depth */
-function addSequencingDepthSection(parent, data, depthPerSample) {
-    if (!data) return;
-    const div = document.createElement("div");
-    div.className = "section " + flagClass(data.flag_sequencing_depth);
-
-    const msg = data.message_sequencing_depth || "";
-
-    div.innerHTML = `
-        <details>
-            <summary>Sequencing depth</summary>
-            <div class="content">
-                <p class="summary-message">${msg}</p>
-                <div class="seq-depth-stats">
-                    <div class="seq-depth-stat-item">
-                        <div class="seq-depth-stat-label">Mean depth</div>
-                        <div class="seq-depth-stat-value">${fmtMillions(data.mean_reads)}</div>
-                        <div class="seq-depth-stat-note">Average reads per sample</div>
-                    </div>
-                    <div class="seq-depth-stat-item">
-                        <div class="seq-depth-stat-label">Median depth</div>
-                        <div class="seq-depth-stat-value">${fmtMillions(data.median_reads)}</div>
-                        <div class="seq-depth-stat-note">Median reads per sample</div>
-                    </div>
-                    <div class="seq-depth-stat-item">
-                        <div class="seq-depth-stat-label">Variation</div>
-                        <div class="seq-depth-stat-value">${fmtFloat(data.cv_reads, 3)}</div>
-                        <div class="seq-depth-stat-note">Coefficient of variation (CV)</div>
+                    <div class="screen-overview-stat-item">
+                        <div class="screen-overview-stat-label">Median depth / variation</div>
+                        <div class="screen-overview-stat-value">
+                            ${fmtMillions(medianReads)} / ${fmtFloat(cvReads, 3)}
+                        </div>
+                        <div class="screen-overview-stat-note">Median reads per sample / CV</div>
                     </div>
                 </div>
                 <div class="seq-depth-plot-container">
@@ -453,7 +426,7 @@ function addSequencingDepthSection(parent, data, depthPerSample) {
         }
     });
 
-    const medianDepth = Number(data.median_reads) || 0;
+    const medianDepth = Number(medianReads) || 0;
 
     if (medianDepth > 0) {
         const y = yForValue(medianDepth);
@@ -1698,8 +1671,7 @@ function main() {
         : null;
     const redBiplotPerSample = redBiplot ? (redBiplot.per_sample || []) : [];
 
-    addScreeningSection(summaryDiv, S.screening_threshold);
-    addSequencingDepthSection(summaryDiv, S.sequencing_depth, depthPerSample);
+    addScreeningOverviewSection(summaryDiv, S.screening_overview, depthPerSample);
     addLowQualitySection(summaryDiv, S.low_quality_reads, depthPerSample);
     addProkFractionSection(summaryDiv, S.prokaryotic_fraction, depthPerSample);
     addRedundancyReadsSection(summaryDiv, S.redundancy_reads, depthPerSample);
