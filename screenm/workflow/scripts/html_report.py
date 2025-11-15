@@ -30,11 +30,26 @@ HTML_TEMPLATE = r"""<!DOCTYPE html>
         background: #fff;
     }
 
+    .section-title {
+        margin: 2px 0 4px 0;
+        font-size: 1.25em;
+    }
+
+    .section-intro {
+        margin: 0 0 6px 0;
+        font-size: 0.95em;
+        color: #444;
+    }
+
+    details {
+        margin-top: 6px;
+    }
+
     details > summary {
-        font-size: 1.05em;
+        font-size: 0.98em;
         cursor: pointer;
         padding: 4px 0;
-        font-weight: bold;
+        font-weight: 600;
         list-style: none;
     }
 
@@ -60,6 +75,13 @@ HTML_TEMPLATE = r"""<!DOCTYPE html>
         font-size: 0.85em;
         color: #666;
         margin-top: 8px;
+    }
+
+    .status-emoji {
+        margin-right: 6px;
+    }
+    .status-text {
+        font-weight: 500;
     }
 
     .screen-overview-stats,
@@ -216,6 +238,25 @@ function getOrCreateTooltip() {
     return tooltip;
 }
 
+/* ---------- Section-level status (emoji + short text) ---------- */
+function sectionStatus(sectionLabel, flag) {
+    let emoji, descriptor;
+    if (flag === 1) {
+        emoji = "😊";
+        descriptor = "contains no warnings";
+    } else if (flag === 2) {
+        emoji = "😐";
+        descriptor = "contains some warnings";
+    } else {
+        emoji = "☹️";
+        descriptor = "contains many warnings";
+    }
+    return {
+        emoji,
+        text: `${sectionLabel} ${descriptor}`
+    };
+}
+
 /* ---------- Screening overview (merged) ---------- */
 function addScreeningOverviewSection(parent, data, depthPerSample) {
     if (!data) return;
@@ -232,9 +273,18 @@ function addScreeningOverviewSection(parent, data, depthPerSample) {
     const medianReads = data.median_reads;
     const cvReads = data.cv_reads;
 
+    const status = sectionStatus("Screening overview", data.flag_screening_overview);
+
     div.innerHTML = `
+        <h2 class="section-title">Screening overview</h2>
+        <p class="section-intro">
+            This section summarises how many samples pass the read threshold and how evenly sequencing depth is distributed.
+        </p>
         <details open>
-            <summary>Screening overview</summary>
+            <summary>
+                <span class="status-emoji">${status.emoji}</span>
+                <span class="status-text">${status.text}</span>
+            </summary>
             <div class="content">
                 <p class="summary-message">${msg}</p>
                 <div class="screen-overview-stats">
@@ -499,9 +549,18 @@ function addLowQualitySection(parent, data, depthPerSample) {
     const meanFrac = data.mean_fraction_removed;
     const medianFrac = data.median_fraction_removed;
 
+    const status = sectionStatus("Sequencing quality", data.flag_low_quality);
+
     div.innerHTML = `
+        <h2 class="section-title">Sequencing quality</h2>
+        <p class="section-intro">
+            This section reports how many reads are discarded by quality trimming and filtering across samples.
+        </p>
         <details>
-            <summary>Sequencing quality</summary>
+            <summary>
+                <span class="status-emoji">${status.emoji}</span>
+                <span class="status-text">${status.text}</span>
+            </summary>
             <div class="content">
                 <p class="summary-message">${msg}</p>
                 <div class="quality-stats">
@@ -750,10 +809,19 @@ function addProkFractionSection(parent, data, depthPerSample) {
     div.className = "section " + flagClass(data.flag_prokaryotic_fraction);
 
     const msg = data.message_prokaryotic_fraction || "";
+    const status = sectionStatus("Prokaryotic fraction", data.flag_prokaryotic_fraction);
 
     div.innerHTML = `
+        <h2 class="section-title">Prokaryotic fraction</h2>
+        <p class="section-intro">
+            This section describes how much of the sequencing effort is targeting prokaryotic genomes
+            versus non-prokaryotic or low-quality reads.
+        </p>
         <details>
-            <summary>Prokaryotic fraction</summary>
+            <summary>
+                <span class="status-emoji">${status.emoji}</span>
+                <span class="status-text">${status.text}</span>
+            </summary>
             <div class="content">
                 <p class="summary-message">${msg}</p>
                 <div class="prok-stats">
@@ -1020,7 +1088,7 @@ function addProkFractionSection(parent, data, depthPerSample) {
     }
 }
 
-/* ---------- Overall metagenomic coverage (reads Nonpareil) ---------- */
+/* Overall metagenomic coverage (reads Nonpareil) */
 function addRedundancyReadsSection(parent, data, depthPerSample) {
     if (!data) return;
     const div = document.createElement("div");
@@ -1033,9 +1101,18 @@ function addRedundancyReadsSection(parent, data, depthPerSample) {
     const nAtOrAbove = nLR ? (nLR - nBelow) : 0;
     const fracAtOrAbove = nLR ? (100 * nAtOrAbove / nLR) : null;
 
+    const status = sectionStatus("Overall metagenomic coverage", data.flag_redundancy);
+
     div.innerHTML = `
+        <h2 class="section-title">Overall metagenomic coverage</h2>
+        <p class="section-intro">
+            This section evaluates how close the sequencing depth is to the Nonpareil LR target for metagenomic reads.
+        </p>
         <details>
-            <summary>Overall metagenomic coverage</summary>
+            <summary>
+                <span class="status-emoji">${status.emoji}</span>
+                <span class="status-text">${status.text}</span>
+            </summary>
             <div class="content">
                 <p class="summary-message">${msg}</p>
                 <div class="redundancy-stats">
@@ -1112,8 +1189,8 @@ function addRedundancyReadsSection(parent, data, depthPerSample) {
     const baselineY = yTop + plotH / 2;
 
     function transformRatio(r) {
-        if (r >= 1) return r - 1;          // extra above target
-        return -(1 / r - 1);               // times more needed as negative
+        if (r >= 1) return r - 1;
+        return -(1 / r - 1);
     }
 
     const values = combined.map(d => transformRatio(d.ratio));
@@ -1122,7 +1199,6 @@ function addRedundancyReadsSection(parent, data, depthPerSample) {
         const a = Math.abs(v);
         if (a > maxAbs) maxAbs = a;
     });
-    // Always allow at least ±3× scale so -3× threshold is visible
     maxAbs = Math.max(maxAbs, 3);
     maxAbs *= 1.05;
 
@@ -1147,7 +1223,6 @@ function addRedundancyReadsSection(parent, data, depthPerSample) {
     yAxis.setAttribute("stroke", "#555");
     svg.appendChild(yAxis);
 
-    // Baseline: LR target – black dashed
     const baseLine = document.createElementNS(svgns, "line");
     baseLine.setAttribute("x1", x0);
     baseLine.setAttribute("y1", baselineY);
@@ -1178,10 +1253,7 @@ function addRedundancyReadsSection(parent, data, depthPerSample) {
         tick.setAttribute("stroke", "#555");
         svg.appendChild(tick);
 
-        if (v === 0) {
-            // Middle line: no Y-axis label
-            continue;
-        }
+        if (v === 0) continue;
 
         const lab = document.createElementNS(svgns, "text");
         lab.setAttribute("x", x0 - 6);
@@ -1191,17 +1263,14 @@ function addRedundancyReadsSection(parent, data, depthPerSample) {
 
         let labelStr;
         if (v > 0) {
-            // Above target: 1×, 2×, ...
             labelStr = v.toFixed(0) + "×";
         } else {
-            // Below target: -1×, -2×, -3×, ...
             labelStr = "-" + Math.abs(v).toFixed(0) + "×";
         }
         lab.textContent = labelStr;
         svg.appendChild(lab);
     }
 
-    // Horizontal dashed line at -3× threshold
     if (maxAbs >= 3) {
         const yThr = yForVal(-3);
         const thrLine = document.createElementNS(svgns, "line");
@@ -1269,9 +1338,9 @@ function addRedundancyReadsSection(parent, data, depthPerSample) {
         if (v >= 0) {
             fillColor = "#4caf50";
         } else if (v >= -3) {
-            fillColor = "#ffa000"; // up to -3× short
+            fillColor = "#ffa000";
         } else {
-            fillColor = "#c62828"; // more than -3× short
+            fillColor = "#c62828";
         }
 
         const rect = document.createElementNS(svgns, "rect");
@@ -1328,7 +1397,7 @@ function addRedundancyReadsSection(parent, data, depthPerSample) {
     });
 }
 
-/* ---------- Prokaryotic coverage (markers Nonpareil) ---------- */
+/* Prokaryotic coverage (markers Nonpareil) */
 function addRedundancyMarkersSection(parent, data, redBiplotPerSample) {
     if (!data) return;
     const div = document.createElement("div");
@@ -1341,9 +1410,18 @@ function addRedundancyMarkersSection(parent, data, redBiplotPerSample) {
     const nAtOrAbove = nLR ? (nLR - nBelow) : 0;
     const fracAtOrAbove = nLR ? (100 * nAtOrAbove / nLR) : null;
 
+    const status = sectionStatus("Prokaryotic coverage", data.flag_redundancy_markers);
+
     div.innerHTML = `
+        <h2 class="section-title">Prokaryotic coverage</h2>
+        <p class="section-intro">
+            This section evaluates coverage of marker genes relative to the 95% Nonpareil target.
+        </p>
         <details>
-            <summary>Prokaryotic coverage</summary>
+            <summary>
+                <span class="status-emoji">${status.emoji}</span>
+                <span class="status-text">${status.text}</span>
+            </summary>
             <div class="content">
                 <p class="summary-message">${msg}</p>
                 <div class="redundancy-stats">
@@ -1481,7 +1559,7 @@ function addRedundancyMarkersSection(parent, data, redBiplotPerSample) {
         tick.setAttribute("stroke", "#555");
         svg.appendChild(tick);
 
-        if (v === 0) continue; // no Y-axis label for middle line
+        if (v === 0) continue;
 
         const lab = document.createElementNS(svgns, "text");
         lab.setAttribute("x", x0 - 6);
@@ -1624,7 +1702,7 @@ function addRedundancyMarkersSection(parent, data, redBiplotPerSample) {
     });
 }
 
-/* Sample clusters section stays unchanged */
+/* Sample clusters */
 function addClustersSection(parent, clusters) {
     if (!clusters) return;
     const div = document.createElement("div");
@@ -1637,9 +1715,18 @@ function addClustersSection(parent, clusters) {
     const nClustersMarkers = markers.n_clusters != null ? markers.n_clusters : "NA";
     const nClustersReads = reads.n_clusters != null ? reads.n_clusters : "NA";
 
+    const status = sectionStatus("Sample clusters", clusters.flag_clusters);
+
     div.innerHTML = `
+        <h2 class="section-title">Sample clusters</h2>
+        <p class="section-intro">
+            This section highlights similarity-based clusters inferred from Mash distances on reads and marker genes.
+        </p>
         <details>
-            <summary>Sample clusters</summary>
+            <summary>
+                <span class="status-emoji">${status.emoji}</span>
+                <span class="status-text">${status.text}</span>
+            </summary>
             <div class="content">
                 <p class="summary-message">${msg}</p>
                 <div class="cluster-stats">
@@ -1754,10 +1841,10 @@ function addClustersSection(parent, clusters) {
     function drawRow(rowIndex, label, map, colorMap, defaultColor) {
         const yRowTop = margin.top + rowIndex * cellH;
         const labelX = 10;
-        const labelY = yRowTop + cellH / 2 + 4;
+        thelabelY = yRowTop + cellH / 2 + 4;
         const labelText = document.createElementNS(svgns, "text");
         labelText.setAttribute("x", labelX);
-        labelText.setAttribute("y", labelY);
+        labelText.setAttribute("y", thelabelY);
         labelText.setAttribute("font-size", "11");
         labelText.setAttribute("text-anchor", "start");
         labelText.textContent = label;
