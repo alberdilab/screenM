@@ -21,10 +21,6 @@ HTML_TEMPLATE = r"""<!DOCTYPE html>
         text-align: center;
         margin-bottom: 30px;
     }
-    h2 {
-        margin-top: 40px;
-        margin-bottom: 15px;
-    }
 
     .section {
         margin-bottom: 20px;
@@ -77,33 +73,7 @@ HTML_TEMPLATE = r"""<!DOCTYPE html>
         margin-top: 4px;
     }
 
-    /* Depth fractions legend colours */
-    .depth-legend {
-        font-size: 0.9em;
-        margin-bottom: 6px;
-    }
-    .depth-legend span.box {
-        display: inline-block;
-        width: 12px;
-        height: 10px;
-        margin-right: 4px;
-        border-radius: 2px;
-        vertical-align: middle;
-    }
-    .seg-lowq   { background: #f44336; }  /* red */
-    .seg-prok   { background: #4caf50; }  /* green */
-    .seg-other  { background: #9e9e9e; }  /* grey */
-
-    /* Redundancy biplot */
-    .biplot-container {
-        overflow-x: auto;
-    }
-    .biplot-svg {
-        border: 1px solid #ddd;
-        background: #fcfcfc;
-    }
-
-    /* Summary stat tiles (Sequencing, Prok, Redundancy) */
+    /* Summary stat tiles */
     .seq-depth-stats, .prok-stats, .redundancy-stats {
         display: flex;
         gap: 16px;
@@ -150,6 +120,20 @@ HTML_TEMPLATE = r"""<!DOCTYPE html>
         height: 320px;
     }
 
+    /* Clusters heatmap */
+    .clusters-heatmap-scroll {
+        overflow-x: auto;
+        margin-top: 8px;
+        border: 1px solid #ddd;
+        border-radius: 4px;
+        background: #fcfcfc;
+    }
+    .clusters-heatmap-svg {
+        display: block;
+        width: 100%;
+        height: 120px;
+    }
+
     /* Tooltip for interactive charts */
     .chart-tooltip {
         position: fixed;
@@ -171,9 +155,6 @@ HTML_TEMPLATE = r"""<!DOCTYPE html>
 <h1>ScreenM Summary Report</h1>
 
 <div id="summary-sections"></div>
-
-<h2>Figures</h2>
-<div id="figure-sections"></div>
 
 <script>
 // Embedded data from Python.
@@ -296,7 +277,6 @@ function addSequencingDepthSection(parent, data, depthPerSample) {
         return;
     }
 
-    // Logical drawing size (viewBox); SVG will scale to full width via CSS.
     const width = 1000;
     const height = 320;
     const margin = {left: 60, right: 20, top: 20, bottom: 80};
@@ -304,7 +284,6 @@ function addSequencingDepthSection(parent, data, depthPerSample) {
     const plotH = height - margin.top - margin.bottom;
     const svgns = "http://www.w3.org/2000/svg";
 
-    // Determine max depth for scaling
     let maxDepth = 0;
     perSample.forEach(d => {
         const v = Number(d.total_reads) || 0;
@@ -320,7 +299,6 @@ function addSequencingDepthSection(parent, data, depthPerSample) {
         return y0 - ratio * plotH;
     }
 
-    // Axes
     const xAxis = document.createElementNS(svgns, "line");
     xAxis.setAttribute("x1", x0);
     xAxis.setAttribute("y1", y0);
@@ -337,7 +315,6 @@ function addSequencingDepthSection(parent, data, depthPerSample) {
     yAxis.setAttribute("stroke", "#555");
     svg.appendChild(yAxis);
 
-    // Y ticks
     [0, 0.25, 0.5, 0.75, 1].forEach(frac => {
         const val = frac * maxDepth;
         const y = yForValue(val);
@@ -359,7 +336,6 @@ function addSequencingDepthSection(parent, data, depthPerSample) {
         svg.appendChild(lab);
     });
 
-    // Axis labels
     const ylabel = document.createElementNS(svgns, "text");
     ylabel.setAttribute("x", 16);
     ylabel.setAttribute("y", margin.top + plotH / 2);
@@ -377,10 +353,8 @@ function addSequencingDepthSection(parent, data, depthPerSample) {
     xlabel.textContent = "Samples";
     svg.appendChild(xlabel);
 
-    // Shared tooltip
     const tooltip = getOrCreateTooltip();
 
-    // Bars
     const n = perSample.length;
     const step = plotW / n;
     const barWidth = Math.min(16, step * 0.8);
@@ -435,19 +409,18 @@ function addSequencingDepthSection(parent, data, depthPerSample) {
         }
     });
 
-    // Median line only
     const medianDepth = Number(data.median_reads) || 0;
 
-    function addHorizontalLine(val, color, dash, labelText) {
-        const y = yForValue(val);
+    if (medianDepth > 0) {
+        const y = yForValue(medianDepth);
         const line = document.createElementNS(svgns, "line");
         line.setAttribute("x1", x0);
         line.setAttribute("y1", y);
         line.setAttribute("x2", x0 + plotW);
         line.setAttribute("y2", y);
-        line.setAttribute("stroke", color);
+        line.setAttribute("stroke", "#43a047");
         line.setAttribute("stroke-width", "1.2");
-        line.setAttribute("stroke-dasharray", dash);
+        line.setAttribute("stroke-dasharray", "3,2");
         svg.appendChild(line);
 
         const lab = document.createElementNS(svgns, "text");
@@ -455,13 +428,9 @@ function addSequencingDepthSection(parent, data, depthPerSample) {
         lab.setAttribute("y", y - 2);
         lab.setAttribute("font-size", "10");
         lab.setAttribute("text-anchor", "end");
-        lab.setAttribute("fill", color);
-        lab.textContent = `${labelText} (${fmtMillions(val)})`;
+        lab.setAttribute("fill", "#43a047");
+        lab.textContent = `median (${fmtMillions(medianDepth)})`;
         svg.appendChild(lab);
-    }
-
-    if (medianDepth > 0) {
-        addHorizontalLine(medianDepth, "#43a047", "3,2", "median");
     }
 }
 
@@ -564,7 +533,6 @@ function addProkFractionSection(parent, data, depthPerSample) {
         return y0 - f * plotH;
     }
 
-    // Axes
     const xAxis = document.createElementNS(svgns, "line");
     xAxis.setAttribute("x1", x0);
     xAxis.setAttribute("y1", y0);
@@ -581,7 +549,6 @@ function addProkFractionSection(parent, data, depthPerSample) {
     yAxis.setAttribute("stroke", "#555");
     svg.appendChild(yAxis);
 
-    // Y ticks (0–100%)
     [0, 0.25, 0.5, 0.75, 1].forEach(frac => {
         const y = yForFrac(frac);
         const tick = document.createElementNS(svgns, "line");
@@ -706,7 +673,6 @@ function addProkFractionSection(parent, data, depthPerSample) {
         }
     });
 
-    // Dashed median line for prokaryotic fraction (as fraction 0–1)
     const medianProkFrac = (Number(data.median_prokaryotic_fraction) || 0) / 100;
     if (medianProkFrac > 0) {
         const y = yForFrac(medianProkFrac);
@@ -788,7 +754,6 @@ function addRedundancyReadsSection(parent, data, depthPerSample) {
 
     const svg = div.querySelector("#lr-target-svg");
 
-    // Use depthPerSample which already has total_reads and target_reads_95_LR_reads
     const combined = (depthPerSample || []).map(d => {
         const observed = d.total_reads != null ? Number(d.total_reads) : null;
         const target = d.target_reads_95_LR_reads != null ? Number(d.target_reads_95_LR_reads) : null;
@@ -819,11 +784,8 @@ function addRedundancyReadsSection(parent, data, depthPerSample) {
     const x0 = margin.left;
     const yTop = margin.top;
     const yBottom = height - margin.bottom;
-    const baselineY = yTop + plotH / 2; // 0 (1×) in the middle
+    const baselineY = yTop + plotH / 2;
 
-    // Transform ratio -> signed value v:
-    //  - ratio >= 1: v = ratio - 1  (times extra)
-    //  - ratio < 1:  v = -(1/ratio - 1)  (negative, times missing)
     function transformRatio(r) {
         if (r >= 1) return r - 1;
         return -(1 / r - 1);
@@ -836,14 +798,13 @@ function addRedundancyReadsSection(parent, data, depthPerSample) {
         if (a > maxAbs) maxAbs = a;
     });
     if (maxAbs <= 0) maxAbs = 1;
-    maxAbs *= 1.1; // headroom
+    maxAbs *= 1.1;
 
     function yForVal(v) {
-        const f = v / maxAbs; // v in [-maxAbs, maxAbs]
+        const f = v / maxAbs;
         return baselineY - f * (plotH / 2);
     }
 
-    // Axes
     const xAxis = document.createElementNS(svgns, "line");
     xAxis.setAttribute("x1", x0);
     xAxis.setAttribute("y1", yBottom);
@@ -860,7 +821,6 @@ function addRedundancyReadsSection(parent, data, depthPerSample) {
     yAxis.setAttribute("stroke", "#555");
     svg.appendChild(yAxis);
 
-    // Baseline (1× target) in the middle, red dashed
     const baseLine = document.createElementNS(svgns, "line");
     baseLine.setAttribute("x1", x0);
     baseLine.setAttribute("y1", baselineY);
@@ -880,7 +840,6 @@ function addRedundancyReadsSection(parent, data, depthPerSample) {
     baseLabel.textContent = "LR target (1×)";
     svg.appendChild(baseLabel);
 
-    // Y ticks symmetrically around 0 (baseline), integer v from -ceil(maxAbs) to +ceil(maxAbs)
     const maxTick = Math.max(1, Math.ceil(maxAbs));
     for (let v = -maxTick; v <= maxTick; v++) {
         const y = yForVal(v);
@@ -943,11 +902,9 @@ function addRedundancyReadsSection(parent, data, depthPerSample) {
 
         let yRect, hRect;
         if (v >= 0) {
-            // Above baseline
             yRect = yVal;
             hRect = baselineY - yVal;
         } else {
-            // Below baseline
             yRect = baselineY;
             hRect = yVal - baselineY;
         }
@@ -1066,16 +1023,13 @@ function addRedundancyMarkersSection(parent, data, redBiplotPerSample) {
 
     const combined = (redBiplotPerSample || []).map(r => {
         const coverage = r.coverage_markers != null ? Number(r.coverage_markers) : null;
-        const target = r.target_markers_95_LR_reads != null ? Number(r.target_markers_95_LR_reads) : null;
         let ratio = null;
         if (coverage != null && coverage > 0) {
-            // target is 95% coverage -> ratio = observed coverage / 0.95
             ratio = coverage / 0.95;
         }
         return {
             sample: r.sample,
             coverage,
-            target,
             ratio
         };
     }).filter(d => d.ratio != null);
@@ -1116,7 +1070,6 @@ function addRedundancyMarkersSection(parent, data, redBiplotPerSample) {
         return baselineY - f * (plotH / 2);
     }
 
-    // Axes
     const xAxis = document.createElementNS(svgns, "line");
     xAxis.setAttribute("x1", x0);
     xAxis.setAttribute("y1", yBottom);
@@ -1133,7 +1086,6 @@ function addRedundancyMarkersSection(parent, data, redBiplotPerSample) {
     yAxis.setAttribute("stroke", "#555");
     svg.appendChild(yAxis);
 
-    // Baseline (1×) in middle
     const baseLine = document.createElementNS(svgns, "line");
     baseLine.setAttribute("x1", x0);
     baseLine.setAttribute("y1", baselineY);
@@ -1153,7 +1105,6 @@ function addRedundancyMarkersSection(parent, data, redBiplotPerSample) {
     baseLabel.textContent = "95% coverage target (1×)";
     svg.appendChild(baseLabel);
 
-    // Y ticks
     const maxTick = Math.max(1, Math.ceil(maxAbs));
     for (let v = -maxTick; v <= maxTick; v++) {
         const y = yForVal(v);
@@ -1299,160 +1250,186 @@ function addClustersSection(parent, clusters) {
                     <li>Read-based clusters: ${nClustersReads}</li>
                 </ul>
                 <p class="small-note">
-                    Cluster assignments and distances are available in the JSON output and can be explored programmatically.
+                    Heatmap below shows cluster assignments per sample. Rows correspond to marker-based
+                    and read-based clustering; columns are samples. Colour palettes are distinct per row,
+                    so cluster IDs are not directly comparable between the two.
                 </p>
-            </div>
-        </details>
-    `;
-    parent.appendChild(div);
-}
-
-/* ---------- Figures: redundancy biplot ---------- */
-
-function addFigureRedundancyBiplot(parent, fig) {
-    if (!fig) return;
-    const data = (fig.per_sample || []).filter(d =>
-        d.kappa_reads !== null && d.kappa_reads !== undefined &&
-        d.kappa_markers !== null && d.kappa_markers !== undefined
-    );
-    if (!data.length) return;
-
-    const div = document.createElement("div");
-    div.className = "section";
-
-    div.innerHTML = `
-        <details open>
-            <summary>Redundancy Biplot (Nonpareil kappa)</summary>
-            <div class="figure-container">
-                <div class="biplot-container">
-                    <svg id="biplot-svg" class="biplot-svg" width="380" height="380"></svg>
+                <div class="clusters-heatmap-scroll">
+                    <svg id="clusters-heatmap-svg" class="clusters-heatmap-svg" viewBox="0 0 1000 120" preserveAspectRatio="none"></svg>
                 </div>
                 <p class="small-note">
-                    Scatterplot of read-based vs marker-based Nonpareil kappa_total.
-                    Points are samples (hover for sample names). Axes are fixed to [0, 1].
+                    Hover over tiles for exact cluster assignments. Samples without an assignment in a given
+                    row are shown as light grey.
                 </p>
             </div>
         </details>
     `;
     parent.appendChild(div);
 
-    const svg = div.querySelector("#biplot-svg");
-    const w = 380, h = 380;
-    const margin = {left: 50, right: 10, top: 20, bottom: 40};
-    const plotW = w - margin.left - margin.right;
-    const plotH = h - margin.top - margin.bottom;
-
+    const svg = div.querySelector("#clusters-heatmap-svg");
     const svgns = "http://www.w3.org/2000/svg";
+    const tooltip = getOrCreateTooltip();
 
+    // Build sample->cluster maps from clusters[].members
+    const markersPS = (markers.clusters || []).flatMap(cl => {
+        const cid = cl.cluster_id;
+        const members = cl.members || [];
+        return members.map(m => ({ sample: m, cluster: cid }));
+    });
+
+    const readsPS = (reads.clusters || []).flatMap(cl => {
+        const cid = cl.cluster_id;
+        const members = cl.members || [];
+        return members.map(m => ({ sample: m, cluster: cid }));
+    });
+
+    if (!markersPS.length && !readsPS.length) {
+        svg.outerHTML = `<div class="small-note">Per-sample cluster assignments not available; heatmap cannot be drawn.</div>`;
+        return;
+    }
+
+    const markersMap = {};
+    markersPS.forEach(d => {
+        if (d.sample != null) markersMap[d.sample] = d.cluster;
+    });
+
+    const readsMap = {};
+    readsPS.forEach(d => {
+        if (d.sample != null) readsMap[d.sample] = d.cluster;
+    });
+
+    const sampleSet = new Set();
+    Object.keys(markersMap).forEach(s => sampleSet.add(s));
+    Object.keys(readsMap).forEach(s => sampleSet.add(s));
+    const samples = Array.from(sampleSet);
+    samples.sort();
+
+    const nSamples = samples.length;
+
+    const markerPalette = [
+        "#084594", "#2171b5", "#4292c6", "#6baed6",
+        "#9ecae1", "#c6dbef", "#08519c", "#3182bd"
+    ];
+    const readPalette = [
+        "#a50f15", "#cb181d", "#ef3b2c", "#fb6a4a",
+        "#fc9272", "#fcbba1", "#dd3497", "#f768a1"
+    ];
+
+    function buildClusterColorMap(map, palette) {
+        const clusters = Array.from(new Set(
+            Object.values(map).filter(v => v !== null && v !== undefined)
+        ));
+        clusters.sort((a, b) => {
+            const na = Number(a), nb = Number(b);
+            if (!isNaN(na) && !isNaN(nb)) return na - nb;
+            return String(a).localeCompare(String(b));
+        });
+        const colorMap = {};
+        clusters.forEach((cl, idx) => {
+            colorMap[cl] = palette[idx % palette.length];
+        });
+        return colorMap;
+    }
+
+    const markerColors = buildClusterColorMap(markersMap, markerPalette);
+    const readColors = buildClusterColorMap(readsMap, readPalette);
+
+    const height = 120;
+    const margin = {left: 80, right: 20, top: 20, bottom: 30};
+    const rows = 2;
+    const cellH = (height - margin.top - margin.bottom) / rows;
+    const baseCellW = 20;
+    const width = Math.max(1000, margin.left + margin.right + nSamples * baseCellW);
+    svg.setAttribute("viewBox", `0 0 ${width} ${height}`);
+
+    const plotW = width - margin.left - margin.right;
     const x0 = margin.left;
-    const y0 = h - margin.bottom;
-    const x1 = margin.left + plotW;
-    const y1 = margin.top;
 
-    const xAxis = document.createElementNS(svgns, "line");
-    xAxis.setAttribute("x1", x0);
-    xAxis.setAttribute("y1", y0);
-    xAxis.setAttribute("x2", x1);
-    xAxis.setAttribute("y2", y0);
-    xAxis.setAttribute("stroke", "#555");
-    svg.appendChild(xAxis);
+    function drawRow(rowIndex, label, map, colorMap, defaultColor) {
+        const yRowTop = margin.top + rowIndex * cellH;
+        const labelX = 10;
+        const labelY = yRowTop + cellH / 2 + 4;
+        const labelText = document.createElementNS(svgns, "text");
+        labelText.setAttribute("x", labelX);
+        labelText.setAttribute("y", labelY);
+        labelText.setAttribute("font-size", "11");
+        labelText.setAttribute("text-anchor", "start");
+        labelText.textContent = label;
+        svg.appendChild(labelText);
 
-    const yAxis = document.createElementNS(svgns, "line");
-    yAxis.setAttribute("x1", x0);
-    yAxis.setAttribute("y1", y0);
-    yAxis.setAttribute("x2", x0);
-    yAxis.setAttribute("y2", y1);
-    yAxis.setAttribute("stroke", "#555");
-    svg.appendChild(yAxis);
+        const cellW = plotW / nSamples;
 
-    const xlabel = document.createElementNS(svgns, "text");
-    xlabel.setAttribute("x", margin.left + plotW / 2);
-    xlabel.setAttribute("y", h - 8);
-    xlabel.setAttribute("text-anchor", "middle");
-    xlabel.setAttribute("font-size", "11");
-    xlabel.textContent = "kappa_total (reads)";
-    svg.appendChild(xlabel);
+        samples.forEach((sampleName, i) => {
+            const cluster = map[sampleName];
+            const hasCluster = cluster !== null && cluster !== undefined;
+            const fill = hasCluster ? (colorMap[cluster] || defaultColor) : "#eeeeee";
 
-    const ylabel = document.createElementNS(svgns, "text");
-    ylabel.setAttribute("x", 14);
-    ylabel.setAttribute("y", margin.top + plotH / 2);
-    ylabel.setAttribute("text-anchor", "middle");
-    ylabel.setAttribute("font-size", "11");
-    ylabel.setAttribute("transform", `rotate(-90 14 ${margin.top + plotH / 2})`);
-    ylabel.textContent = "kappa_total (markers)";
-    svg.appendChild(ylabel);
+            const x = x0 + i * cellW;
+            const y = yRowTop;
 
-    [0.5, 1.0].forEach(t => {
-        const xt = x0 + t * plotW;
-        const yt = y0 - t * plotH;
+            const rect = document.createElementNS(svgns, "rect");
+            rect.setAttribute("x", x);
+            rect.setAttribute("y", y);
+            rect.setAttribute("width", cellW);
+            rect.setAttribute("height", cellH);
+            rect.setAttribute("fill", fill);
+            rect.setAttribute("stroke", "#ffffff");
+            rect.setAttribute("stroke-width", "0.5");
+            rect.style.cursor = hasCluster ? "pointer" : "default";
 
-        const xtick = document.createElementNS(svgns, "line");
-        xtick.setAttribute("x1", xt);
-        xtick.setAttribute("y1", y0);
-        xtick.setAttribute("x2", xt);
-        xtick.setAttribute("y2", y0 + 4);
-        xtick.setAttribute("stroke", "#555");
-        svg.appendChild(xtick);
+            const tooltipText = hasCluster
+                ? `${sampleName}\n${label}: cluster ${cluster}`
+                : `${sampleName}\n${label}: no cluster assigned`;
 
-        const xtlab = document.createElementNS(svgns, "text");
-        xtlab.setAttribute("x", xt);
-        xtlab.setAttribute("y", y0 + 15);
-        xtlab.setAttribute("font-size", "10");
-        xtlab.setAttribute("text-anchor", "middle");
-        xtlab.textContent = t.toFixed(1);
-        svg.appendChild(xtlab);
+            rect.addEventListener("mouseenter", (evt) => {
+                rect.setAttribute("stroke", "#000");
+                rect.setAttribute("stroke-width", "1");
+                tooltip.style.display = "block";
+                tooltip.textContent = tooltipText;
+                tooltip.style.left = evt.clientX + "px";
+                tooltip.style.top = evt.clientY + "px";
+            });
+            rect.addEventListener("mousemove", (evt) => {
+                tooltip.style.left = evt.clientX + "px";
+                tooltip.style.top = evt.clientY + "px";
+            });
+            rect.addEventListener("mouseleave", () => {
+                rect.setAttribute("stroke", "#ffffff");
+                rect.setAttribute("stroke-width", "0.5");
+                tooltip.style.display = "none";
+            });
 
-        const ytick = document.createElementNS(svgns, "line");
-        ytick.setAttribute("x1", x0 - 4);
-        ytick.setAttribute("y1", yt);
-        ytick.setAttribute("x2", x0);
-        ytick.setAttribute("y2", yt);
-        ytick.setAttribute("stroke", "#555");
-        svg.appendChild(ytick);
+            svg.appendChild(rect);
 
-        const ytlab = document.createElementNS(svgns, "text");
-        ytlab.setAttribute("x", x0 - 7);
-        ytlab.setAttribute("y", yt + 3);
-        ytlab.setAttribute("font-size", "10");
-        ytlab.setAttribute("text-anchor", "end");
-        ytlab.textContent = t.toFixed(1);
-        svg.appendChild(ytlab);
-    });
+            if (rowIndex === rows - 1) {
+                const showAll = nSamples <= 40;
+                const show = showAll || (i % 5 === 0);
+                if (show) {
+                    const lab = document.createElementNS(svgns, "text");
+                    lab.setAttribute("x", x + cellW / 2);
+                    lab.setAttribute("y", height - 5);
+                    lab.setAttribute("font-size", "9");
+                    lab.setAttribute("text-anchor", "end");
+                    lab.setAttribute(
+                        "transform",
+                        `rotate(-60 ${x + cellW / 2} ${height - 5})`
+                    );
+                    lab.textContent = sampleName;
+                    svg.appendChild(lab);
+                }
+            }
+        });
+    }
 
-    data.forEach(d => {
-        const xr = Number(d.kappa_reads);
-        const yr = Number(d.kappa_markers);
-        if (!isFinite(xr) || !isFinite(yr)) return;
-
-        const cx = x0 + Math.max(0, Math.min(1, xr)) * plotW;
-        const cy = y0 - Math.max(0, Math.min(1, yr)) * plotH;
-
-        const circle = document.createElementNS(svgns, "circle");
-        circle.setAttribute("cx", cx);
-        circle.setAttribute("cy", cy);
-        circle.setAttribute("r", 4);
-        circle.setAttribute("fill", "#1976d2");
-        circle.setAttribute("fill-opacity", "0.8");
-
-        const title = document.createElementNS(svgns, "title");
-        title.textContent =
-            `${d.sample}\n` +
-            `kappa_reads = ${xr.toFixed(3)}\n` +
-            `kappa_markers = ${yr.toFixed(3)}`;
-        circle.appendChild(title);
-
-        svg.appendChild(circle);
-    });
+    drawRow(0, "Markers", markersMap, markerColors, "#9ecae1");
+    drawRow(1, "Reads", readsMap, readColors, "#fcae91");
 }
-
-/* ---------- Main ---------- */
 
 function main() {
     const distill = DISTILL_DATA;
     const figures = FIGURES_DATA;
 
     const summaryDiv = document.getElementById("summary-sections");
-    const figureDiv = document.getElementById("figure-sections");
 
     const S = distill.summary || {};
 
@@ -1473,11 +1450,6 @@ function main() {
     addRedundancyReadsSection(summaryDiv, S.redundancy_reads, depthPerSample);
     addRedundancyMarkersSection(summaryDiv, S.redundancy_markers, redBiplotPerSample);
     addClustersSection(summaryDiv, S.clusters);
-
-    // Figures section: keep the biplot here
-    if (redBiplot) {
-        addFigureRedundancyBiplot(figureDiv, redBiplot);
-    }
 }
 
 main();
@@ -1503,7 +1475,7 @@ def main():
     parser.add_argument(
         "--figures-json",
         required=True,
-        help="Path to figures.json (figure-friendly data, e.g. depth fractions, redundancy biplot).",
+        help="Path to figures.json (figure-friendly data).",
     )
     parser.add_argument(
         "-o",
@@ -1524,7 +1496,6 @@ def main():
     distill_json_str = json.dumps(distill_data, indent=2)
     figures_json_str = json.dumps(figures_data, indent=2)
 
-    # Avoid breaking the <script> tag if JSON contains "</script>"
     distill_json_str = distill_json_str.replace("</script>", "<\\/script>")
     figures_json_str = figures_json_str.replace("</script>", "<\\/script>")
 
