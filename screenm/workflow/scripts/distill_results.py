@@ -1115,9 +1115,13 @@ def compute_clusters(results_json: Dict[str, Any]) -> Dict[str, Any]:
 
     Returns a nested structure with per-distance-type summaries and an
     overall flag/message (preferring markers if available).
+
+    Additionally, it passes through the raw pairwise Mash distances
+    (for both markers and reads) so that downstream tools can build
+    distance heatmaps without having to re-read results.json.
     """
-    mash_markers_block = results_json.get("mash_markers")
-    mash_reads_block = results_json.get("mash_reads")
+    mash_markers_block = results_json.get("mash_markers") or {}
+    mash_reads_block = results_json.get("mash_reads") or {}
 
     markers_summary = _summarise_mash_cluster_block(mash_markers_block, "marker")
     reads_summary = _summarise_mash_cluster_block(mash_reads_block, "read")
@@ -1135,11 +1139,27 @@ def compute_clusters(results_json: Dict[str, Any]) -> Dict[str, Any]:
     overall_flag = overall_source.get("flag_cluster_structure")
     overall_message = overall_source.get("message_cluster_structure")
 
+    # Pass through pairwise Mash distances (if present)
+    pairwise_markers = None
+    if isinstance(mash_markers_block, dict):
+        pw = mash_markers_block.get("pairwise")
+        if isinstance(pw, list):
+            pairwise_markers = pw
+
+    pairwise_reads = None
+    if isinstance(mash_reads_block, dict):
+        pw = mash_reads_block.get("pairwise")
+        if isinstance(pw, list):
+            pairwise_reads = pw
+
     return {
         "markers": markers_summary,
         "reads": reads_summary,
         "flag_clusters": overall_flag,
         "message_clusters": overall_message,
+        # NEW: raw pairwise Mash distances for downstream plotting
+        "pairwise_markers": pairwise_markers,
+        "pairwise_reads": pairwise_reads,
     }
 
 
