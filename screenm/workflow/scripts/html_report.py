@@ -144,6 +144,44 @@ HTML_TEMPLATE = r"""<!DOCTYPE html>
         border: 1px solid #ddd;
         background: #fcfcfc;
     }
+
+    /* Sequencing depth barplot */
+    .seq-depth-stats {
+        display: flex;
+        gap: 16px;
+        justify-content: space-between;
+        margin-bottom: 10px;
+        flex-wrap: wrap;
+    }
+    .seq-depth-stat-item {
+        flex: 1;
+        min-width: 160px;
+    }
+    .seq-depth-stat-label {
+        font-size: 0.9em;
+        color: #555;
+        margin-bottom: 2px;
+    }
+    .seq-depth-stat-value {
+        font-size: 1.4em;
+        font-weight: 600;
+    }
+    .seq-depth-stat-note {
+        font-size: 0.8em;
+        color: #666;
+        margin-top: 2px;
+    }
+
+    .seq-depth-plot-container {
+        overflow-x: auto;
+        border: 1px solid #ddd;
+        border-radius: 4px;
+        background: #fcfcfc;
+        padding: 4px 4px 0 4px;
+    }
+    .seq-depth-svg {
+        display: block;
+    }
 </style>
 
 </head>
@@ -189,11 +227,6 @@ function fmtMillions(x) {
     return v.toString();
 }
 
-function fmtPercent(x, digits) {
-    if (x === null || x === undefined) return "NA";
-    return Number(x).toFixed(digits) + "%";
-}
-
 /* ---------- Summary sections ---------- */
 
 function addScreeningSection(parent, data) {
@@ -219,29 +252,223 @@ function addScreeningSection(parent, data) {
     parent.appendChild(div);
 }
 
-function addSequencingDepthSection(parent, data) {
+function addSequencingDepthSection(parent, data, depthPerSample) {
     if (!data) return;
     const div = document.createElement("div");
     div.className = "section " + flagClass(data.flag_sequencing_depth);
 
     const msg = data.message_sequencing_depth || "";
 
+    // container with stats + plot placeholder
     div.innerHTML = `
         <details>
             <summary>Sequencing Depth</summary>
             <div class="content">
                 <p class="summary-message">${msg}</p>
-                <ul class="summary-metrics">
-                    <li>Samples with read counts: ${fmtInt(data.n_samples)}</li>
-                    <li>Mean reads per sample: ${fmtMillions(data.mean_reads)}</li>
-                    <li>Median reads per sample: ${fmtMillions(data.median_reads)}</li>
-                    <li>Standard deviation: ${fmtMillions(data.sd_reads)}</li>
-                    <li>Coefficient of variation (CV): ${fmtFloat(data.cv_reads, 3)}</li>
-                </ul>
+                <div class="seq-depth-stats">
+                    <div class="seq-depth-stat-item">
+                        <div class="seq-depth-stat-label">Mean depth</div>
+                        <div class="seq-depth-stat-value">${fmtMillions(data.mean_reads)}</div>
+                        <div class="seq-depth-stat-note">Average reads per sample</div>
+                    </div>
+                    <div class="seq-depth-stat-item">
+                        <div class="seq-depth-stat-label">Median depth</div>
+                        <div class="seq-depth-stat-value">${fmtMillions(data.median_reads)}</div>
+                        <div class="seq-depth-stat-note">Median reads per sample</div>
+                    </div>
+                    <div class="seq-depth-stat-item">
+                        <div class="seq-depth-stat-label">Variation</div>
+                        <div class="seq-depth-stat-value">${fmtFloat(data.cv_reads, 3)}</div>
+                        <div class="seq-depth-stat-note">Coefficient of variation (CV)</div>
+                    </div>
+                </div>
+                <div class="seq-depth-plot-container">
+                    <svg id="seq-depth-svg" class="seq-depth-svg" width="600" height="320"></svg>
+                </div>
+                <p class="small-note">
+                    X axis: samples; Y axis: sequencing depth in reads. Bars show per-sample total read counts.
+                    Horizontal dashed lines indicate mean and median sequencing depth across samples.
+                </p>
             </div>
         </details>
     `;
     parent.appendChild(div);
+
+    // Build barplot using depthPerSample (from figures.json)
+    const svg = div.querySelector("#seq-depth-svg");
+    const perSample = (depthPerSample || [])
+        .filter(d => d.total_reads !== null && d.total_reads !== undefined);
+
+    if (!perSample.length) {
+        // show message in place of the plot
+        const msgNode = document.createElement("text");
+        msgNode.textContent = "Per-sample read counts not available for barplot.";
+        // quick hack: use foreignObject-like display via innerHTML
+        svg.outerHTML = `<div class="small-note">Per-sample read counts not available for sequencing depth barplot.</div>`;
+        return;
+    }
+
+    // If many samples, make SVG wider; container will scroll horizontally
+    const n = perSample.length;
+    const margin = {left: 60, right: 10, top: 20, bottom: 80};
+    const baseWidth = 400;
+    const barWidth = 14;
+    const minPlotWidth = n * (barWidth + 4);
+    const width = Math.max(baseWidth, margin.left + margin.right + minPlotWidth);
+    const height = 320;
+    svg.setAttribute("width", width);
+    svg.setAttribute("height", height);
+
+    const plotW = width - margin.left - margin.right;
+    const plotH = height - margin.top - margin.bottom;
+
+    const svgns = "http://www.w3.org/2000/svg";
+
+    // Determine max depth for scaling
+    let maxDepth = 0;
+    perSample.forEach(d => {
+        const v = Number(d.total_reads) || 0;
+        if (v > maxDepth) maxDepth = v;
+    });
+    if (maxDepth <= 0) maxDepth = 1;
+
+    // y-scale: 0..maxDepth maps to bottom..top
+    const x0 = margin.left;
+    const y0 = height - margin.bottom;
+
+    function yForValue(v) {
+        const ratio = Math.max(0, Math.min(1, v / maxDepth));
+        return y0 - ratio * plotH;
+    }
+
+    // Draw axes
+    const xAxis = document.createElementNS(svgns, "line");
+    xAxis.setAttribute("x1", x0);
+    xAxis.setAttribute("y1", y0);
+    xAxis.setAttribute("x2", x0 + plotW);
+    xAxis.setAttribute("y2", y0);
+    xAxis.setAttribute("stroke", "#555");
+    svg.appendChild(xAxis);
+
+    const yAxis = document.createElementNS(svgns, "line");
+    yAxis.setAttribute("x1", x0);
+    yAxis.setAttribute("y1", y0);
+    yAxis.setAttribute("x2", x0);
+    yAxis.setAttribute("y2", margin.top);
+    yAxis.setAttribute("stroke", "#555");
+    svg.appendChild(yAxis);
+
+    // Y-ticks at 0, 25, 50, 75, 100% of max
+    [0, 0.25, 0.5, 0.75, 1].forEach(frac => {
+        const val = frac * maxDepth;
+        const y = yForValue(val);
+        const tick = document.createElementNS(svgns, "line");
+        tick.setAttribute("x1", x0 - 4);
+        tick.setAttribute("y1", y);
+        tick.setAttribute("x2", x0);
+        tick.setAttribute("y2", y);
+        tick.setAttribute("stroke", "#555");
+        svg.appendChild(tick);
+
+        const lab = document.createElementNS(svgns, "text");
+        lab.setAttribute("x", x0 - 6);
+        lab.setAttribute("y", y + 3);
+        lab.setAttribute("font-size", "10");
+        lab.setAttribute("text-anchor", "end");
+        lab.textContent = fmtMillions(val);
+        svg.appendChild(lab);
+    });
+
+    // Axis labels
+    const ylabel = document.createElementNS(svgns, "text");
+    ylabel.setAttribute("x", 16);
+    ylabel.setAttribute("y", margin.top + plotH / 2);
+    ylabel.setAttribute("text-anchor", "middle");
+    ylabel.setAttribute("font-size", "11");
+    ylabel.setAttribute("transform", `rotate(-90 16 ${margin.top + plotH / 2})`);
+    ylabel.textContent = "Sequencing depth (reads)";
+    svg.appendChild(ylabel);
+
+    const xlabel = document.createElementNS(svgns, "text");
+    xlabel.setAttribute("x", margin.left + plotW / 2);
+    xlabel.setAttribute("y", height - 8);
+    xlabel.setAttribute("text-anchor", "middle");
+    xlabel.setAttribute("font-size", "11");
+    xlabel.textContent = "Samples";
+    svg.appendChild(xlabel);
+
+    // Bars
+    const step = plotW / n;
+    const barActualWidth = Math.min(barWidth, step * 0.8);
+
+    perSample.forEach((d, i) => {
+        const val = Number(d.total_reads) || 0;
+        const xCenter = x0 + step * i + step / 2;
+        const x = xCenter - barActualWidth / 2;
+        const y = yForValue(val);
+        const hBar = y0 - y;
+
+        const rect = document.createElementNS(svgns, "rect");
+        rect.setAttribute("x", x);
+        rect.setAttribute("y", y);
+        rect.setAttribute("width", barActualWidth);
+        rect.setAttribute("height", hBar);
+        rect.setAttribute("fill", "#1976d2");
+        rect.setAttribute("fill-opacity", "0.85");
+
+        const title = document.createElementNS(svgns, "title");
+        title.textContent = `${d.sample}\n${fmtMillions(val)} reads`;
+        rect.appendChild(title);
+
+        svg.appendChild(rect);
+
+        // Sample labels: only show if not too many samples, or every 5th one
+        const showAll = n <= 40;
+        const show = showAll || (i % 5 === 0);
+        if (show) {
+            const lab = document.createElementNS(svgns, "text");
+            lab.setAttribute("x", xCenter);
+            lab.setAttribute("y", y0 + 10);
+            lab.setAttribute("font-size", "9");
+            lab.setAttribute("text-anchor", "end");
+            lab.setAttribute("transform", `rotate(-60 ${xCenter} ${y0 + 10})`);
+            lab.textContent = d.sample;
+            svg.appendChild(lab);
+        }
+    });
+
+    // Mean & median lines (from distill section data)
+    const meanDepth = Number(data.mean_reads) || 0;
+    const medianDepth = Number(data.median_reads) || 0;
+
+    function addHorizontalLine(val, color, dash, labelText, dx) {
+        const y = yForValue(val);
+        const line = document.createElementNS(svgns, "line");
+        line.setAttribute("x1", x0);
+        line.setAttribute("y1", y);
+        line.setAttribute("x2", x0 + plotW);
+        line.setAttribute("y2", y);
+        line.setAttribute("stroke", color);
+        line.setAttribute("stroke-width", "1.2");
+        line.setAttribute("stroke-dasharray", dash);
+        svg.appendChild(line);
+
+        const lab = document.createElementNS(svgns, "text");
+        lab.setAttribute("x", x0 + plotW + (dx || 0));
+        lab.setAttribute("y", y - 2);
+        lab.setAttribute("font-size", "10");
+        lab.setAttribute("text-anchor", "end");
+        lab.setAttribute("fill", color);
+        lab.textContent = `${labelText} (${fmtMillions(val)})`;
+        svg.appendChild(lab);
+    }
+
+    if (meanDepth > 0) {
+        addHorizontalLine(meanDepth, "#e53935", "4,2", "mean", -2);
+    }
+    if (medianDepth > 0) {
+        addHorizontalLine(medianDepth, "#43a047", "3,2", "median", -2);
+    }
 }
 
 function addLowQualitySection(parent, data) {
@@ -496,13 +723,11 @@ function addFigureRedundancyBiplot(parent, fig) {
 
     const svgns = "http://www.w3.org/2000/svg";
 
-    // Axes (0-1)
     const x0 = margin.left;
     const y0 = h - margin.bottom;
     const x1 = margin.left + plotW;
     const y1 = margin.top;
 
-    // X axis
     const xAxis = document.createElementNS(svgns, "line");
     xAxis.setAttribute("x1", x0);
     xAxis.setAttribute("y1", y0);
@@ -511,7 +736,6 @@ function addFigureRedundancyBiplot(parent, fig) {
     xAxis.setAttribute("stroke", "#555");
     svg.appendChild(xAxis);
 
-    // Y axis
     const yAxis = document.createElementNS(svgns, "line");
     yAxis.setAttribute("x1", x0);
     yAxis.setAttribute("y1", y0);
@@ -520,7 +744,6 @@ function addFigureRedundancyBiplot(parent, fig) {
     yAxis.setAttribute("stroke", "#555");
     svg.appendChild(yAxis);
 
-    // Axis labels
     const xlabel = document.createElementNS(svgns, "text");
     xlabel.setAttribute("x", margin.left + plotW / 2);
     xlabel.setAttribute("y", h - 8);
@@ -538,7 +761,6 @@ function addFigureRedundancyBiplot(parent, fig) {
     ylabel.textContent = "kappa_total (markers)";
     svg.appendChild(ylabel);
 
-    // Ticks at 0.5 and 1.0
     [0.5, 1.0].forEach(t => {
         const xt = x0 + t * plotW;
         const yt = y0 - t * plotH;
@@ -576,7 +798,6 @@ function addFigureRedundancyBiplot(parent, fig) {
         svg.appendChild(ytlab);
     });
 
-    // Points
     data.forEach(d => {
         const xr = Number(d.kappa_reads);
         const yr = Number(d.kappa_markers);
@@ -614,8 +835,13 @@ function main() {
 
     const S = distill.summary || {};
 
+    const depthFig = figures.figures && figures.figures.dna_depth_fractions
+        ? figures.figures.dna_depth_fractions
+        : null;
+    const depthPerSample = depthFig ? (depthFig.per_sample || []) : [];
+
     addScreeningSection(summaryDiv, S.screening_threshold);
-    addSequencingDepthSection(summaryDiv, S.sequencing_depth);
+    addSequencingDepthSection(summaryDiv, S.sequencing_depth, depthPerSample);
     addLowQualitySection(summaryDiv, S.low_quality_reads);
     addProkFractionSection(summaryDiv, S.prokaryotic_fraction);
     addRedundancyReadsSection(summaryDiv, S.redundancy_reads);
