@@ -23,9 +23,9 @@ HTML_TEMPLATE = r"""<!DOCTYPE html>
     }
 
     .section {
-        margin-bottom: 20px;
+        margin-bottom: 24px;
         border-radius: 8px;
-        padding: 10px 15px 15px 15px;
+        padding: 12px 16px 18px 16px;
         border: 1px solid #ccc;
         background: #fff;
     }
@@ -39,7 +39,7 @@ HTML_TEMPLATE = r"""<!DOCTYPE html>
     }
 
     details[open] > summary {
-        margin-bottom: 5px;
+        margin-bottom: 8px;
     }
 
     /* Flag-based background colours */
@@ -54,23 +54,13 @@ HTML_TEMPLATE = r"""<!DOCTYPE html>
     }
 
     .summary-message {
-        margin-bottom: 6px;
-    }
-
-    .summary-metrics {
-        margin: 0;
-        padding-left: 18px;
-        font-size: 0.95em;
-    }
-
-    .summary-metrics li {
-        margin-bottom: 2px;
+        margin-bottom: 12px;
     }
 
     .small-note {
         font-size: 0.85em;
         color: #666;
-        margin-top: 4px;
+        margin-top: 8px;
     }
 
     /* Generic highlight tiles (for stats) */
@@ -78,18 +68,21 @@ HTML_TEMPLATE = r"""<!DOCTYPE html>
     .seq-depth-stats,
     .prok-stats,
     .redundancy-stats,
-    .cluster-stats {
+    .cluster-stats,
+    .quality-stats {
         display: flex;
         gap: 16px;
         justify-content: space-between;
-        margin-bottom: 10px;
+        margin-bottom: 14px;
         flex-wrap: wrap;
     }
+
     .screen-overview-stat-item,
     .seq-depth-stat-item,
     .prok-stat-item,
     .redundancy-stat-item,
-    .cluster-stat-item {
+    .cluster-stat-item,
+    .quality-stat-item {
         flex: 1;
         min-width: 160px;
     }
@@ -98,7 +91,8 @@ HTML_TEMPLATE = r"""<!DOCTYPE html>
     .seq-depth-stat-label,
     .prok-stat-label,
     .redundancy-stat-label,
-    .cluster-stat-label {
+    .cluster-stat-label,
+    .quality-stat-label {
         font-size: 0.9em;
         color: #555;
         margin-bottom: 2px;
@@ -108,7 +102,8 @@ HTML_TEMPLATE = r"""<!DOCTYPE html>
     .seq-depth-stat-value,
     .prok-stat-value,
     .redundancy-stat-value,
-    .cluster-stat-value {
+    .cluster-stat-value,
+    .quality-stat-value {
         font-size: 1.4em;
         font-weight: 600;
     }
@@ -117,7 +112,8 @@ HTML_TEMPLATE = r"""<!DOCTYPE html>
     .seq-depth-stat-note,
     .prok-stat-note,
     .redundancy-stat-note,
-    .cluster-stat-note {
+    .cluster-stat-note,
+    .quality-stat-note {
         font-size: 0.8em;
         color: #666;
         margin-top: 2px;
@@ -126,18 +122,22 @@ HTML_TEMPLATE = r"""<!DOCTYPE html>
     .seq-depth-plot-container,
     .prok-depth-plot-container,
     .lr-target-plot-container,
-    .lr-target-markers-plot-container {
+    .lr-target-markers-plot-container,
+    .quality-plot-container {
         width: 100%;
         border: 1px solid #ddd;
         border-radius: 4px;
         background: #fcfcfc;
-        padding: 4px 4px 0 4px;
+        padding: 6px 6px 2px 6px;
         box-sizing: border-box;
+        margin-top: 10px;
     }
+
     .seq-depth-svg,
     .prok-depth-svg,
     .lr-target-svg,
-    .lr-target-markers-svg {
+    .lr-target-markers-svg,
+    .quality-svg {
         display: block;
         width: 100%;
         height: 320px;
@@ -146,7 +146,7 @@ HTML_TEMPLATE = r"""<!DOCTYPE html>
     /* Clusters heatmap */
     .clusters-heatmap-scroll {
         overflow-x: auto;
-        margin-top: 8px;
+        margin-top: 10px;
         border: 1px solid #ddd;
         border-radius: 4px;
         background: #fcfcfc;
@@ -154,7 +154,7 @@ HTML_TEMPLATE = r"""<!DOCTYPE html>
     .clusters-heatmap-svg {
         display: block;
         width: 100%;
-        height: 150px; /* increased to avoid cropping */
+        height: 190px; /* more vertical room for labels */
     }
 
     /* Tooltip for interactive charts */
@@ -486,23 +486,192 @@ function addLowQualitySection(parent, data) {
 
     const msg = data.message_low_quality || "";
 
+    const overall = data.percent_removed_reads_overall;
+    const meanFrac = data.mean_fraction_removed;
+    const medianFrac = data.median_fraction_removed;
+
     div.innerHTML = `
         <details>
             <summary>Sequencing quality</summary>
             <div class="content">
                 <p class="summary-message">${msg}</p>
-                <ul class="summary-metrics">
-                    <li>Samples with fastp metrics: ${fmtInt(data.n_samples)}</li>
-                    <li>Total reads across these samples: ${fmtMillions(data.total_reads)}</li>
-                    <li>Total reads removed: ${fmtMillions(data.total_removed_reads)}</li>
-                    <li>Overall fraction removed: ${fmtFloat(data.percent_removed_reads_overall, 3)}%</li>
-                    <li>Mean fraction removed per sample: ${fmtFloat(100*data.mean_fraction_removed, 2)}%</li>
-                    <li>Median fraction removed per sample: ${fmtFloat(100*data.median_fraction_removed, 2)}%</li>
-                </ul>
+                <div class="quality-stats">
+                    <div class="quality-stat-item">
+                        <div class="quality-stat-label">Overall removed</div>
+                        <div class="quality-stat-value">${fmtFloat(overall, 2)}%</div>
+                        <div class="quality-stat-note">Fraction of reads removed across all samples</div>
+                    </div>
+                    <div class="quality-stat-item">
+                        <div class="quality-stat-label">Mean removed per sample</div>
+                        <div class="quality-stat-value">${fmtFloat(100 * meanFrac, 2)}%</div>
+                        <div class="quality-stat-note">Average fraction removed per sample</div>
+                    </div>
+                    <div class="quality-stat-item">
+                        <div class="quality-stat-label">Median removed per sample</div>
+                        <div class="quality-stat-value">${fmtFloat(100 * medianFrac, 2)}%</div>
+                        <div class="quality-stat-note">Typical per-sample fraction of discarded reads</div>
+                    </div>
+                </div>
+                <div class="quality-plot-container">
+                    <svg id="quality-svg" class="quality-svg" viewBox="0 0 1000 220" preserveAspectRatio="none"></svg>
+                </div>
+                <p class="small-note">
+                    The bar shows the overall fraction of reads removed by quality filtering. Dashed vertical
+                    lines mark 5% (yellow-orange) and 20% (red) thresholds. Hover over the bar for exact values.
+                </p>
             </div>
         </details>
     `;
     parent.appendChild(div);
+
+    const svg = div.querySelector("#quality-svg");
+
+    const percentOverall = Number(overall) || 0;
+    const width = 1000;
+    const height = 220;
+    const margin = {left: 70, right: 30, top: 30, bottom: 60};
+    const plotW = width - margin.left - margin.right;
+    const plotH = height - margin.top - margin.bottom;
+    const svgns = "http://www.w3.org/2000/svg";
+
+    const x0 = margin.left;
+    const yBase = margin.top + plotH / 2;
+
+    // X scale in %; ensure thresholds fit comfortably
+    const maxPct = Math.max(25, percentOverall * 1.5, 20);
+    const xMax = maxPct;
+
+    function xForPct(p) {
+        const clamped = Math.max(0, Math.min(xMax, p));
+        return x0 + (clamped / xMax) * plotW;
+    }
+
+    // Axis
+    const xAxis = document.createElementNS(svgns, "line");
+    xAxis.setAttribute("x1", x0);
+    xAxis.setAttribute("y1", yBase);
+    xAxis.setAttribute("x2", x0 + plotW);
+    xAxis.setAttribute("y2", yBase);
+    xAxis.setAttribute("stroke", "#555");
+    svg.appendChild(xAxis);
+
+    // Ticks every 5%
+    for (let p = 0; p <= xMax + 0.1; p += 5) {
+        const x = xForPct(p);
+        const tick = document.createElementNS(svgns, "line");
+        tick.setAttribute("x1", x);
+        tick.setAttribute("y1", yBase - 6);
+        tick.setAttribute("x2", x);
+        tick.setAttribute("y2", yBase + 6);
+        tick.setAttribute("stroke", "#555");
+        svg.appendChild(tick);
+
+        const lab = document.createElementNS(svgns, "text");
+        lab.setAttribute("x", x);
+        lab.setAttribute("y", yBase + 18);
+        lab.setAttribute("font-size", "10");
+        lab.setAttribute("text-anchor", "middle");
+        lab.textContent = p.toString() + "%";
+        svg.appendChild(lab);
+    }
+
+    // Axis label
+    const xlabel = document.createElementNS(svgns, "text");
+    xlabel.setAttribute("x", margin.left + plotW / 2);
+    xlabel.setAttribute("y", height - 20);
+    xlabel.setAttribute("text-anchor", "middle");
+    xlabel.setAttribute("font-size", "11");
+    xlabel.textContent = "Overall fraction of reads removed (%)";
+    svg.appendChild(xlabel);
+
+    const tooltip = getOrCreateTooltip();
+
+    // Overall bar
+    const xStart = xForPct(0);
+    const xEnd = xForPct(percentOverall);
+    const barWidth = Math.max(0, xEnd - xStart);
+    const barHeight = 30;
+    const barY = yBase - barHeight / 2;
+
+    const bar = document.createElementNS(svgns, "rect");
+    bar.setAttribute("x", xStart);
+    bar.setAttribute("y", barY);
+    bar.setAttribute("width", barWidth);
+    bar.setAttribute("height", barHeight);
+    bar.setAttribute("fill", "#1976d2");
+    bar.setAttribute("fill-opacity", "0.9");
+    bar.style.cursor = "pointer";
+
+    const tooltipText =
+        `Overall removed: ${percentOverall.toFixed(2)}%\n` +
+        `Mean per-sample: ${(meanFrac * 100).toFixed(2)}%\n` +
+        `Median per-sample: ${(medianFrac * 100).toFixed(2)}%`;
+
+    bar.addEventListener("mouseenter", (evt) => {
+        bar.setAttribute("fill", "#0d47a1");
+        tooltip.style.display = "block";
+        tooltip.textContent = tooltipText;
+        tooltip.style.left = evt.clientX + "px";
+        tooltip.style.top = evt.clientY + "px";
+    });
+    bar.addEventListener("mousemove", (evt) => {
+        tooltip.style.left = evt.clientX + "px";
+        tooltip.style.top = evt.clientY + "px";
+    });
+    bar.addEventListener("mouseleave", () => {
+        bar.setAttribute("fill", "#1976d2");
+        tooltip.style.display = "none";
+    });
+
+    svg.appendChild(bar);
+
+    // Marker at the end of the bar
+    const markerLine = document.createElementNS(svgns, "line");
+    markerLine.setAttribute("x1", xEnd);
+    markerLine.setAttribute("y1", barY - 8);
+    markerLine.setAttribute("x2", xEnd);
+    markerLine.setAttribute("y2", barY + barHeight + 8);
+    markerLine.setAttribute("stroke", "#1976d2");
+    markerLine.setAttribute("stroke-width", "1.2");
+    svg.appendChild(markerLine);
+
+    const markerLabel = document.createElementNS(svgns, "text");
+    markerLabel.setAttribute("x", xEnd);
+    markerLabel.setAttribute("y", barY - 10);
+    markerLabel.setAttribute("font-size", "10");
+    markerLabel.setAttribute("text-anchor", "middle");
+    markerLabel.setAttribute("fill", "#1976d2");
+    markerLabel.textContent = `${percentOverall.toFixed(1)}% overall`;
+    svg.appendChild(markerLabel);
+
+    // Threshold lines at 5% (yellow-orange) and 20% (red)
+    const thresholds = [
+        {pct: 5,  color: "#ffb300", label: "5%"},
+        {pct: 20, color: "#d32f2f", label: "20%"}
+    ];
+
+    thresholds.forEach(t => {
+        if (t.pct > xMax) return;
+        const x = xForPct(t.pct);
+        const line = document.createElementNS(svgns, "line");
+        line.setAttribute("x1", x);
+        line.setAttribute("y1", yBase - 40);
+        line.setAttribute("x2", x);
+        line.setAttribute("y2", yBase + 40);
+        line.setAttribute("stroke", t.color);
+        line.setAttribute("stroke-width", "1.4");
+        line.setAttribute("stroke-dasharray", "4,2");
+        svg.appendChild(line);
+
+        const lab = document.createElementNS(svgns, "text");
+        lab.setAttribute("x", x);
+        lab.setAttribute("y", yBase - 46);
+        lab.setAttribute("font-size", "10");
+        lab.setAttribute("text-anchor", "middle");
+        lab.setAttribute("fill", t.color);
+        lab.textContent = t.label;
+        svg.appendChild(lab);
+    });
 }
 
 /* Prokaryotic fraction + depth components */
@@ -1312,7 +1481,7 @@ function addClustersSection(parent, clusters) {
                     so cluster IDs are not directly comparable between the two.
                 </p>
                 <div class="clusters-heatmap-scroll">
-                    <svg id="clusters-heatmap-svg" class="clusters-heatmap-svg" viewBox="0 0 1000 150" preserveAspectRatio="none"></svg>
+                    <svg id="clusters-heatmap-svg" class="clusters-heatmap-svg" viewBox="0 0 1000 190" preserveAspectRatio="none"></svg>
                 </div>
                 <p class="small-note">
                     Hover over tiles for exact cluster assignments. Samples without an assignment in a given
@@ -1394,8 +1563,8 @@ function addClustersSection(parent, clusters) {
     const markerColors = buildClusterColorMap(markersMap, markerPalette);
     const readColors = buildClusterColorMap(readsMap, readPalette);
 
-    const height = 150;  // increased from 120 to avoid cropping
-    const margin = {left: 80, right: 20, top: 20, bottom: 40};
+    const height = 190;  // more vertical space
+    const margin = {left: 80, right: 20, top: 20, bottom: 60};
     const rows = 2;
     const cellH = (height - margin.top - margin.bottom) / rows;
     const baseCellW = 20;
@@ -1467,12 +1636,12 @@ function addClustersSection(parent, clusters) {
                 if (show) {
                     const lab = document.createElementNS(svgns, "text");
                     lab.setAttribute("x", x + cellW / 2);
-                    lab.setAttribute("y", height - 10);
+                    lab.setAttribute("y", height - 15);
                     lab.setAttribute("font-size", "9");
                     lab.setAttribute("text-anchor", "end");
                     lab.setAttribute(
                         "transform",
-                        `rotate(-60 ${x + cellW / 2} ${height - 10})`
+                        `rotate(-60 ${x + cellW / 2} ${height - 15})`
                     );
                     lab.textContent = sampleName;
                     svg.appendChild(lab);
