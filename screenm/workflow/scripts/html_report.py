@@ -73,28 +73,51 @@ HTML_TEMPLATE = r"""<!DOCTYPE html>
         margin-top: 4px;
     }
 
-    /* Summary stat tiles */
-    .seq-depth-stats, .prok-stats, .redundancy-stats {
+    /* Generic highlight tiles (for stats) */
+    .screen-overview-stats,
+    .seq-depth-stats,
+    .prok-stats,
+    .redundancy-stats,
+    .cluster-stats {
         display: flex;
         gap: 16px;
         justify-content: space-between;
         margin-bottom: 10px;
         flex-wrap: wrap;
     }
-    .seq-depth-stat-item, .prok-stat-item, .redundancy-stat-item {
+    .screen-overview-stat-item,
+    .seq-depth-stat-item,
+    .prok-stat-item,
+    .redundancy-stat-item,
+    .cluster-stat-item {
         flex: 1;
         min-width: 160px;
     }
-    .seq-depth-stat-label, .prok-stat-label, .redundancy-stat-label {
+
+    .screen-overview-stat-label,
+    .seq-depth-stat-label,
+    .prok-stat-label,
+    .redundancy-stat-label,
+    .cluster-stat-label {
         font-size: 0.9em;
         color: #555;
         margin-bottom: 2px;
     }
-    .seq-depth-stat-value, .prok-stat-value, .redundancy-stat-value {
+
+    .screen-overview-stat-value,
+    .seq-depth-stat-value,
+    .prok-stat-value,
+    .redundancy-stat-value,
+    .cluster-stat-value {
         font-size: 1.4em;
         font-weight: 600;
     }
-    .seq-depth-stat-note, .prok-stat-note, .redundancy-stat-note {
+
+    .screen-overview-stat-note,
+    .seq-depth-stat-note,
+    .prok-stat-note,
+    .redundancy-stat-note,
+    .cluster-stat-note {
         font-size: 0.8em;
         color: #666;
         margin-top: 2px;
@@ -131,7 +154,7 @@ HTML_TEMPLATE = r"""<!DOCTYPE html>
     .clusters-heatmap-svg {
         display: block;
         width: 100%;
-        height: 120px;
+        height: 150px; /* increased to avoid cropping */
     }
 
     /* Tooltip for interactive charts */
@@ -203,6 +226,7 @@ function getOrCreateTooltip() {
 
 /* ---------- Summary sections ---------- */
 
+/* Screening overview */
 function addScreeningSection(parent, data) {
     if (!data) return;
     const div = document.createElement("div");
@@ -210,22 +234,42 @@ function addScreeningSection(parent, data) {
 
     const msg = data.message_reads_threshold || "";
 
+    const total = data.n_samples_total;
+    const above = data.n_samples_above_threshold;
+    const perc = data.percent_above_threshold;
+    const thr  = data.reads_threshold;
+
     div.innerHTML = `
         <details open>
-            <summary>Screening Threshold</summary>
+            <summary>Screening overview</summary>
             <div class="content">
                 <p class="summary-message">${msg}</p>
-                <ul class="summary-metrics">
-                    <li>Total samples in data.json: ${fmtInt(data.n_samples_total)}</li>
-                    <li>Samples above threshold: ${fmtInt(data.n_samples_above_threshold)} (${fmtFloat(data.percent_above_threshold, 1)}%)</li>
-                    <li>Read threshold used: ${fmtInt(data.reads_threshold)} reads</li>
-                </ul>
+                <div class="screen-overview-stats">
+                    <div class="screen-overview-stat-item">
+                        <div class="screen-overview-stat-label">Total samples</div>
+                        <div class="screen-overview-stat-value">${fmtInt(total)}</div>
+                        <div class="screen-overview-stat-note">Samples in data.json</div>
+                    </div>
+                    <div class="screen-overview-stat-item">
+                        <div class="screen-overview-stat-label">Above read threshold</div>
+                        <div class="screen-overview-stat-value">
+                            ${fmtInt(above)} (${fmtFloat(perc, 1)}%)
+                        </div>
+                        <div class="screen-overview-stat-note">Samples passing the screening threshold</div>
+                    </div>
+                    <div class="screen-overview-stat-item">
+                        <div class="screen-overview-stat-label">Read threshold</div>
+                        <div class="screen-overview-stat-value">${fmtMillions(thr)}</div>
+                        <div class="screen-overview-stat-note">Minimum reads used for screening</div>
+                    </div>
+                </div>
             </div>
         </details>
     `;
     parent.appendChild(div);
 }
 
+/* Sequencing depth */
 function addSequencingDepthSection(parent, data, depthPerSample) {
     if (!data) return;
     const div = document.createElement("div");
@@ -235,7 +279,7 @@ function addSequencingDepthSection(parent, data, depthPerSample) {
 
     div.innerHTML = `
         <details>
-            <summary>Sequencing Depth</summary>
+            <summary>Sequencing depth</summary>
             <div class="content">
                 <p class="summary-message">${msg}</p>
                 <div class="seq-depth-stats">
@@ -434,6 +478,7 @@ function addSequencingDepthSection(parent, data, depthPerSample) {
     }
 }
 
+/* Sequencing quality (fastp) */
 function addLowQualitySection(parent, data) {
     if (!data) return;
     const div = document.createElement("div");
@@ -443,7 +488,7 @@ function addLowQualitySection(parent, data) {
 
     div.innerHTML = `
         <details>
-            <summary>Low-quality Reads (fastp)</summary>
+            <summary>Sequencing quality</summary>
             <div class="content">
                 <p class="summary-message">${msg}</p>
                 <ul class="summary-metrics">
@@ -460,6 +505,7 @@ function addLowQualitySection(parent, data) {
     parent.appendChild(div);
 }
 
+/* Prokaryotic fraction + depth components */
 function addProkFractionSection(parent, data, depthPerSample) {
     if (!data) return;
     const div = document.createElement("div");
@@ -469,7 +515,7 @@ function addProkFractionSection(parent, data, depthPerSample) {
 
     div.innerHTML = `
         <details>
-            <summary>Prokaryotic Fraction (SingleM & depth components)</summary>
+            <summary>Prokaryotic fraction</summary>
             <div class="content">
                 <p class="summary-message">${msg}</p>
                 <div class="prok-stats">
@@ -697,6 +743,7 @@ function addProkFractionSection(parent, data, depthPerSample) {
     }
 }
 
+/* Overall metagenomic coverage (reads Nonpareil) */
 function addRedundancyReadsSection(parent, data, depthPerSample) {
     if (!data) return;
     const div = document.createElement("div");
@@ -711,7 +758,7 @@ function addRedundancyReadsSection(parent, data, depthPerSample) {
 
     div.innerHTML = `
         <details>
-            <summary>Redundancy (Reads, Nonpareil)</summary>
+            <summary>Overall metagenomic coverage</summary>
             <div class="content">
                 <p class="summary-message">${msg}</p>
                 <div class="redundancy-stats">
@@ -964,6 +1011,7 @@ function addRedundancyReadsSection(parent, data, depthPerSample) {
     });
 }
 
+/* Prokaryotic coverage (markers Nonpareil) */
 function addRedundancyMarkersSection(parent, data, redBiplotPerSample) {
     if (!data) return;
     const div = document.createElement("div");
@@ -978,7 +1026,7 @@ function addRedundancyMarkersSection(parent, data, redBiplotPerSample) {
 
     div.innerHTML = `
         <details>
-            <summary>Redundancy (Marker genes, Nonpareil)</summary>
+            <summary>Prokaryotic coverage</summary>
             <div class="content">
                 <p class="summary-message">${msg}</p>
                 <div class="redundancy-stats">
@@ -1228,6 +1276,7 @@ function addRedundancyMarkersSection(parent, data, redBiplotPerSample) {
     });
 }
 
+/* Sample clusters (Mash-based) */
 function addClustersSection(parent, clusters) {
     if (!clusters) return;
     const div = document.createElement("div");
@@ -1242,20 +1291,28 @@ function addClustersSection(parent, clusters) {
 
     div.innerHTML = `
         <details>
-            <summary>Sample Clusters (Mash-based)</summary>
+            <summary>Sample clusters</summary>
             <div class="content">
                 <p class="summary-message">${msg}</p>
-                <ul class="summary-metrics">
-                    <li>Marker-based clusters: ${nClustersMarkers}</li>
-                    <li>Read-based clusters: ${nClustersReads}</li>
-                </ul>
+                <div class="cluster-stats">
+                    <div class="cluster-stat-item">
+                        <div class="cluster-stat-label">Marker-based clusters</div>
+                        <div class="cluster-stat-value">${fmtInt(nClustersMarkers)}</div>
+                        <div class="cluster-stat-note">Clusters inferred from marker-based Mash distances</div>
+                    </div>
+                    <div class="cluster-stat-item">
+                        <div class="cluster-stat-label">Read-based clusters</div>
+                        <div class="cluster-stat-value">${fmtInt(nClustersReads)}</div>
+                        <div class="cluster-stat-note">Clusters inferred from read-based Mash distances</div>
+                    </div>
+                </div>
                 <p class="small-note">
                     Heatmap below shows cluster assignments per sample. Rows correspond to marker-based
                     and read-based clustering; columns are samples. Colour palettes are distinct per row,
                     so cluster IDs are not directly comparable between the two.
                 </p>
                 <div class="clusters-heatmap-scroll">
-                    <svg id="clusters-heatmap-svg" class="clusters-heatmap-svg" viewBox="0 0 1000 120" preserveAspectRatio="none"></svg>
+                    <svg id="clusters-heatmap-svg" class="clusters-heatmap-svg" viewBox="0 0 1000 150" preserveAspectRatio="none"></svg>
                 </div>
                 <p class="small-note">
                     Hover over tiles for exact cluster assignments. Samples without an assignment in a given
@@ -1306,13 +1363,16 @@ function addClustersSection(parent, clusters) {
 
     const nSamples = samples.length;
 
+    /* High-contrast palettes: cold blues/teals for markers, warm reds/oranges/magentas for reads */
     const markerPalette = [
-        "#084594", "#2171b5", "#4292c6", "#6baed6",
-        "#9ecae1", "#c6dbef", "#08519c", "#3182bd"
+        "#08306b", "#08519c", "#2171b5", "#4292c6",
+        "#41b6c4", "#1d91c0", "#2c7fb8", "#7fcdbb",
+        "#0c2c84", "#4eb3d3", "#2b8cbe", "#a1dab4"
     ];
     const readPalette = [
-        "#a50f15", "#cb181d", "#ef3b2c", "#fb6a4a",
-        "#fc9272", "#fcbba1", "#dd3497", "#f768a1"
+        "#7f0000", "#b30000", "#e31a1c", "#ff7f00",
+        "#f03b20", "#bd0026", "#fd8d3c", "#fc4e2a",
+        "#b10026", "#dd1c77", "#df65b0", "#ff1493"
     ];
 
     function buildClusterColorMap(map, palette) {
@@ -1334,8 +1394,8 @@ function addClustersSection(parent, clusters) {
     const markerColors = buildClusterColorMap(markersMap, markerPalette);
     const readColors = buildClusterColorMap(readsMap, readPalette);
 
-    const height = 120;
-    const margin = {left: 80, right: 20, top: 20, bottom: 30};
+    const height = 150;  // increased from 120 to avoid cropping
+    const margin = {left: 80, right: 20, top: 20, bottom: 40};
     const rows = 2;
     const cellH = (height - margin.top - margin.bottom) / rows;
     const baseCellW = 20;
@@ -1407,12 +1467,12 @@ function addClustersSection(parent, clusters) {
                 if (show) {
                     const lab = document.createElementNS(svgns, "text");
                     lab.setAttribute("x", x + cellW / 2);
-                    lab.setAttribute("y", height - 5);
+                    lab.setAttribute("y", height - 10);
                     lab.setAttribute("font-size", "9");
                     lab.setAttribute("text-anchor", "end");
                     lab.setAttribute(
                         "transform",
-                        `rotate(-60 ${x + cellW / 2} ${height - 5})`
+                        `rotate(-60 ${x + cellW / 2} ${height - 10})`
                     );
                     lab.textContent = sampleName;
                     svg.appendChild(lab);
@@ -1425,6 +1485,7 @@ function addClustersSection(parent, clusters) {
     drawRow(1, "Reads", readsMap, readColors, "#fcae91");
 }
 
+/* Main JS entry */
 function main() {
     const distill = DISTILL_DATA;
     const figures = FIGURES_DATA;
@@ -1496,6 +1557,7 @@ def main():
     distill_json_str = json.dumps(distill_data, indent=2)
     figures_json_str = json.dumps(figures_data, indent=2)
 
+    # Avoid breaking the <script> tag if JSON contains "</script>"
     distill_json_str = distill_json_str.replace("</script>", "<\\/script>")
     figures_json_str = figures_json_str.replace("</script>", "<\\/script>")
 
