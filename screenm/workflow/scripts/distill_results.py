@@ -1116,9 +1116,8 @@ def compute_clusters(results_json: Dict[str, Any]) -> Dict[str, Any]:
     Returns a nested structure with per-distance-type summaries and an
     overall flag/message (preferring markers if available).
 
-    Additionally, it passes through the raw pairwise Mash distances
-    (for both markers and reads) so that downstream tools can build
-    distance heatmaps without having to re-read results.json.
+    Additionally passes through *filtered* raw pairwise Mash distances
+    (markers and reads), keeping only sample1, sample2, and distance.
     """
     mash_markers_block = results_json.get("mash_markers") or {}
     mash_reads_block = results_json.get("mash_reads") or {}
@@ -1126,9 +1125,7 @@ def compute_clusters(results_json: Dict[str, Any]) -> Dict[str, Any]:
     markers_summary = _summarise_mash_cluster_block(mash_markers_block, "marker")
     reads_summary = _summarise_mash_cluster_block(mash_reads_block, "read")
 
-    # Choose primary view for overall flag/message:
-    #   - Prefer markers when they have at least 2 clusters,
-    #   - otherwise fall back to reads.
+    # pick dominant summary for overall flag/message
     overall_source = markers_summary
     if (
         markers_summary.get("n_clusters") is None
@@ -1139,28 +1136,40 @@ def compute_clusters(results_json: Dict[str, Any]) -> Dict[str, Any]:
     overall_flag = overall_source.get("flag_cluster_structure")
     overall_message = overall_source.get("message_cluster_structure")
 
-    # Pass through pairwise Mash distances (if present)
-    pairwise_markers = None
-    if isinstance(mash_markers_block, dict):
-        pw = mash_markers_block.get("pairwise")
-        if isinstance(pw, list):
-            pairwise_markers = pw
+    # ---- FILTER PAIRWISE DISTANCES ----
+    def extract_pairwise(block):
+        pw = block.get("pairwise")
+        if not isinstance(pw, list):
+            return None
+        filtered = []
+        for rec in pw:
+            if not isinstance(rec, dict):
+                continue
+            s1 = rec.get("sample1")
+            s2 = rec.get("sample2")
+            dist = rec.get("distance")
+            if s1 is None or s2 is None or dist is None:
+                continue
+            filtered.append({
+                "sample1": s1,
+                "sample2": s2,
+                "distance": dist
+            })
+        return filtered if filtered else None
 
-    pairwise_reads = None
-    if isinstance(mash_reads_block, dict):
-        pw = mash_reads_block.get("pairwise")
-        if isinstance(pw, list):
-            pairwise_reads = pw
+    pairwise_markers = extract_pairwise(mash_markers_block)
+    pairwise_reads = extract_pairwise(mash_reads_block)
 
     return {
         "markers": markers_summary,
         "reads": reads_summary,
         "flag_clusters": overall_flag,
         "message_clusters": overall_message,
-        # NEW: raw pairwise Mash distances for downstream plotting
+        # new filtered pairwise distance lists
         "pairwise_markers": pairwise_markers,
         "pairwise_reads": pairwise_reads,
     }
+
 
 
 # ---------- Main ----------

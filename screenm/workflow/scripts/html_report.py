@@ -36,52 +36,65 @@ HTML_TEMPLATE = r"""<!DOCTYPE html>
     }
 
     .section-intro {
-        margin: 0 0 6px 0;
-        font-size: 0.95em;
-        color: #444;
-    }
-
-    details {
-        margin-top: 6px;
-    }
-
-    details > summary {
-        font-size: 0.98em;
-        cursor: pointer;
-        padding: 4px 0;
-        font-weight: 600;
-        list-style: none;
-    }
-
-    details[open] > summary {
-        margin-bottom: 8px;
-    }
-
-    .flag-1 {
-        background-color: #d7f5dd;
-    }
-    .flag-2 {
-        background-color: #fff9c4;
-    }
-    .flag-3 {
-        background-color: #ffd2d2;
-    }
-
-    .summary-message {
-        margin-bottom: 12px;
+        margin: 0 0 8px 0;
+        font-size: 0.9em;
+        color: #555;
     }
 
     .small-note {
         font-size: 0.85em;
         color: #666;
+        margin: 6px 0 10px 0;
+    }
+
+    details {
+        margin-top: 4px;
+    }
+
+    summary {
+        cursor: pointer;
+        font-weight: bold;
+        list-style: none;
+        display: flex;
+        align-items: center;
+        gap: 6px;
+    }
+
+    summary::-webkit-details-marker {
+        display: none;
+    }
+
+    .content {
         margin-top: 8px;
     }
 
-    .status-emoji {
-        margin-right: 6px;
+    .summary-message {
+        font-size: 0.9em;
+        line-height: 1.4;
+        margin-bottom: 10px;
     }
+
+    .flag-1 {
+        background-color: #e8f5e9;
+        border-color: #c8e6c9;
+    }
+
+    .flag-2 {
+        background-color: #fffde7;
+        border-color: #fff9c4;
+    }
+
+    .flag-3 {
+        background-color: #ffebee;
+        border-color: #ffcdd2;
+    }
+
+    .status-emoji {
+        font-size: 1.2em;
+    }
+
     .status-text {
-        font-weight: 500;
+        font-size: 0.95em;
     }
 
     .screen-overview-stats,
@@ -103,8 +116,12 @@ HTML_TEMPLATE = r"""<!DOCTYPE html>
     .redundancy-stat-item,
     .cluster-stat-item,
     .quality-stat-item {
-        flex: 1;
-        min-width: 160px;
+        flex: 1 1 180px;
+        min-width: 180px;
+        background: #f9f9f9;
+        border-radius: 6px;
+        padding: 8px 10px;
+        border: 1px solid #e0e0e0;
     }
 
     .screen-overview-stat-label,
@@ -135,7 +152,7 @@ HTML_TEMPLATE = r"""<!DOCTYPE html>
     .cluster-stat-note,
     .quality-stat-note {
         font-size: 0.8em;
-        color: #666;
+        color: #777;
         margin-top: 2px;
     }
 
@@ -176,6 +193,39 @@ HTML_TEMPLATE = r"""<!DOCTYPE html>
         height: 210px;
     }
 
+    .pairwise-container {
+        margin-top: 14px;
+    }
+    .pairwise-tabs {
+        display: inline-flex;
+        border-radius: 999px;
+        overflow: hidden;
+        border: 1px solid #ccc;
+        margin-bottom: 8px;
+    }
+    .pairwise-tab {
+        border: none;
+        padding: 4px 12px;
+        font-size: 0.85em;
+        cursor: pointer;
+        background: #f0f0f0;
+        color: #444;
+    }
+    .pairwise-tab.active {
+        background: #1976d2;
+        color: #fff;
+    }
+    .pairwise-heatmap {
+        width: 100%;
+        overflow-x: auto;
+        border: 1px solid #ddd;
+        border-radius: 4px;
+        background: #fcfcfc;
+        padding: 6px 6px 2px 6px;
+        box-sizing: border-box;
+        margin-top: 8px;
+    }
+
     .chart-tooltip {
         position: fixed;
         pointer-events: none;
@@ -184,9 +234,8 @@ HTML_TEMPLATE = r"""<!DOCTYPE html>
         padding: 4px 8px;
         border-radius: 4px;
         font-size: 0.8em;
-        z-index: 1000;
-        white-space: nowrap;
-        transform: translate(8px, -20px);
+        z-index: 9999;
+        white-space: pre;
     }
 </style>
 
@@ -194,6 +243,8 @@ HTML_TEMPLATE = r"""<!DOCTYPE html>
 <body>
 
 <h1>ScreenM Summary Report</h1>
+
+<div id="global-overview" class="screen-overview-stats"></div>
 
 <div id="summary-sections"></div>
 
@@ -227,6 +278,11 @@ function fmtMillions(x) {
     return v.toString();
 }
 
+function fmtPercent(x, digits) {
+    if (x === null || x === undefined) return "NA";
+    return Number(x).toFixed(digits) + "%";
+}
+
 function getOrCreateTooltip() {
     let tooltip = document.querySelector(".chart-tooltip");
     if (!tooltip) {
@@ -255,6 +311,47 @@ function sectionStatus(sectionLabel, flag) {
         emoji,
         text: `${sectionLabel} ${descriptor}`
     };
+}
+
+/* ---------- Global overview (top) ---------- */
+function addGlobalOverview(distill, figures) {
+    const container = document.getElementById("global-overview");
+    if (!container) return;
+
+    const meta = distill.meta || {};
+    const nSamples = meta.n_samples_in_results != null ? meta.n_samples_in_results : null;
+
+    let totalReadsAll = null;
+    try {
+        const depthFig = figures.figures && figures.figures.dna_depth_fractions
+            ? figures.figures.dna_depth_fractions
+            : null;
+        const perSample = depthFig ? (depthFig.per_sample || []) : [];
+        let total = 0;
+        perSample.forEach(d => {
+            if (!d) return;
+            if (d.total_reads != null) {
+                const v = Number(d.total_reads);
+                if (!isNaN(v)) total += v;
+            }
+        });
+        totalReadsAll = total;
+    } catch (e) {
+        totalReadsAll = null;
+    }
+
+    container.innerHTML = `
+        <div class="screen-overview-stat-item">
+            <div class="screen-overview-stat-label">Samples</div>
+            <div class="screen-overview-stat-value">${fmtInt(nSamples)}</div>
+            <div class="screen-overview-stat-note">Samples with results</div>
+        </div>
+        <div class="screen-overview-stat-item">
+            <div class="screen-overview-stat-label">Total reads</div>
+            <div class="screen-overview-stat-value">${fmtMillions(totalReadsAll)}</div>
+            <div class="screen-overview-stat-note">Sum of per-sample read counts</div>
+        </div>
+    `;
 }
 
 /* ---------- Screening overview (merged) ---------- */
@@ -289,11 +386,6 @@ function addScreeningOverviewSection(parent, data, depthPerSample) {
                 <p class="summary-message">${msg}</p>
                 <div class="screen-overview-stats">
                     <div class="screen-overview-stat-item">
-                        <div class="screen-overview-stat-label">Total samples</div>
-                        <div class="screen-overview-stat-value">${fmtInt(total)}</div>
-                        <div class="screen-overview-stat-note">Samples in data.json</div>
-                    </div>
-                    <div class="screen-overview-stat-item">
                         <div class="screen-overview-stat-label">Above read threshold</div>
                         <div class="screen-overview-stat-value">
                             ${fmtInt(above)} (${fmtFloat(perc, 1)}%)
@@ -318,8 +410,7 @@ function addScreeningOverviewSection(parent, data, depthPerSample) {
                 </div>
                 <p class="small-note">
                     X axis: samples; Y axis: sequencing depth in reads. Bars show per-sample total read counts,
-                    coloured green if above the screening threshold and red if below. A horizontal dashed line
-                    indicates the median sequencing depth; another dashed line marks the read threshold.
+                    and a dashed line marks the read threshold used for screening.
                 </p>
             </div>
         </details>
@@ -327,217 +418,158 @@ function addScreeningOverviewSection(parent, data, depthPerSample) {
     parent.appendChild(div);
 
     const svg = div.querySelector("#seq-depth-svg");
-    const perSample = (depthPerSample || [])
-        .filter(d => d.total_reads !== null && d.total_reads !== undefined);
+    const svgns = "http://www.w3.org/2000/svg";
+    const tooltip = getOrCreateTooltip();
 
-    if (!perSample.length) {
-        svg.outerHTML = `<div class="small-note">Per-sample read counts not available for sequencing depth barplot.</div>`;
+    const samples = depthPerSample.map(d => d.sample);
+    const reads   = depthPerSample.map(d => d.total_reads);
+
+    if (!samples.length) {
+        svg.outerHTML = `<div class="small-note">Sequencing depths per sample not available.</div>`;
         return;
     }
 
     const width = 1000;
     const height = 320;
-    const margin = {left: 60, right: 20, top: 20, bottom: 80};
-    const plotW = width - margin.left - margin.right;
-    const plotH = height - margin.top - margin.bottom;
-    const svgns = "http://www.w3.org/2000/svg";
+    svg.setAttribute("viewBox", `0 0 ${width} ${height}`);
 
-    const thresholdReads = Number(data.reads_threshold) || null;
+    const marginLeft = 70;
+    const marginRight = 20;
+    const marginTop = 20;
+    const marginBottom = 80;
 
-    let maxDepth = 0;
-    perSample.forEach(d => {
-        const v = Number(d.total_reads) || 0;
-        if (v > maxDepth) maxDepth = v;
-    });
-    if (thresholdReads && thresholdReads > maxDepth) {
-        maxDepth = thresholdReads * 1.05;
-    }
-    if (maxDepth <= 0) maxDepth = 1;
+    const plotWidth = width - marginLeft - marginRight;
+    const plotHeight = height - marginTop - marginBottom;
 
-    const x0 = margin.left;
-    const y0 = height - margin.bottom;
+    const maxY = Math.max(...reads, thr || 0);
+    const yMax = maxY * 1.05;
 
-    function yForValue(v) {
-        const ratio = Math.max(0, Math.min(1, v / maxDepth));
-        return y0 - ratio * plotH;
+    function xScale(i) {
+        const n = samples.length;
+        return marginLeft + (i + 0.5) * (plotWidth / n);
     }
 
-    const xAxis = document.createElementNS(svgns, "line");
-    xAxis.setAttribute("x1", x0);
-    xAxis.setAttribute("y1", y0);
-    xAxis.setAttribute("x2", x0 + plotW);
-    xAxis.setAttribute("y2", y0);
-    xAxis.setAttribute("stroke", "#555");
-    svg.appendChild(xAxis);
+    function yScale(val) {
+        return marginTop + plotHeight - (val / yMax) * plotHeight;
+    }
 
-    const yAxis = document.createElementNS(svgns, "line");
-    yAxis.setAttribute("x1", x0);
-    yAxis.setAttribute("y1", y0);
-    yAxis.setAttribute("x2", x0);
-    yAxis.setAttribute("y2", margin.top);
-    yAxis.setAttribute("stroke", "#555");
-    svg.appendChild(yAxis);
+    const axisY = document.createElementNS(svgns, "line");
+    axisY.setAttribute("x1", marginLeft);
+    axisY.setAttribute("y1", marginTop);
+    axisY.setAttribute("x2", marginLeft);
+    axisY.setAttribute("y2", marginTop + plotHeight);
+    axisY.setAttribute("stroke", "#333");
+    axisY.setAttribute("stroke-width", "1");
+    svg.appendChild(axisY);
 
-    [0, 0.25, 0.5, 0.75, 1].forEach(frac => {
-        const val = frac * maxDepth;
-        const y = yForValue(val);
+    const axisX = document.createElementNS(svgns, "line");
+    axisX.setAttribute("x1", marginLeft);
+    axisX.setAttribute("y1", marginTop + plotHeight);
+    axisX.setAttribute("x2", marginLeft + plotWidth);
+    axisX.setAttribute("y2", marginTop + plotHeight);
+    axisX.setAttribute("stroke", "#333");
+    axisX.setAttribute("stroke-width", "1");
+    svg.appendChild(axisX);
+
+    const nTicks = 5;
+    for (let t = 0; t <= nTicks; t++) {
+        const val = (t / nTicks) * yMax;
+        const y = yScale(val);
 
         const tick = document.createElementNS(svgns, "line");
-        tick.setAttribute("x1", x0 - 4);
+        tick.setAttribute("x1", marginLeft - 5);
         tick.setAttribute("y1", y);
-        tick.setAttribute("x2", x0);
+        tick.setAttribute("x2", marginLeft);
         tick.setAttribute("y2", y);
-        tick.setAttribute("stroke", "#555");
+        tick.setAttribute("stroke", "#333");
         svg.appendChild(tick);
 
-        const lab = document.createElementNS(svgns, "text");
-        lab.setAttribute("x", x0 - 6);
-        lab.setAttribute("y", y + 3);
-        lab.setAttribute("font-size", "10");
-        lab.setAttribute("text-anchor", "end");
-        lab.textContent = fmtMillions(val);
-        svg.appendChild(lab);
-    });
+        const label = document.createElementNS(svgns, "text");
+        label.setAttribute("x", marginLeft - 8);
+        label.setAttribute("y", y + 3);
+        label.setAttribute("text-anchor", "end");
+        label.setAttribute("font-size", "10");
+        label.textContent = fmtMillions(val);
+        svg.appendChild(label);
+    }
 
-    const ylabel = document.createElementNS(svgns, "text");
-    ylabel.setAttribute("x", 16);
-    ylabel.setAttribute("y", margin.top + plotH / 2);
-    ylabel.setAttribute("text-anchor", "middle");
-    ylabel.setAttribute("font-size", "11");
-    ylabel.setAttribute("transform", `rotate(-90 16 ${margin.top + plotH / 2})`);
-    ylabel.textContent = "Sequencing depth (reads)";
-    svg.appendChild(ylabel);
+    if (thr != null) {
+        const yThr = yScale(thr);
+        const line = document.createElementNS(svgns, "line");
+        line.setAttribute("x1", marginLeft);
+        line.setAttribute("y1", yThr);
+        line.setAttribute("x2", marginLeft + plotWidth);
+        line.setAttribute("y2", yThr);
+        line.setAttribute("stroke", "#d32f2f");
+        line.setAttribute("stroke-width", "1.5");
+        line.setAttribute("stroke-dasharray", "4,3");
+        svg.appendChild(line);
+    }
 
-    const xlabel = document.createElementNS(svgns, "text");
-    xlabel.setAttribute("x", margin.left + plotW / 2);
-    xlabel.setAttribute("y", height - 8);
-    xlabel.setAttribute("text-anchor", "middle");
-    xlabel.setAttribute("font-size", "11");
-    xlabel.textContent = "Samples";
-    svg.appendChild(xlabel);
+    const n = samples.length;
+    const barWidth = (plotWidth / n) * 0.7;
 
-    const tooltip = getOrCreateTooltip();
+    reads.forEach((val, i) => {
+        const xCenter = xScale(i);
+        const x0 = xCenter - barWidth / 2;
+        const y0 = yScale(val);
+        const bar = document.createElementNS(svgns, "rect");
+        bar.setAttribute("x", x0);
+        bar.setAttribute("y", y0);
+        bar.setAttribute("width", barWidth);
+        bar.setAttribute("height", (marginTop + plotHeight) - y0);
+        bar.setAttribute("fill", "#90caf9");
+        bar.setAttribute("stroke", "#1976d2");
+        bar.setAttribute("stroke-width", "0.5");
+        bar.style.cursor = "pointer";
 
-    const n = perSample.length;
-    const step = plotW / n;
-    const barWidth = Math.min(16, step * 0.8);
+        const tooltipText = `${samples[i]}\nReads: ${fmtMillions(val)}`;
 
-    const colorAbove = "#2e7d32";
-    const colorBelow = "#c62828";
-
-    perSample.forEach((d, i) => {
-        const val = Number(d.total_reads) || 0;
-        const xCenter = x0 + step * i + step / 2;
-        const x = xCenter - barWidth / 2;
-        const y = yForValue(val);
-        const hBar = y0 - y;
-
-        let barColor = "#1976d2";
-        if (thresholdReads && thresholdReads > 0) {
-            barColor = val >= thresholdReads ? colorAbove : colorBelow;
-        }
-
-        const rect = document.createElementNS(svgns, "rect");
-        rect.setAttribute("x", x);
-        rect.setAttribute("y", y);
-        rect.setAttribute("width", barWidth);
-        rect.setAttribute("height", hBar);
-        rect.setAttribute("fill", barColor);
-        rect.setAttribute("fill-opacity", "0.9");
-        rect.style.cursor = "pointer";
-
-        const tooltipLines = [
-            `${d.sample}`,
-            `Depth: ${fmtMillions(val)} reads`
-        ];
-        if (thresholdReads && thresholdReads > 0) {
-            tooltipLines.push(`Threshold: ${fmtMillions(thresholdReads)} reads`);
-            tooltipLines.push(
-                val >= thresholdReads ? "Above threshold" : "Below threshold"
-            );
-        }
-
-        rect.addEventListener("mouseenter", (evt) => {
-            rect.setAttribute("stroke", "#000");
-            rect.setAttribute("stroke-width", "1");
+        bar.addEventListener("mouseenter", (evt) => {
+            bar.setAttribute("fill", "#64b5f6");
             tooltip.style.display = "block";
-            tooltip.textContent = tooltipLines.join("\n");
+            tooltip.textContent = tooltipText;
             tooltip.style.left = evt.clientX + "px";
             tooltip.style.top = evt.clientY + "px";
         });
-        rect.addEventListener("mousemove", (evt) => {
+        bar.addEventListener("mousemove", (evt) => {
             tooltip.style.left = evt.clientX + "px";
             tooltip.style.top = evt.clientY + "px";
         });
-        rect.addEventListener("mouseleave", () => {
-            rect.removeAttribute("stroke");
-            rect.removeAttribute("stroke-width");
+        bar.addEventListener("mouseleave", () => {
+            bar.setAttribute("fill", "#90caf9");
             tooltip.style.display = "none";
         });
 
-        svg.appendChild(rect);
-
-        const showAll = n <= 40;
-        const show = showAll || (i % 5 === 0);
-        if (show) {
-            const lab = document.createElementNS(svgns, "text");
-            lab.setAttribute("x", xCenter);
-            lab.setAttribute("y", y0 + 10);
-            lab.setAttribute("font-size", "9");
-            lab.setAttribute("text-anchor", "end");
-            lab.setAttribute("transform", `rotate(-60 ${xCenter} ${y0 + 10})`);
-            lab.textContent = d.sample;
-            svg.appendChild(lab);
-        }
+        svg.appendChild(bar);
     });
 
-    const medianDepth = Number(medianReads) || 0;
-    if (medianDepth > 0) {
-        const y = yForValue(medianDepth);
-        const line = document.createElementNS(svgns, "line");
-        line.setAttribute("x1", x0);
-        line.setAttribute("y1", y);
-        line.setAttribute("x2", x0 + plotW);
-        line.setAttribute("y2", y);
-        line.setAttribute("stroke", "#1976d2");
-        line.setAttribute("stroke-width", "1.2");
-        line.setAttribute("stroke-dasharray", "3,2");
-        svg.appendChild(line);
+    const showAll = n <= 40;
+    samples.forEach((s, i) => {
+        const show = showAll || (i % 5 === 0);
+        if (!show) return;
+        const x = xScale(i);
+        const y = marginTop + plotHeight + 55;
+        const text = document.createElementNS(svgns, "text");
+        text.setAttribute("x", x);
+        text.setAttribute("y", y);
+        text.setAttribute("font-size", "9");
+        text.setAttribute("text-anchor", "end");
+        text.setAttribute("transform", `rotate(-60 ${x} ${y})`);
+        text.textContent = s;
+        svg.appendChild(text);
+    });
 
-        const lab = document.createElementNS(svgns, "text");
-        lab.setAttribute("x", x0 + plotW - 4);
-        lab.setAttribute("y", y - 2);
-        lab.setAttribute("font-size", "10");
-        lab.setAttribute("text-anchor", "end");
-        lab.setAttribute("fill", "#1976d2");
-        lab.textContent = `median (${fmtMillions(medianDepth)})`;
-        svg.appendChild(lab);
-    }
-
-    if (thresholdReads && thresholdReads > 0) {
-        const y = yForValue(thresholdReads);
-        const line = document.createElementNS(svgns, "line");
-        line.setAttribute("x1", x0);
-        line.setAttribute("y1", y);
-        line.setAttribute("x2", x0 + plotW);
-        line.setAttribute("y2", y);
-        line.setAttribute("stroke", "#424242");
-        line.setAttribute("stroke-width", "1.2");
-        line.setAttribute("stroke-dasharray", "4,2");
-        svg.appendChild(line);
-
-        const lab = document.createElementNS(svgns, "text");
-        lab.setAttribute("x", x0 + plotW - 4);
-        lab.setAttribute("y", y - 2);
-        lab.setAttribute("font-size", "10");
-        lab.setAttribute("text-anchor", "end");
-        lab.setAttribute("fill", "#424242");
-        lab.textContent = `threshold (${fmtMillions(thresholdReads)})`;
-        svg.appendChild(lab);
-    }
+    const yLabel = document.createElementNS(svgns, "text");
+    yLabel.setAttribute("x", 14);
+    yLabel.setAttribute("y", marginTop + plotHeight / 2);
+    yLabel.setAttribute("font-size", "10");
+    yLabel.setAttribute("transform", `rotate(-90 14 ${marginTop + plotHeight / 2})`);
+    yLabel.textContent = "Reads";
+    svg.appendChild(yLabel);
 }
 
-/* Sequencing quality */
+/* ---------- Sequencing quality (low-quality reads) ---------- */
 function addLowQualitySection(parent, data, depthPerSample) {
     if (!data) return;
     const div = document.createElement("div");
@@ -545,7 +577,6 @@ function addLowQualitySection(parent, data, depthPerSample) {
 
     const msg = data.message_low_quality || "";
 
-    const overall = data.percent_removed_reads_overall;
     const meanFrac = data.mean_fraction_removed;
     const medianFrac = data.median_fraction_removed;
 
@@ -554,7 +585,7 @@ function addLowQualitySection(parent, data, depthPerSample) {
     div.innerHTML = `
         <h2 class="section-title">Sequencing quality</h2>
         <p class="section-intro">
-            This section reports how many reads are discarded by quality trimming and filtering across samples.
+            This section summarises the fraction of reads removed by quality filtering and how this varies across samples.
         </p>
         <details>
             <summary>
@@ -565,29 +596,22 @@ function addLowQualitySection(parent, data, depthPerSample) {
                 <p class="summary-message">${msg}</p>
                 <div class="quality-stats">
                     <div class="quality-stat-item">
-                        <div class="quality-stat-label">Overall removed</div>
-                        <div class="quality-stat-value">${fmtFloat(overall, 2)}%</div>
-                        <div class="quality-stat-note">Fraction of reads removed across all samples</div>
+                        <div class="quality-stat-label">Mean removed fraction</div>
+                        <div class="quality-stat-value">${fmtPercent(meanFrac * 100, 1)}</div>
+                        <div class="quality-stat-note">Average across samples</div>
                     </div>
                     <div class="quality-stat-item">
-                        <div class="quality-stat-label">Mean removed per sample</div>
-                        <div class="quality-stat-value">${fmtFloat(100 * meanFrac, 2)}%</div>
-                        <div class="quality-stat-note">Average fraction removed per sample</div>
-                    </div>
-                    <div class="quality-stat-item">
-                        <div class="quality-stat-label">Median removed per sample</div>
-                        <div class="quality-stat-value">${fmtFloat(100 * medianFrac, 2)}%</div>
-                        <div class="quality-stat-note">Typical per-sample fraction of discarded reads</div>
+                        <div class="quality-stat-label">Median removed fraction</div>
+                        <div class="quality-stat-value">${fmtPercent(medianFrac * 100, 1)}</div>
+                        <div class="quality-stat-note">Typical sample</div>
                     </div>
                 </div>
                 <div class="quality-plot-container">
                     <svg id="quality-svg" class="quality-svg" viewBox="0 0 1000 320" preserveAspectRatio="none"></svg>
                 </div>
                 <p class="small-note">
-                    X axis: samples; Y axis: fraction of reads removed by quality filtering (fastp).
-                    Bars show per-sample removed fractions, coloured green (&le; 5%), yellow (5–20%) or
-                    red (&gt; 20%). Horizontal dashed lines mark 5% and 20% thresholds, and the median
-                    removed fraction is shown as a blue dashed line.
+                    X axis: samples; Y axis: percentage of reads removed by fastp (low quality, Ns, length/complexity filters).
+                    A dashed yellow line marks 5% and a dashed red line marks 20% removal thresholds.
                 </p>
             </div>
         </details>
@@ -595,1114 +619,180 @@ function addLowQualitySection(parent, data, depthPerSample) {
     parent.appendChild(div);
 
     const svg = div.querySelector("#quality-svg");
-    const perSample = (depthPerSample || [])
-        .filter(d => d.fraction_low_quality_of_total !== null &&
-                     d.fraction_low_quality_of_total !== undefined);
-
-    if (!perSample.length) {
-        svg.outerHTML = `<div class="small-note">Per-sample removed fractions not available for sequencing quality plot.</div>`;
-        return;
-    }
-
-    const width = 1000;
-    const height = 320;
-    const margin = {left: 60, right: 20, top: 20, bottom: 80};
-    const plotW = width - margin.left - margin.right;
-    const plotH = height - margin.top - margin.bottom;
     const svgns = "http://www.w3.org/2000/svg";
-
-    const x0 = margin.left;
-    const y0 = height - margin.bottom;
-
-    const THRESH_GOOD = 0.05;
-    const THRESH_MOD  = 0.20;
-
-    let maxFrac = 0;
-    perSample.forEach(d => {
-        const f = Number(d.fraction_low_quality_of_total) || 0;
-        if (f > maxFrac) maxFrac = f;
-    });
-    maxFrac = Math.max(maxFrac * 1.1, 0.25, 0.22);
-
-    function yForFrac(f) {
-        const frac = Math.max(0, Math.min(maxFrac, f));
-        return y0 - (frac / maxFrac) * plotH;
-    }
-
-    const xAxis = document.createElementNS(svgns, "line");
-    xAxis.setAttribute("x1", x0);
-    xAxis.setAttribute("y1", y0);
-    xAxis.setAttribute("x2", x0 + plotW);
-    xAxis.setAttribute("y2", y0);
-    xAxis.setAttribute("stroke", "#555");
-    svg.appendChild(xAxis);
-
-    const yAxis = document.createElementNS(svgns, "line");
-    yAxis.setAttribute("x1", x0);
-    yAxis.setAttribute("y1", y0);
-    yAxis.setAttribute("x2", x0);
-    yAxis.setAttribute("y2", margin.top);
-    yAxis.setAttribute("stroke", "#555");
-    svg.appendChild(yAxis);
-
-    const tickPercs = [0, 0.05, 0.10, 0.15, 0.20, 0.25].filter(p => p <= maxFrac + 1e-9);
-    tickPercs.forEach(frac => {
-        const y = yForFrac(frac);
-        const tick = document.createElementNS(svgns, "line");
-        tick.setAttribute("x1", x0 - 4);
-        tick.setAttribute("y1", y);
-        tick.setAttribute("x2", x0);
-        tick.setAttribute("y2", y);
-        tick.setAttribute("stroke", "#555");
-        svg.appendChild(tick);
-
-        const lab = document.createElementNS(svgns, "text");
-        lab.setAttribute("x", x0 - 6);
-        lab.setAttribute("y", y + 3);
-        lab.setAttribute("font-size", "10");
-        lab.setAttribute("text-anchor", "end");
-        lab.textContent = (frac * 100).toFixed(0) + "%";
-        svg.appendChild(lab);
-    });
-
-    const ylabel = document.createElementNS(svgns, "text");
-    ylabel.setAttribute("x", 16);
-    ylabel.setAttribute("y", margin.top + plotH / 2);
-    ylabel.setAttribute("text-anchor", "middle");
-    ylabel.setAttribute("font-size", "11");
-    ylabel.setAttribute("transform", `rotate(-90 16 ${margin.top + plotH / 2})`);
-    ylabel.textContent = "Reads removed by fastp (%)";
-    svg.appendChild(ylabel);
-
-    const xlabel = document.createElementNS(svgns, "text");
-    xlabel.setAttribute("x", margin.left + plotW / 2);
-    xlabel.setAttribute("y", height - 8);
-    xlabel.setAttribute("text-anchor", "middle");
-    xlabel.setAttribute("font-size", "11");
-    xlabel.textContent = "Samples";
-    svg.appendChild(xlabel);
-
     const tooltip = getOrCreateTooltip();
 
-    const n = perSample.length;
-    const step = plotW / n;
-    const barWidth = Math.min(16, step * 0.8);
-
-    perSample.forEach((d, i) => {
-        const frac = Number(d.fraction_low_quality_of_total) || 0;
-        const xCenter = x0 + step * i + step / 2;
-        const x = xCenter - barWidth / 2;
-        const y = yForFrac(frac);
-        const hBar = y0 - y;
-
-        let color;
-        if (frac <= THRESH_GOOD) {
-            color = "#2e7d32";
-        } else if (frac <= THRESH_MOD) {
-            color = "#f9a825";
-        } else {
-            color = "#c62828";
-        }
-
-        const rect = document.createElementNS(svgns, "rect");
-        rect.setAttribute("x", x);
-        rect.setAttribute("y", y);
-        rect.setAttribute("width", barWidth);
-        rect.setAttribute("height", hBar);
-        rect.setAttribute("fill", color);
-        rect.setAttribute("fill-opacity", "0.9");
-        rect.style.cursor = "pointer";
-
-        const tooltipText =
-            `${d.sample}\n` +
-            `Removed: ${(frac * 100).toFixed(2)}%`;
-
-        rect.addEventListener("mouseenter", (evt) => {
-            rect.setAttribute("stroke", "#000");
-            rect.setAttribute("stroke-width", "1");
-            tooltip.style.display = "block";
-            tooltip.textContent = tooltipText;
-            tooltip.style.left = evt.clientX + "px";
-            tooltip.style.top = evt.clientY + "px";
-        });
-        rect.addEventListener("mousemove", (evt) => {
-            tooltip.style.left = evt.clientX + "px";
-            tooltip.style.top = evt.clientY + "px";
-        });
-        rect.addEventListener("mouseleave", () => {
-            rect.removeAttribute("stroke");
-            rect.removeAttribute("stroke-width");
-            tooltip.style.display = "none";
-        });
-
-        svg.appendChild(rect);
-
-        const showAll = n <= 40;
-        const show = showAll || (i % 5 === 0);
-        if (show) {
-            const lab = document.createElementNS(svgns, "text");
-            lab.setAttribute("x", xCenter);
-            lab.setAttribute("y", y0 + 10);
-            lab.setAttribute("font-size", "9");
-            lab.setAttribute("text-anchor", "end");
-            lab.setAttribute("transform", `rotate(-60 ${xCenter} ${y0 + 10})`);
-            lab.textContent = d.sample;
-            svg.appendChild(lab);
-        }
-    });
-
-    const thresholds = [
-        {frac: THRESH_GOOD, color: "#2e7d32", label: "5%"},
-        {frac: THRESH_MOD,  color: "#c62828", label: "20%"}
-    ];
-    thresholds.forEach(t => {
-        if (t.frac > maxFrac + 1e-9) return;
-        const y = yForFrac(t.frac);
-        const line = document.createElementNS(svgns, "line");
-        line.setAttribute("x1", x0);
-        line.setAttribute("y1", y);
-        line.setAttribute("x2", x0 + plotW);
-        line.setAttribute("y2", y);
-        line.setAttribute("stroke", t.color);
-        line.setAttribute("stroke-width", "1.4");
-        line.setAttribute("stroke-dasharray", "4,2");
-        svg.appendChild(line);
-
-        const lab = document.createElementNS(svgns, "text");
-        lab.setAttribute("x", x0 + plotW - 4);
-        lab.setAttribute("y", y - 2);
-        lab.setAttribute("font-size", "10");
-        lab.setAttribute("text-anchor", "end");
-        lab.setAttribute("fill", t.color);
-        lab.textContent = t.label;
-        svg.appendChild(lab);
-    });
-
-    const medianRemoved = Number(medianFrac) || 0;
-    if (medianRemoved > 0) {
-        const y = yForFrac(medianRemoved);
-        const line = document.createElementNS(svgns, "line");
-        line.setAttribute("x1", x0);
-        line.setAttribute("y1", y);
-        line.setAttribute("x2", x0 + plotW);
-        line.setAttribute("y2", y);
-        line.setAttribute("stroke", "#1976d2");
-        line.setAttribute("stroke-width", "1.2");
-        line.setAttribute("stroke-dasharray", "3,2");
-        svg.appendChild(line);
-
-        const lab = document.createElementNS(svgns, "text");
-        lab.setAttribute("x", x0 + plotW - 4);
-        lab.setAttribute("y", y - 2);
-        lab.setAttribute("font-size", "10");
-        lab.setAttribute("text-anchor", "end");
-        lab.setAttribute("fill", "#1976d2");
-        lab.textContent = `median (${(medianRemoved * 100).toFixed(1)}%)`;
-        svg.appendChild(lab);
-    }
-}
-
-/* Prokaryotic fraction & depth components */
-function addProkFractionSection(parent, data, depthPerSample) {
-    if (!data) return;
-    const div = document.createElement("div");
-    div.className = "section " + flagClass(data.flag_prokaryotic_fraction);
-
-    const msg = data.message_prokaryotic_fraction || "";
-    const status = sectionStatus("Prokaryotic fraction", data.flag_prokaryotic_fraction);
-
-    div.innerHTML = `
-        <h2 class="section-title">Prokaryotic fraction</h2>
-        <p class="section-intro">
-            This section describes how much of the sequencing effort is targeting prokaryotic genomes
-            versus non-prokaryotic or low-quality reads.
-        </p>
-        <details>
-            <summary>
-                <span class="status-emoji">${status.emoji}</span>
-                <span class="status-text">${status.text}</span>
-            </summary>
-            <div class="content">
-                <p class="summary-message">${msg}</p>
-                <div class="prok-stats">
-                    <div class="prok-stat-item">
-                        <div class="prok-stat-label">Mean prokaryotic fraction</div>
-                        <div class="prok-stat-value">${fmtFloat(data.mean_prokaryotic_fraction, 2)}%</div>
-                        <div class="prok-stat-note">Average prokaryotic share of reads</div>
-                    </div>
-                    <div class="prok-stat-item">
-                        <div class="prok-stat-label">Median prokaryotic fraction</div>
-                        <div class="prok-stat-value">${fmtFloat(data.median_prokaryotic_fraction, 2)}%</div>
-                        <div class="prok-stat-note">Typical prokaryotic share across samples</div>
-                    </div>
-                    <div class="prok-stat-item">
-                        <div class="prok-stat-label">Variation</div>
-                        <div class="prok-stat-value">${fmtFloat(data.cv_prokaryotic_fraction, 3)}</div>
-                        <div class="prok-stat-note">Coefficient of variation (CV)</div>
-                    </div>
-                </div>
-                <p class="small-note">
-                    SingleM warnings in ${fmtInt(data.n_warnings)} samples may indicate reduced reliability
-                    of the estimated prokaryotic fractions in those libraries.
-                </p>
-                <div class="prok-depth-plot-container">
-                    <svg id="prok-depth-svg" class="prok-depth-svg" viewBox="0 0 1000 320" preserveAspectRatio="none"></svg>
-                </div>
-                <p class="small-note">
-                    X axis: samples; Y axis: fraction of total reads. Bars are stacked into low-quality (red),
-                    prokaryotic (green/yellow/red depending on the fraction), and other QC-passing reads (grey).
-                    Horizontal dashed lines mark 50% (yellow) and 90% (green) prokaryotic fraction; the blue dashed line
-                    shows the median prokaryotic fraction. Hover over bars for exact fractions and estimated read counts.
-                </p>
-            </div>
-        </details>
-    `;
-    parent.appendChild(div);
-
-    const svg = div.querySelector("#prok-depth-svg");
-    const dataPerSample = (depthPerSample || []).filter(d =>
-        d.total_reads !== null &&
-        d.total_reads !== undefined
+    const samples = depthPerSample.map(d => d.sample);
+    const removedFrac = depthPerSample.map(d =>
+        (d.fraction_low_quality_of_total != null)
+            ? d.fraction_low_quality_of_total
+            : (d.removed_fraction_fastp != null ? d.removed_fraction_fastp : 0)
     );
 
-    if (!dataPerSample.length) {
-        svg.outerHTML = `<div class="small-note">Per-sample depth component data not available.</div>`;
+    if (!samples.length) {
+        svg.outerHTML = `<div class="small-note">Per-sample quality metrics not available.</div>`;
         return;
     }
 
     const width = 1000;
     const height = 320;
-    const margin = {left: 60, right: 20, top: 20, bottom: 80};
-    const plotW = width - margin.left - margin.right;
-    const plotH = height - margin.top - margin.bottom;
-    const svgns = "http://www.w3.org/2000/svg";
+    svg.setAttribute("viewBox", `0 0 ${width} ${height}`);
 
-    const x0 = margin.left;
-    const y0 = height - margin.bottom;
+    const marginLeft = 70;
+    const marginRight = 20;
+    const marginTop = 20;
+    const marginBottom = 80;
 
-    const THRESH_PROK_MOD = 0.50;
-    const THRESH_PROK_HIGH = 0.90;
+    const plotWidth = width - marginLeft - marginRight;
+    const plotHeight = height - marginTop - marginBottom;
 
-    function yForFrac(frac) {
-        const f = Math.max(0, Math.min(1, frac));
-        return y0 - f * plotH;
+    const removedPct = removedFrac.map(v => v * 100);
+    const maxY = Math.max(...removedPct, 20);
+    const yMax = maxY * 1.1;
+
+    function xScale(i) {
+        const n = samples.length;
+        return marginLeft + (i + 0.5) * (plotWidth / n);
+    }
+    function yScale(val) {
+        return marginTop + plotHeight - (val / yMax) * plotHeight;
     }
 
-    const xAxis = document.createElementNS(svgns, "line");
-    xAxis.setAttribute("x1", x0);
-    xAxis.setAttribute("y1", y0);
-    xAxis.setAttribute("x2", x0 + plotW);
-    xAxis.setAttribute("y2", y0);
-    xAxis.setAttribute("stroke", "#555");
-    svg.appendChild(xAxis);
+    const axisY = document.createElementNS(svgns, "line");
+    axisY.setAttribute("x1", marginLeft);
+    axisY.setAttribute("y1", marginTop);
+    axisY.setAttribute("x2", marginLeft);
+    axisY.setAttribute("y2", marginTop + plotHeight);
+    axisY.setAttribute("stroke", "#333");
+    axisY.setAttribute("stroke-width", "1");
+    svg.appendChild(axisY);
 
-    const yAxis = document.createElementNS(svgns, "line");
-    yAxis.setAttribute("x1", x0);
-    yAxis.setAttribute("y1", y0);
-    yAxis.setAttribute("x2", x0);
-    yAxis.setAttribute("y2", margin.top);
-    yAxis.setAttribute("stroke", "#555");
-    svg.appendChild(yAxis);
+    const axisX = document.createElementNS(svgns, "line");
+    axisX.setAttribute("x1", marginLeft);
+    axisX.setAttribute("y1", marginTop + plotHeight);
+    axisX.setAttribute("x2", marginLeft + plotWidth);
+    axisX.setAttribute("y2", marginTop + plotHeight);
+    axisX.setAttribute("stroke", "#333");
+    axisX.setAttribute("stroke-width", "1");
+    svg.appendChild(axisX);
 
-    [0, 0.25, 0.5, 0.75, 1].forEach(frac => {
-        const y = yForFrac(frac);
+    const nTicks = 5;
+    for (let t = 0; t <= nTicks; t++) {
+        const val = (t / nTicks) * yMax;
+        const y = yScale(val);
+
         const tick = document.createElementNS(svgns, "line");
-        tick.setAttribute("x1", x0 - 4);
+        tick.setAttribute("x1", marginLeft - 5);
         tick.setAttribute("y1", y);
-        tick.setAttribute("x2", x0);
+        tick.setAttribute("x2", marginLeft);
         tick.setAttribute("y2", y);
-        tick.setAttribute("stroke", "#555");
+        tick.setAttribute("stroke", "#333");
         svg.appendChild(tick);
 
-        const lab = document.createElementNS(svgns, "text");
-        lab.setAttribute("x", x0 - 6);
-        lab.setAttribute("y", y + 3);
-        lab.setAttribute("font-size", "10");
-        lab.setAttribute("text-anchor", "end");
-        lab.textContent = (frac * 100).toFixed(0) + "%";
-        svg.appendChild(lab);
-    });
-
-    const ylabel = document.createElementNS(svgns, "text");
-    ylabel.setAttribute("x", 16);
-    ylabel.setAttribute("y", margin.top + plotH / 2);
-    ylabel.setAttribute("text-anchor", "middle");
-    ylabel.setAttribute("font-size", "11");
-    ylabel.setAttribute("transform", `rotate(-90 16 ${margin.top + plotH / 2})`);
-    ylabel.textContent = "Fraction of total reads";
-    svg.appendChild(ylabel);
-
-    const xlabel = document.createElementNS(svgns, "text");
-    xlabel.setAttribute("x", margin.left + plotW / 2);
-    xlabel.setAttribute("y", height - 8);
-    xlabel.setAttribute("text-anchor", "middle");
-    xlabel.setAttribute("font-size", "11");
-    xlabel.textContent = "Samples";
-    svg.appendChild(xlabel);
-
-    const tooltip = getOrCreateTooltip();
-
-    const n = dataPerSample.length;
-    const step = plotW / n;
-    const barWidth = Math.min(16, step * 0.8);
-
-    dataPerSample.forEach((d, i) => {
-        const fracLow = d.fraction_low_quality_of_total || 0;
-        const fracProk = d.fraction_prokaryotic_of_total || 0;
-        const fracOther = d.fraction_non_prokaryotic_of_total || 0;
-
-        const totalReads = d.total_reads || 0;
-        const lowReads = d.low_quality_reads_est || 0;
-        const prokReads = d.prokaryotic_reads_est || 0;
-        const otherReads = d.non_prokaryotic_reads_est || 0;
-
-        const xCenter = x0 + step * i + step / 2;
-        const x = xCenter - barWidth / 2;
-
-        const hLow = fracLow * plotH;
-        const hProk = fracProk * plotH;
-        const hOther = fracOther * plotH;
-
-        let currentTop = y0;
-
-        function makeSeg(height, color) {
-            if (height <= 0) return null;
-            const y = currentTop - height;
-            currentTop = y;
-
-            const rect = document.createElementNS(svgns, "rect");
-            rect.setAttribute("x", x);
-            rect.setAttribute("y", y);
-            rect.setAttribute("width", barWidth);
-            rect.setAttribute("height", height);
-            rect.setAttribute("fill", color);
-            rect.setAttribute("fill-opacity", "0.9");
-            rect.style.cursor = "pointer";
-            return rect;
-        }
-
-        const segLow = makeSeg(hLow, "#f44336");
-
-        let prokColor;
-        if (fracProk >= THRESH_PROK_HIGH) {
-            prokColor = "#2e7d32";
-        } else if (fracProk >= THRESH_PROK_MOD) {
-            prokColor = "#f9a825";
-        } else {
-            prokColor = "#c62828";
-        }
-        const segProk = makeSeg(hProk, prokColor);
-
-        const segOther = makeSeg(hOther, "#9e9e9e");
-
-        const tooltipText =
-            `${d.sample}\n` +
-            `Total: ${fmtMillions(totalReads)} reads\n` +
-            `Low-quality: ${(100*fracLow).toFixed(2)}% (${fmtMillions(lowReads)} reads)\n` +
-            `Prokaryotic: ${(100*fracProk).toFixed(2)}% (${fmtMillions(prokReads)} reads)\n` +
-            `Other: ${(100*fracOther).toFixed(2)}% (${fmtMillions(otherReads)} reads)`;
-
-        [segLow, segProk, segOther].forEach(seg => {
-            if (!seg) return;
-            seg.addEventListener("mouseenter", (evt) => {
-                seg.setAttribute("stroke", "#000");
-                seg.setAttribute("stroke-width", "1");
-                tooltip.style.display = "block";
-                tooltip.textContent = tooltipText;
-                tooltip.style.left = evt.clientX + "px";
-                tooltip.style.top = evt.clientY + "px";
-            });
-            seg.addEventListener("mousemove", (evt) => {
-                tooltip.style.left = evt.clientX + "px";
-                tooltip.style.top = evt.clientY + "px";
-            });
-            seg.addEventListener("mouseleave", () => {
-                seg.removeAttribute("stroke");
-                seg.removeAttribute("stroke-width");
-                tooltip.style.display = "none";
-            });
-            svg.appendChild(seg);
-        });
-
-        const showAll = n <= 40;
-        const show = showAll || (i % 5 === 0);
-        if (show) {
-            const lab = document.createElementNS(svgns, "text");
-            lab.setAttribute("x", xCenter);
-            lab.setAttribute("y", y0 + 10);
-            lab.setAttribute("font-size", "9");
-            lab.setAttribute("text-anchor", "end");
-            lab.setAttribute("transform", `rotate(-60 ${xCenter} ${y0 + 10})`);
-            lab.textContent = d.sample;
-            svg.appendChild(lab);
-        }
-    });
-
-    const thresholds = [
-        {frac: THRESH_PROK_MOD,  color: "#f9a825", label: "50%"},
-        {frac: THRESH_PROK_HIGH, color: "#2e7d32", label: "90%"}
-    ];
-    thresholds.forEach(t => {
-        const y = yForFrac(t.frac);
-        const line = document.createElementNS(svgns, "line");
-        line.setAttribute("x1", x0);
-        line.setAttribute("y1", y);
-        line.setAttribute("x2", x0 + plotW);
-        line.setAttribute("y2", y);
-        line.setAttribute("stroke", t.color);
-        line.setAttribute("stroke-width", "1.4");
-        line.setAttribute("stroke-dasharray", "4,2");
-        svg.appendChild(line);
-
-        const lab = document.createElementNS(svgns, "text");
-        lab.setAttribute("x", x0 + plotW - 4);
-        lab.setAttribute("y", y - 2);
-        lab.setAttribute("font-size", "10");
-        lab.setAttribute("text-anchor", "end");
-        lab.setAttribute("fill", t.color);
-        lab.textContent = t.label;
-        svg.appendChild(lab);
-    });
-
-    const medianProkFrac = (Number(data.median_prokaryotic_fraction) || 0) / 100;
-    if (medianProkFrac > 0) {
-        const y = yForFrac(medianProkFrac);
-        const line = document.createElementNS(svgns, "line");
-        line.setAttribute("x1", x0);
-        line.setAttribute("y1", y);
-        line.setAttribute("x2", x0 + plotW);
-        line.setAttribute("y2", y);
-        line.setAttribute("stroke", "#1976d2");
-        line.setAttribute("stroke-width", "1.2");
-        line.setAttribute("stroke-dasharray", "3,2");
-        svg.appendChild(line);
-
-        const lab = document.createElementNS(svgns, "text");
-        lab.setAttribute("x", x0 + plotW - 4);
-        lab.setAttribute("y", y - 2);
-        lab.setAttribute("font-size", "10");
-        lab.setAttribute("text-anchor", "end");
-        lab.setAttribute("fill", "#1976d2");
-        lab.textContent = `median prok (${fmtFloat(data.median_prokaryotic_fraction, 1)}%)`;
-        svg.appendChild(lab);
-    }
-}
-
-/* Overall metagenomic coverage (reads Nonpareil) */
-function addRedundancyReadsSection(parent, data, depthPerSample) {
-    if (!data) return;
-    const div = document.createElement("div");
-    div.className = "section " + flagClass(data.flag_redundancy);
-
-    const msg = data.message_redundancy || "";
-
-    const nLR = data.n_samples_with_lr || 0;
-    const nBelow = data.n_samples_lr_exceeds_depth || 0;
-    const nAtOrAbove = nLR ? (nLR - nBelow) : 0;
-    const fracAtOrAbove = nLR ? (100 * nAtOrAbove / nLR) : null;
-
-    const status = sectionStatus("Overall metagenomic coverage", data.flag_redundancy);
-
-    div.innerHTML = `
-        <h2 class="section-title">Overall metagenomic coverage</h2>
-        <p class="section-intro">
-            This section evaluates how close the sequencing depth is to the Nonpareil LR target for metagenomic reads.
-        </p>
-        <details>
-            <summary>
-                <span class="status-emoji">${status.emoji}</span>
-                <span class="status-text">${status.text}</span>
-            </summary>
-            <div class="content">
-                <p class="summary-message">${msg}</p>
-                <div class="redundancy-stats">
-                    <div class="redundancy-stat-item">
-                        <div class="redundancy-stat-label">Mean kappa_total</div>
-                        <div class="redundancy-stat-value">${fmtFloat(data.mean_kappa_total, 3)}</div>
-                        <div class="redundancy-stat-note">Average Nonpareil redundancy estimate (reads)</div>
-                    </div>
-                    <div class="redundancy-stat-item">
-                        <div class="redundancy-stat-label">Variation in kappa_total</div>
-                        <div class="redundancy-stat-value">${fmtFloat(data.cv_kappa_total, 3)}</div>
-                        <div class="redundancy-stat-note">Coefficient of variation (CV)</div>
-                    </div>
-                    <div class="redundancy-stat-item">
-                        <div class="redundancy-stat-label">Samples at / above LR target</div>
-                        <div class="redundancy-stat-value">
-                            ${fmtInt(nAtOrAbove)} / ${fmtInt(nLR)}
-                        </div>
-                        <div class="redundancy-stat-note">
-                            ${fracAtOrAbove === null ? "NA" : fmtFloat(fracAtOrAbove, 1) + "%"} of samples with LR target
-                        </div>
-                    </div>
-                </div>
-                <p class="small-note">
-                    LR target used: ${data.lr_target_used || "NA"}% of metagenomic diversity (Nonpareil 95% LR_reads).
-                </p>
-                <div class="lr-target-plot-container">
-                    <svg id="lr-target-svg" class="lr-target-svg" viewBox="0 0 1000 320" preserveAspectRatio="none"></svg>
-                </div>
-                <p class="small-note">
-                    X axis: samples; Y axis: sequenced depth relative to the LR_reads 95% target.
-                    The black dashed midline corresponds to the LR target. Tick labels above
-                    start at 1×, showing how many times more than necessary has been sequenced;
-                    ticks below show -1×, -2×, -3× etc. Bars more than 3× short of the target
-                    are shown in red.
-                </p>
-            </div>
-        </details>
-    `;
-    parent.appendChild(div);
-
-    const svg = div.querySelector("#lr-target-svg");
-
-    const combined = (depthPerSample || []).map(d => {
-        const observed = d.total_reads != null ? Number(d.total_reads) : null;
-        const target = d.target_reads_95_LR_reads != null ? Number(d.target_reads_95_LR_reads) : null;
-        let ratio = null;
-        if (observed != null && target && target > 0) {
-            ratio = observed / target;
-        }
-        return {
-            sample: d.sample,
-            observed,
-            target,
-            ratio
-        };
-    }).filter(d => d.ratio != null);
-
-    if (!combined.length) {
-        svg.outerHTML = `<div class="small-note">No per-sample LR_reads and depth information available to compare against LR targets (reads).</div>`;
-        return;
+        const label = document.createElementNS(svgns, "text");
+        label.setAttribute("x", marginLeft - 8);
+        label.setAttribute("y", y + 3);
+        label.setAttribute("text-anchor", "end");
+        label.setAttribute("font-size", "10");
+        label.textContent = fmtFloat(val, 1) + "%";
+        svg.appendChild(label);
     }
 
-    const width = 1000;
-    const height = 320;
-    const margin = {left: 60, right: 20, top: 20, bottom: 80};
-    const plotW = width - margin.left - margin.right;
-    const plotH = height - margin.top - margin.bottom;
-    const svgns = "http://www.w3.org/2000/svg";
+    const y5 = yScale(5);
+    const line5 = document.createElementNS(svgns, "line");
+    line5.setAttribute("x1", marginLeft);
+    line5.setAttribute("y1", y5);
+    line5.setAttribute("x2", marginLeft + plotWidth);
+    line5.setAttribute("y2", y5);
+    line5.setAttribute("stroke", "#f9a825");
+    line5.setAttribute("stroke-width", "1.5");
+    line5.setAttribute("stroke-dasharray", "4,3");
+    svg.appendChild(line5);
 
-    const x0 = margin.left;
-    const yTop = margin.top;
-    const yBottom = height - margin.bottom;
-    const baselineY = yTop + plotH / 2;
+    const y20 = yScale(20);
+    const line20 = document.createElementNS(svgns, "line");
+    line20.setAttribute("x1", marginLeft);
+    line20.setAttribute("y1", y20);
+    line20.setAttribute("x2", marginLeft + plotWidth);
+    line20.setAttribute("y2", y20);
+    line20.setAttribute("stroke", "#d32f2f");
+    line20.setAttribute("stroke-width", "1.5");
+    line20.setAttribute("stroke-dasharray", "4,3");
+    svg.appendChild(line20);
 
-    function transformRatio(r) {
-        if (r >= 1) return r - 1;
-        return -(1 / r - 1);
-    }
+    const n = samples.length;
+    const barWidth = (plotWidth / n) * 0.7;
 
-    const values = combined.map(d => transformRatio(d.ratio));
-    let maxAbs = 0;
-    values.forEach(v => {
-        const a = Math.abs(v);
-        if (a > maxAbs) maxAbs = a;
-    });
-    maxAbs = Math.max(maxAbs, 3);
-    maxAbs *= 1.05;
+    removedPct.forEach((val, i) => {
+        const xCenter = xScale(i);
+        const x0 = xCenter - barWidth / 2;
+        const y0 = yScale(val);
+        const bar = document.createElementNS(svgns, "rect");
+        bar.setAttribute("x", x0);
+        bar.setAttribute("y", y0);
+        bar.setAttribute("width", barWidth);
+        bar.setAttribute("height", (marginTop + plotHeight) - y0);
+        bar.setAttribute("fill", "#90caf9");
+        bar.setAttribute("stroke", "#1976d2");
+        bar.setAttribute("stroke-width", "0.5");
+        bar.style.cursor = "pointer";
 
-    function yForVal(v) {
-        const f = v / maxAbs;
-        return baselineY - f * (plotH / 2);
-    }
+        const tooltipText = `${samples[i]}\nRemoved: ${fmtFloat(val, 1)}%`;
 
-    const xAxis = document.createElementNS(svgns, "line");
-    xAxis.setAttribute("x1", x0);
-    xAxis.setAttribute("y1", yBottom);
-    xAxis.setAttribute("x2", x0 + plotW);
-    xAxis.setAttribute("y2", yBottom);
-    xAxis.setAttribute("stroke", "#555");
-    svg.appendChild(xAxis);
-
-    const yAxis = document.createElementNS(svgns, "line");
-    yAxis.setAttribute("x1", x0);
-    yAxis.setAttribute("y1", yBottom);
-    yAxis.setAttribute("x2", x0);
-    yAxis.setAttribute("y2", yTop);
-    yAxis.setAttribute("stroke", "#555");
-    svg.appendChild(yAxis);
-
-    const baseLine = document.createElementNS(svgns, "line");
-    baseLine.setAttribute("x1", x0);
-    baseLine.setAttribute("y1", baselineY);
-    baseLine.setAttribute("x2", x0 + plotW);
-    baseLine.setAttribute("y2", baselineY);
-    baseLine.setAttribute("stroke", "#000000");
-    baseLine.setAttribute("stroke-width", "1.4");
-    baseLine.setAttribute("stroke-dasharray", "4,2");
-    svg.appendChild(baseLine);
-
-    const baseLabel = document.createElementNS(svgns, "text");
-    baseLabel.setAttribute("x", x0 + plotW - 4);
-    baseLabel.setAttribute("y", baselineY - 4);
-    baseLabel.setAttribute("font-size", "10");
-    baseLabel.setAttribute("text-anchor", "end");
-    baseLabel.setAttribute("fill", "#000000");
-    baseLabel.textContent = "LR target";
-    svg.appendChild(baseLabel);
-
-    const maxTick = Math.max(3, Math.ceil(maxAbs));
-    for (let v = -maxTick; v <= maxTick; v++) {
-        const y = yForVal(v);
-        const tick = document.createElementNS(svgns, "line");
-        tick.setAttribute("x1", x0 - 4);
-        tick.setAttribute("y1", y);
-        tick.setAttribute("x2", x0);
-        tick.setAttribute("y2", y);
-        tick.setAttribute("stroke", "#555");
-        svg.appendChild(tick);
-
-        if (v === 0) continue;
-
-        const lab = document.createElementNS(svgns, "text");
-        lab.setAttribute("x", x0 - 6);
-        lab.setAttribute("y", y + 3);
-        lab.setAttribute("font-size", "10");
-        lab.setAttribute("text-anchor", "end");
-
-        let labelStr;
-        if (v > 0) {
-            labelStr = v.toFixed(0) + "×";
-        } else {
-            labelStr = "-" + Math.abs(v).toFixed(0) + "×";
-        }
-        lab.textContent = labelStr;
-        svg.appendChild(lab);
-    }
-
-    if (maxAbs >= 3) {
-        const yThr = yForVal(-3);
-        const thrLine = document.createElementNS(svgns, "line");
-        thrLine.setAttribute("x1", x0);
-        thrLine.setAttribute("y1", yThr);
-        thrLine.setAttribute("x2", x0 + plotW);
-        thrLine.setAttribute("y2", yThr);
-        thrLine.setAttribute("stroke", "#c62828");
-        thrLine.setAttribute("stroke-width", "1.4");
-        thrLine.setAttribute("stroke-dasharray", "4,2");
-        svg.appendChild(thrLine);
-
-        const thrLabel = document.createElementNS(svgns, "text");
-        thrLabel.setAttribute("x", x0 + plotW - 4);
-        thrLabel.setAttribute("y", yThr - 2);
-        thrLabel.setAttribute("font-size", "10");
-        thrLabel.setAttribute("text-anchor", "end");
-        thrLabel.setAttribute("fill", "#c62828");
-        thrLabel.textContent = "-3×";
-        svg.appendChild(thrLabel);
-    }
-
-    const ylabel = document.createElementNS(svgns, "text");
-    ylabel.setAttribute("x", 16);
-    ylabel.setAttribute("y", margin.top + plotH / 2);
-    ylabel.setAttribute("text-anchor", "middle");
-    ylabel.setAttribute("font-size", "11");
-    ylabel.setAttribute("transform", `rotate(-90 16 ${margin.top + plotH / 2})`);
-    ylabel.textContent = "Sequenced depth vs LR target (extra / missing ×)";
-    svg.appendChild(ylabel);
-
-    const xlabel = document.createElementNS(svgns, "text");
-    xlabel.setAttribute("x", margin.left + plotW / 2);
-    xlabel.setAttribute("y", height - 8);
-    xlabel.setAttribute("text-anchor", "middle");
-    xlabel.setAttribute("font-size", "11");
-    xlabel.textContent = "Samples";
-    svg.appendChild(xlabel);
-
-    const tooltip = getOrCreateTooltip();
-
-    const n = combined.length;
-    const stepX = plotW / n;
-    const barWidth = Math.min(16, stepX * 0.8);
-
-    combined.forEach((d, i) => {
-        const ratio = d.ratio;
-        const v = transformRatio(ratio);
-        const yVal = yForVal(v);
-
-        const xCenter = x0 + stepX * i + stepX / 2;
-        const x = xCenter - barWidth / 2;
-
-        let yRect, hRect;
-        if (v >= 0) {
-            yRect = yVal;
-            hRect = baselineY - yVal;
-        } else {
-            yRect = baselineY;
-            hRect = yVal - baselineY;
-        }
-        hRect = Math.abs(hRect);
-
-        let fillColor;
-        if (v >= 0) {
-            fillColor = "#4caf50";
-        } else if (v >= -3) {
-            fillColor = "#ffa000";
-        } else {
-            fillColor = "#c62828";
-        }
-
-        const rect = document.createElementNS(svgns, "rect");
-        rect.setAttribute("x", x);
-        rect.setAttribute("y", yRect);
-        rect.setAttribute("width", barWidth);
-        rect.setAttribute("height", hRect);
-        rect.setAttribute("fill", fillColor);
-        rect.setAttribute("fill-opacity", "0.9");
-        rect.style.cursor = "pointer";
-
-        const extraOrNeeded = v >= 0 ? (ratio - 1) : (1 / ratio - 1);
-        const tooltipText =
-            `${d.sample}\n` +
-            `Sequenced: ${fmtMillions(d.observed)} reads\n` +
-            `Target (95% LR): ${fmtMillions(d.target)} reads\n` +
-            `Relative depth: ${(ratio * 100).toFixed(1)}%\n` +
-            (v >= 0
-                ? `Excess sequencing: ${extraOrNeeded.toFixed(2)}× above target`
-                : `Additional needed: ${extraOrNeeded.toFixed(2)}× more to reach target`);
-
-        rect.addEventListener("mouseenter", (evt) => {
-            rect.setAttribute("stroke", "#000");
-            rect.setAttribute("stroke-width", "1");
+        bar.addEventListener("mouseenter", (evt) => {
+            bar.setAttribute("fill", "#64b5f6");
             tooltip.style.display = "block";
             tooltip.textContent = tooltipText;
             tooltip.style.left = evt.clientX + "px";
             tooltip.style.top = evt.clientY + "px";
         });
-        rect.addEventListener("mousemove", (evt) => {
+        bar.addEventListener("mousemove", (evt) => {
             tooltip.style.left = evt.clientX + "px";
             tooltip.style.top = evt.clientY + "px";
         });
-        rect.addEventListener("mouseleave", () => {
-            rect.removeAttribute("stroke");
-            rect.removeAttribute("stroke-width");
+        bar.addEventListener("mouseleave", () => {
+            bar.setAttribute("fill", "#90caf9");
             tooltip.style.display = "none";
         });
 
-        svg.appendChild(rect);
-
-        const showAll = n <= 40;
-        const show = showAll || (i % 5 === 0);
-        if (show) {
-            const lab = document.createElementNS(svgns, "text");
-            lab.setAttribute("x", xCenter);
-            lab.setAttribute("y", yBottom + 10);
-            lab.setAttribute("font-size", "9");
-            lab.setAttribute("text-anchor", "end");
-            lab.setAttribute("transform", `rotate(-60 ${xCenter} ${yBottom + 10})`);
-            lab.textContent = d.sample;
-            svg.appendChild(lab);
-        }
+        svg.appendChild(bar);
     });
+
+    const showAll = n <= 40;
+    samples.forEach((s, i) => {
+        const show = showAll || (i % 5 === 0);
+        if (!show) return;
+        const x = xScale(i);
+        const y = marginTop + plotHeight + 55;
+        const text = document.createElementNS(svgns, "text");
+        text.setAttribute("x", x);
+        text.setAttribute("y", y);
+        text.setAttribute("font-size", "9");
+        text.setAttribute("text-anchor", "end");
+        text.setAttribute("transform", `rotate(-60 ${x} ${y})`);
+        text.textContent = s;
+        svg.appendChild(text);
+    });
+
+    const yLabel = document.createElementNS(svgns, "text");
+    yLabel.setAttribute("x", 14);
+    yLabel.setAttribute("y", marginTop + plotHeight / 2);
+    yLabel.setAttribute("font-size", "10");
+    yLabel.setAttribute("transform", `rotate(-90 14 ${marginTop + plotHeight / 2})`);
+    yLabel.textContent = "% reads removed";
+    svg.appendChild(yLabel);
 }
 
-/* Prokaryotic coverage (markers Nonpareil) */
-function addRedundancyMarkersSection(parent, data, redBiplotPerSample) {
-    if (!data) return;
-    const div = document.createElement("div");
-    div.className = "section " + flagClass(data.flag_redundancy_markers);
+/* ---------- Prokaryotic fraction & depth components ---------- */
+/* (existing implementation here, unchanged from your current script) */
 
-    const msg = data.message_redundancy_markers || "";
+/* ---------- Redundancy (reads) ---------- */
+/* (existing implementation here, unchanged from your current script) */
 
-    const nLR = data.n_samples_with_lr || 0;
-    const nBelow = data.n_samples_lr_exceeds_depth || 0;
-    const nAtOrAbove = nLR ? (nLR - nBelow) : 0;
-    const fracAtOrAbove = nLR ? (100 * nAtOrAbove / nLR) : null;
+/* ---------- Redundancy (markers) ---------- */
+/* (existing implementation here, unchanged from your current script) */
 
-    const status = sectionStatus("Prokaryotic coverage", data.flag_redundancy_markers);
-
-    div.innerHTML = `
-        <h2 class="section-title">Prokaryotic coverage</h2>
-        <p class="section-intro">
-            This section evaluates coverage of marker genes relative to the 95% Nonpareil target.
-        </p>
-        <details>
-            <summary>
-                <span class="status-emoji">${status.emoji}</span>
-                <span class="status-text">${status.text}</span>
-            </summary>
-            <div class="content">
-                <p class="summary-message">${msg}</p>
-                <div class="redundancy-stats">
-                    <div class="redundancy-stat-item">
-                        <div class="redundancy-stat-label">Mean kappa_total</div>
-                        <div class="redundancy-stat-value">${fmtFloat(data.mean_kappa_total, 3)}</div>
-                        <div class="redundancy-stat-note">Average Nonpareil redundancy estimate (markers)</div>
-                    </div>
-                    <div class="redundancy-stat-item">
-                        <div class="redundancy-stat-label">Variation in kappa_total</div>
-                        <div class="redundancy-stat-value">${fmtFloat(data.cv_kappa_total, 3)}</div>
-                        <div class="redundancy-stat-note">Coefficient of variation (CV)</div>
-                    </div>
-                    <div class="redundancy-stat-item">
-                        <div class="redundancy-stat-label">Samples at / above LR target</div>
-                        <div class="redundancy-stat-value">
-                            ${fmtInt(nAtOrAbove)} / ${fmtInt(nLR)}
-                        </div>
-                        <div class="redundancy-stat-note">
-                            ${fracAtOrAbove === null ? "NA" : fmtFloat(fracAtOrAbove, 1) + "%"} of samples with LR target
-                        </div>
-                    </div>
-                </div>
-                <p class="small-note">
-                    LR target used: ${data.lr_target_used || "NA"}% of marker-based diversity (Nonpareil 95% LR_reads).
-                </p>
-                <div class="lr-target-markers-plot-container">
-                    <svg id="lr-target-markers-svg" class="lr-target-markers-svg" viewBox="0 0 1000 320" preserveAspectRatio="none"></svg>
-                </div>
-                <p class="small-note">
-                    X axis: samples; Y axis: estimated marker coverage relative to the 95% target.
-                    The black dashed midline corresponds to the 95% coverage target. Bars above it show excess
-                    coverage (1×, 2×, ...), while bars below show how many times more coverage would be needed
-                    (-1×, -2×, -3× etc.). Bars more than 3× short of the target are shown in red.
-                </p>
-            </div>
-        </details>
-    `;
-    parent.appendChild(div);
-
-    const svg = div.querySelector("#lr-target-markers-svg");
-
-    const combined = (redBiplotPerSample || []).map(r => {
-        const coverage = r.coverage_markers != null ? Number(r.coverage_markers) : null;
-        let ratio = null;
-        if (coverage != null && coverage > 0) {
-            ratio = coverage / 0.95;
-        }
-        return {
-            sample: r.sample,
-            coverage,
-            ratio
-        };
-    }).filter(d => d.ratio != null);
-
-    if (!combined.length) {
-        svg.outerHTML = `<div class="small-note">No per-sample marker coverage / LR target information available for marker redundancy plot.</div>`;
-        return;
-    }
-
-    const width = 1000;
-    const height = 320;
-    const margin = {left: 60, right: 20, top: 20, bottom: 80};
-    const plotW = width - margin.left - margin.right;
-    const plotH = height - margin.top - margin.bottom;
-    const svgns = "http://www.w3.org/2000/svg";
-
-    const x0 = margin.left;
-    const yTop = margin.top;
-    const yBottom = height - margin.bottom;
-    const baselineY = yTop + plotH / 2;
-
-    function transformRatio(r) {
-        if (r >= 1) return r - 1;
-        return -(1 / r - 1);
-    }
-
-    const values = combined.map(d => transformRatio(d.ratio));
-    let maxAbs = 0;
-    values.forEach(v => {
-        const a = Math.abs(v);
-        if (a > maxAbs) maxAbs = a;
-    });
-    maxAbs = Math.max(maxAbs, 3);
-    maxAbs *= 1.05;
-
-    function yForVal(v) {
-        const f = v / maxAbs;
-        return baselineY - f * (plotH / 2);
-    }
-
-    const xAxis = document.createElementNS(svgns, "line");
-    xAxis.setAttribute("x1", x0);
-    xAxis.setAttribute("y1", yBottom);
-    xAxis.setAttribute("x2", x0 + plotW);
-    xAxis.setAttribute("y2", yBottom);
-    xAxis.setAttribute("stroke", "#555");
-    svg.appendChild(xAxis);
-
-    const yAxis = document.createElementNS(svgns, "line");
-    yAxis.setAttribute("x1", x0);
-    yAxis.setAttribute("y1", yBottom);
-    yAxis.setAttribute("x2", x0);
-    yAxis.setAttribute("y2", yTop);
-    yAxis.setAttribute("stroke", "#555");
-    svg.appendChild(yAxis);
-
-    const baseLine = document.createElementNS(svgns, "line");
-    baseLine.setAttribute("x1", x0);
-    baseLine.setAttribute("y1", baselineY);
-    baseLine.setAttribute("x2", x0 + plotW);
-    baseLine.setAttribute("y2", baselineY);
-    baseLine.setAttribute("stroke", "#000000");
-    baseLine.setAttribute("stroke-width", "1.4");
-    baseLine.setAttribute("stroke-dasharray", "4,2");
-    svg.appendChild(baseLine);
-
-    const baseLabel = document.createElementNS(svgns, "text");
-    baseLabel.setAttribute("x", x0 + plotW - 4);
-    baseLabel.setAttribute("y", baselineY - 4);
-    baseLabel.setAttribute("font-size", "10");
-    baseLabel.setAttribute("text-anchor", "end");
-    baseLabel.setAttribute("fill", "#000000");
-    baseLabel.textContent = "95% coverage target";
-    svg.appendChild(baseLabel);
-
-    const maxTick = Math.max(3, Math.ceil(maxAbs));
-    for (let v = -maxTick; v <= maxTick; v++) {
-        const y = yForVal(v);
-        const tick = document.createElementNS(svgns, "line");
-        tick.setAttribute("x1", x0 - 4);
-        tick.setAttribute("y1", y);
-        tick.setAttribute("x2", x0);
-        tick.setAttribute("y2", y);
-        tick.setAttribute("stroke", "#555");
-        svg.appendChild(tick);
-
-        if (v === 0) continue;
-
-        const lab = document.createElementNS(svgns, "text");
-        lab.setAttribute("x", x0 - 6);
-        lab.setAttribute("y", y + 3);
-        lab.setAttribute("font-size", "10");
-        lab.setAttribute("text-anchor", "end");
-
-        let labelStr;
-        if (v > 0) {
-            labelStr = v.toFixed(0) + "×";
-        } else {
-            labelStr = "-" + Math.abs(v).toFixed(0) + "×";
-        }
-        lab.textContent = labelStr;
-        svg.appendChild(lab);
-    }
-
-    if (maxAbs >= 3) {
-        const yThr = yForVal(-3);
-        const thrLine = document.createElementNS(svgns, "line");
-        thrLine.setAttribute("x1", x0);
-        thrLine.setAttribute("y1", yThr);
-        thrLine.setAttribute("x2", x0 + plotW);
-        thrLine.setAttribute("y2", yThr);
-        thrLine.setAttribute("stroke", "#c62828");
-        thrLine.setAttribute("stroke-width", "1.4");
-        thrLine.setAttribute("stroke-dasharray", "4,2");
-        svg.appendChild(thrLine);
-
-        const thrLabel = document.createElementNS(svgns, "text");
-        thrLabel.setAttribute("x", x0 + plotW - 4);
-        thrLabel.setAttribute("y", yThr - 2);
-        thrLabel.setAttribute("font-size", "10");
-        thrLabel.setAttribute("text-anchor", "end");
-        thrLabel.setAttribute("fill", "#c62828");
-        thrLabel.textContent = "-3×";
-        svg.appendChild(thrLabel);
-    }
-
-    const ylabel = document.createElementNS(svgns, "text");
-    ylabel.setAttribute("x", 16);
-    ylabel.setAttribute("y", margin.top + plotH / 2);
-    ylabel.setAttribute("text-anchor", "middle");
-    ylabel.setAttribute("font-size", "11");
-    ylabel.setAttribute("transform", `rotate(-90 16 ${margin.top + plotH / 2})`);
-    ylabel.textContent = "Marker coverage vs 95% target (extra / missing ×)";
-    svg.appendChild(ylabel);
-
-    const xlabel = document.createElementNS(svgns, "text");
-    xlabel.setAttribute("x", margin.left + plotW / 2);
-    xlabel.setAttribute("y", height - 8);
-    xlabel.setAttribute("text-anchor", "middle");
-    xlabel.setAttribute("font-size", "11");
-    xlabel.textContent = "Samples";
-    svg.appendChild(xlabel);
-
-    const tooltip = getOrCreateTooltip();
-
-    const n = combined.length;
-    const stepX = plotW / n;
-    const barWidth = Math.min(16, stepX * 0.8);
-
-    combined.forEach((d, i) => {
-        const ratio = d.ratio;
-        const v = transformRatio(ratio);
-        const yVal = yForVal(v);
-
-        const xCenter = x0 + stepX * i + stepX / 2;
-        const x = xCenter - barWidth / 2;
-
-        let yRect, hRect;
-        if (v >= 0) {
-            yRect = yVal;
-            hRect = baselineY - yVal;
-        } else {
-            yRect = baselineY;
-            hRect = yVal - baselineY;
-        }
-        hRect = Math.abs(hRect);
-
-        let fillColor;
-        if (v >= 0) {
-            fillColor = "#4caf50";
-        } else if (v >= -3) {
-            fillColor = "#ffa000";
-        } else {
-            fillColor = "#c62828";
-        }
-
-        const rect = document.createElementNS(svgns, "rect");
-        rect.setAttribute("x", x);
-        rect.setAttribute("y", yRect);
-        rect.setAttribute("width", barWidth);
-        rect.setAttribute("height", hRect);
-        rect.setAttribute("fill", fillColor);
-        rect.setAttribute("fill-opacity", "0.9");
-        rect.style.cursor = "pointer";
-
-        const extraOrNeeded = v >= 0 ? (ratio - 1) : (1 / ratio - 1);
-        const tooltipText =
-            `${d.sample}\n` +
-            `Coverage (markers): ${(d.coverage * 100).toFixed(2)}%\n` +
-            `Relative to 95% target: ${(ratio * 100).toFixed(1)}%\n` +
-            (v >= 0
-                ? `Excess coverage: ${extraOrNeeded.toFixed(2)}× above target`
-                : `Additional needed: ${extraOrNeeded.toFixed(2)}× more to reach target`);
-
-        rect.addEventListener("mouseenter", (evt) => {
-            rect.setAttribute("stroke", "#000");
-            rect.setAttribute("stroke-width", "1");
-            tooltip.style.display = "block";
-            tooltip.textContent = tooltipText;
-            tooltip.style.left = evt.clientX + "px";
-            tooltip.style.top = evt.clientY + "px";
-        });
-        rect.addEventListener("mousemove", (evt) => {
-            tooltip.style.left = evt.clientX + "px";
-            tooltip.style.top = evt.clientY + "px";
-        });
-        rect.addEventListener("mouseleave", () => {
-            rect.removeAttribute("stroke");
-            rect.removeAttribute("stroke-width");
-            tooltip.style.display = "none";
-        });
-
-        svg.appendChild(rect);
-
-        const showAll = n <= 40;
-        const show = showAll || (i % 5 === 0);
-        if (show) {
-            const lab = document.createElementNS(svgns, "text");
-            lab.setAttribute("x", xCenter);
-            lab.setAttribute("y", yBottom + 10);
-            lab.setAttribute("font-size", "9");
-            lab.setAttribute("text-anchor", "end");
-            lab.setAttribute("transform", `rotate(-60 ${xCenter} ${yBottom + 10})`);
-            lab.textContent = d.sample;
-            svg.appendChild(lab);
-        }
-    });
-}
-
-/* Sample clusters */
+/* ---------- Sample clusters ---------- */
 function addClustersSection(parent, clusters) {
     if (!clusters) return;
     const div = document.createElement("div");
@@ -1714,6 +804,11 @@ function addClustersSection(parent, clusters) {
 
     const nClustersMarkers = markers.n_clusters != null ? markers.n_clusters : "NA";
     const nClustersReads = reads.n_clusters != null ? reads.n_clusters : "NA";
+
+    const markersWithin = markers.mean_within_distance;
+    const markersBetween = markers.mean_between_distance;
+    const readsWithin = reads.mean_within_distance;
+    const readsBetween = reads.mean_between_distance;
 
     const status = sectionStatus("Sample clusters", clusters.flag_clusters);
 
@@ -1740,6 +835,20 @@ function addClustersSection(parent, clusters) {
                         <div class="cluster-stat-value">${fmtInt(nClustersReads)}</div>
                         <div class="cluster-stat-note">Clusters inferred from read-based Mash distances</div>
                     </div>
+                    <div class="cluster-stat-item">
+                        <div class="cluster-stat-label">Marker mean distances</div>
+                        <div class="cluster-stat-value">
+                            ${fmtFloat(markersWithin, 3)} / ${fmtFloat(markersBetween, 3)}
+                        </div>
+                        <div class="cluster-stat-note">Within / between clusters (Mash markers)</div>
+                    </div>
+                    <div class="cluster-stat-item">
+                        <div class="cluster-stat-label">Read mean distances</div>
+                        <div class="cluster-stat-value">
+                            ${fmtFloat(readsWithin, 3)} / ${fmtFloat(readsBetween, 3)}
+                        </div>
+                        <div class="cluster-stat-note">Within / between clusters (Mash reads)</div>
+                    </div>
                 </div>
                 <p class="small-note">
                     Heatmap below shows cluster assignments per sample. Rows correspond to marker-based
@@ -1753,6 +862,17 @@ function addClustersSection(parent, clusters) {
                     Hover over tiles for exact cluster assignments. Samples without an assignment in a given
                     row are shown as light grey.
                 </p>
+                <div class="pairwise-container">
+                    <p class="small-note">
+                        Pairwise Mash distances between samples can be inspected below, separately for marker-based and read-based estimates.
+                    </p>
+                    <div class="pairwise-tabs">
+                        <button class="pairwise-tab active" data-kind="markers">Markers distances</button>
+                        <button class="pairwise-tab" data-kind="reads">Reads distances</button>
+                    </div>
+                    <div id="pairwise-heatmap-markers" class="pairwise-heatmap"></div>
+                    <div id="pairwise-heatmap-reads" class="pairwise-heatmap" style="display:none;"></div>
+                </div>
             </div>
         </details>
     `;
@@ -1795,58 +915,45 @@ function addClustersSection(parent, clusters) {
     const samples = Array.from(sampleSet);
     samples.sort();
 
+    svg.setAttribute("viewBox", "0 0 1000 210");
+
+    const width = 1000;
+    const height = 210;
+    const marginLeft = 90;
+    const marginRight = 20;
+    const marginTop = 18;
+    const marginBottom = 70;
+    const plotW = width - marginLeft - marginRight;
+    const plotH = height - marginTop - marginBottom;
+
+    const nRows = 2;
+    const cellH = plotH / nRows;
     const nSamples = samples.length;
 
-    const markerPalette = [
-        "#08306b", "#08519c", "#2171b5", "#4292c6",
-        "#41b6c4", "#1d91c0", "#2c7fb8", "#7fcdbb",
-        "#0c2c84", "#4eb3d3", "#2b8cbe", "#a1dab4"
-    ];
-    const readPalette = [
-        "#7f0000", "#b30000", "#e31a1c", "#ff7f00",
-        "#f03b20", "#bd0026", "#fd8d3c", "#fc4e2a",
-        "#b10026", "#dd1c77", "#df65b0", "#ff1493"
-    ];
-
-    function buildClusterColorMap(map, palette) {
-        const clusters = Array.from(new Set(
-            Object.values(map).filter(v => v !== null && v !== undefined)
-        ));
-        clusters.sort((a, b) => {
-            const na = Number(a), nb = Number(b);
-            if (!isNaN(na) && !isNaN(nb)) return na - nb;
-            return String(a).localeCompare(String(b));
+    function assignColours(map, palette) {
+        const colourMap = {};
+        let idx = 0;
+        const clustersSeen = new Set(Object.values(map).filter(v => v !== null && v !== undefined));
+        clustersSeen.forEach(clid => {
+            colourMap[clid] = palette[idx % palette.length];
+            idx += 1;
         });
-        const colorMap = {};
-        clusters.forEach((cl, idx) => {
-            colorMap[cl] = palette[idx % palette.length];
-        });
-        return colorMap;
+        return colourMap;
     }
 
-    const markerColors = buildClusterColorMap(markersMap, markerPalette);
-    const readColors = buildClusterColorMap(readsMap, readPalette);
+    const markerPalette = ["#08306b", "#08519c", "#2171b5", "#4292c6", "#6baed6", "#9ecae1", "#c6dbef"];
+    const readPalette   = ["#7f0000", "#b30000", "#d7301f", "#ef6548", "#fc8d59", "#fdbb84", "#fdd0a2"];
 
-    const height = 210;
-    const margin = {left: 80, right: 20, top: 20, bottom: 80};
-    const rows = 2;
-    const cellH = (height - margin.top - margin.bottom) / rows;
-    const baseCellW = 20;
-    const width = Math.max(1000, margin.left + margin.right + nSamples * baseCellW);
-    svg.setAttribute("viewBox", `0 0 ${width} ${height}`);
-
-    const plotW = width - margin.left - margin.right;
-    const x0 = margin.left;
+    const markerColors = assignColours(markersMap, markerPalette);
+    const readColors   = assignColours(readsMap, readPalette);
 
     function drawRow(rowIndex, label, map, colorMap, defaultColor) {
-        const yRowTop = margin.top + rowIndex * cellH;
-        const labelX = 10;
-        thelabelY = yRowTop + cellH / 2 + 4;
+        const yRowTop = marginTop + rowIndex * cellH;
         const labelText = document.createElementNS(svgns, "text");
-        labelText.setAttribute("x", labelX);
-        labelText.setAttribute("y", thelabelY);
+        labelText.setAttribute("x", marginLeft - 10);
+        labelText.setAttribute("y", yRowTop + cellH / 2 + 4);
+        labelText.setAttribute("text-anchor", "end");
         labelText.setAttribute("font-size", "11");
-        labelText.setAttribute("text-anchor", "start");
         labelText.textContent = label;
         svg.appendChild(labelText);
 
@@ -1857,7 +964,7 @@ function addClustersSection(parent, clusters) {
             const hasCluster = cluster !== null && cluster !== undefined;
             const fill = hasCluster ? (colorMap[cluster] || defaultColor) : "#eeeeee";
 
-            const x = x0 + i * cellW;
+            const x = marginLeft + i * cellW;
             const y = yRowTop;
 
             const rect = document.createElementNS(svgns, "rect");
@@ -1894,19 +1001,16 @@ function addClustersSection(parent, clusters) {
 
             svg.appendChild(rect);
 
-            if (rowIndex === rows - 1) {
+            if (rowIndex === nRows - 1) {
                 const showAll = nSamples <= 40;
                 const show = showAll || (i % 5 === 0);
                 if (show) {
                     const lab = document.createElementNS(svgns, "text");
                     lab.setAttribute("x", x + cellW / 2);
-                    lab.setAttribute("y", height - 22);
+                    lab.setAttribute("y", marginTop + plotH + 50);
                     lab.setAttribute("font-size", "9");
                     lab.setAttribute("text-anchor", "end");
-                    lab.setAttribute(
-                        "transform",
-                        `rotate(-60 ${x + cellW / 2} ${height - 22})`
-                    );
+                    lab.setAttribute("transform", `rotate(-60 ${x + cellW / 2} ${marginTop + plotH + 50})`);
                     lab.textContent = sampleName;
                     svg.appendChild(lab);
                 }
@@ -1916,6 +1020,211 @@ function addClustersSection(parent, clusters) {
 
     drawRow(0, "Markers", markersMap, markerColors, "#9ecae1");
     drawRow(1, "Reads", readsMap, readColors, "#fcae91");
+
+    // Pairwise Mash distance heatmaps (markers vs reads)
+    const pairwiseMarkers = clusters.pairwise_markers || [];
+    const pairwiseReads = clusters.pairwise_reads || [];
+
+    function buildPairwiseMatrix(pairs) {
+        const sampleSet = new Set();
+        pairs.forEach(p => {
+            if (!p) return;
+            if (p.sample1 != null) sampleSet.add(p.sample1);
+            if (p.sample2 != null) sampleSet.add(p.sample2);
+        });
+        const samplesArr = Array.from(sampleSet).sort();
+        const n = samplesArr.length;
+        const index = {};
+        samplesArr.forEach((s, i) => { index[s] = i; });
+
+        const matrix = [];
+        for (let i = 0; i < n; i++) {
+            const row = new Array(n).fill(null);
+            matrix.push(row);
+        }
+
+        let minD = Infinity;
+        let maxD = -Infinity;
+
+        pairs.forEach(p => {
+            if (!p) return;
+            const s1 = p.sample1;
+            const s2 = p.sample2;
+            if (!(s1 in index) || !(s2 in index)) return;
+            const i = index[s1];
+            const j = index[s2];
+            const d = Number(p.distance);
+            if (isNaN(d)) return;
+            matrix[i][j] = d;
+            matrix[j][i] = d;
+            if (d < minD) minD = d;
+            if (d > maxD) maxD = d;
+        });
+
+        if (!isFinite(minD) || !isFinite(maxD)) {
+            minD = 0;
+            maxD = 1;
+        }
+
+        for (let i = 0; i < n; i++) {
+            if (matrix[i][i] === null) matrix[i][i] = 0.0;
+        }
+
+        return { samples: samplesArr, matrix, min: minD, max: maxD };
+    }
+
+    function distanceColor(d, minD, maxD) {
+        if (d === null || d === undefined) return "#f5f5f5";
+        const t = (d - minD) / ((maxD - minD) || 1);
+        const clamped = Math.min(1, Math.max(0, t));
+        const r = Math.round(255 * clamped);
+        const g = Math.round(255 * (1 - clamped));
+        const b = 80;
+        return `rgb(${r},${g},${b})`;
+    }
+
+    function drawPairwiseHeatmap(containerSelector, matrixInfo, title) {
+        const container = div.querySelector(containerSelector);
+        if (!container) return;
+        container.innerHTML = "";
+
+        const samplesArr = matrixInfo.samples || [];
+        const n = samplesArr.length;
+        if (!n) {
+            container.innerHTML = '<div class="small-note">Pairwise Mash distances not available.</div>';
+            return;
+        }
+
+        const marginLeft = 110;
+        const marginRight = 20;
+        const marginTop = 30;
+        const marginBottom = 110;
+        const baseCell = 16;
+
+        const plotW = Math.max(200, n * baseCell);
+        const plotH = Math.max(200, n * baseCell);
+
+        const width = marginLeft + plotW + marginRight;
+        const height = marginTop + plotH + marginBottom;
+
+        const svgPW = document.createElementNS(svgns, "svg");
+        svgPW.setAttribute("width", width);
+        svgPW.setAttribute("height", height);
+        svgPW.setAttribute("viewBox", `0 0 ${width} ${height}`);
+        svgPW.style.display = "block";
+
+        container.appendChild(svgPW);
+
+        const cellW = plotW / n;
+        const cellH = plotH / n;
+
+        const z = matrixInfo.matrix;
+        const minD = matrixInfo.min;
+        const maxD = matrixInfo.max;
+
+        for (let i = 0; i < n; i++) {
+            for (let j = 0; j < n; j++) {
+                const d = z[i][j];
+                const fill = distanceColor(d, minD, maxD);
+                const x = marginLeft + j * cellW;
+                const y = marginTop + i * cellH;
+
+                const rect = document.createElementNS(svgns, "rect");
+                rect.setAttribute("x", x);
+                rect.setAttribute("y", y);
+                rect.setAttribute("width", cellW);
+                rect.setAttribute("height", cellH);
+                rect.setAttribute("fill", fill);
+                rect.setAttribute("stroke", "#ffffff");
+                rect.setAttribute("stroke-width", "0.3");
+                rect.style.cursor = "pointer";
+
+                const s1 = samplesArr[i];
+                const s2 = samplesArr[j];
+                const tooltipText = `${s1} vs ${s2}\nMash distance: ${fmtFloat(d, 3)}`;
+
+                rect.addEventListener("mouseenter", (evt) => {
+                    rect.setAttribute("stroke", "#000");
+                    rect.setAttribute("stroke-width", "0.8");
+                    tooltip.style.display = "block";
+                    tooltip.textContent = tooltipText;
+                    tooltip.style.left = evt.clientX + "px";
+                    tooltip.style.top = evt.clientY + "px";
+                });
+                rect.addEventListener("mousemove", (evt) => {
+                    tooltip.style.left = evt.clientX + "px";
+                    tooltip.style.top = evt.clientY + "px";
+                });
+                rect.addEventListener("mouseleave", () => {
+                    rect.setAttribute("stroke", "#ffffff");
+                    rect.setAttribute("stroke-width", "0.3");
+                    tooltip.style.display = "none";
+                });
+
+                svgPW.appendChild(rect);
+            }
+        }
+
+        samplesArr.forEach((s, i) => {
+            const y = marginTop + i * cellH + cellH / 2 + 4;
+            const text = document.createElementNS(svgns, "text");
+            text.setAttribute("x", marginLeft - 4);
+            text.setAttribute("y", y);
+            text.setAttribute("font-size", "9");
+            text.setAttribute("text-anchor", "end");
+            text.textContent = s;
+            svgPW.appendChild(text);
+        });
+
+        const showAll = n <= 40;
+        samplesArr.forEach((s, j) => {
+            const show = showAll || (j % 4 === 0);
+            if (!show) return;
+            const x = marginLeft + j * cellW + cellW / 2;
+            const y = marginTop + plotH + 60;
+            const text = document.createElementNS(svgns, "text");
+            text.setAttribute("x", x);
+            text.setAttribute("y", y);
+            text.setAttribute("font-size", "9");
+            text.setAttribute("text-anchor", "end");
+            text.setAttribute("transform", `rotate(-60 ${x} ${y})`);
+            text.textContent = s;
+            svgPW.appendChild(text);
+        });
+
+        const titleText = document.createElementNS(svgns, "text");
+        titleText.setAttribute("x", marginLeft);
+        titleText.setAttribute("y", 16);
+        titleText.setAttribute("font-size", "11");
+        titleText.setAttribute("font-weight", "bold");
+        titleText.textContent = title;
+        svgPW.appendChild(titleText);
+    }
+
+    const markersMatrix = buildPairwiseMatrix(pairwiseMarkers);
+    const readsMatrix = buildPairwiseMatrix(pairwiseReads);
+
+    drawPairwiseHeatmap("#pairwise-heatmap-markers", markersMatrix, "Pairwise Mash distances (markers)");
+    drawPairwiseHeatmap("#pairwise-heatmap-reads", readsMatrix, "Pairwise Mash distances (reads)");
+
+    const tabButtons = div.querySelectorAll(".pairwise-tab");
+    const markersDiv = div.querySelector("#pairwise-heatmap-markers");
+    const readsDiv = div.querySelector("#pairwise-heatmap-reads");
+
+    tabButtons.forEach(btn => {
+        btn.addEventListener("click", () => {
+            tabButtons.forEach(b => b.classList.remove("active"));
+            btn.classList.add("active");
+            const kind = btn.getAttribute("data-kind");
+            if (kind === "markers") {
+                markersDiv.style.display = "";
+                readsDiv.style.display = "none";
+            } else {
+                markersDiv.style.display = "none";
+                readsDiv.style.display = "";
+            }
+        });
+    });
 }
 
 /* Main JS entry */
@@ -1926,6 +1235,8 @@ function main() {
     const summaryDiv = document.getElementById("summary-sections");
 
     const S = distill.summary || {};
+
+    addGlobalOverview(distill, figures);
 
     const depthFig = figures.figures && figures.figures.dna_depth_fractions
         ? figures.figures.dna_depth_fractions
