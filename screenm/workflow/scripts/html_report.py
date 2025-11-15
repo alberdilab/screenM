@@ -103,34 +103,36 @@ HTML_TEMPLATE = r"""<!DOCTYPE html>
         background: #fcfcfc;
     }
 
-    /* Summary stat tiles (used by Sequencing Depth and Prok Fraction) */
-    .seq-depth-stats, .prok-stats {
+    /* Summary stat tiles (Sequencing, Prok, Redundancy) */
+    .seq-depth-stats, .prok-stats, .redundancy-stats {
         display: flex;
         gap: 16px;
         justify-content: space-between;
         margin-bottom: 10px;
         flex-wrap: wrap;
     }
-    .seq-depth-stat-item, .prok-stat-item {
+    .seq-depth-stat-item, .prok-stat-item, .redundancy-stat-item {
         flex: 1;
         min-width: 160px;
     }
-    .seq-depth-stat-label, .prok-stat-label {
+    .seq-depth-stat-label, .prok-stat-label, .redundancy-stat-label {
         font-size: 0.9em;
         color: #555;
         margin-bottom: 2px;
     }
-    .seq-depth-stat-value, .prok-stat-value {
+    .seq-depth-stat-value, .prok-stat-value, .redundancy-stat-value {
         font-size: 1.4em;
         font-weight: 600;
     }
-    .seq-depth-stat-note, .prok-stat-note {
+    .seq-depth-stat-note, .prok-stat-note, .redundancy-stat-note {
         font-size: 0.8em;
         color: #666;
         margin-top: 2px;
     }
 
-    .seq-depth-plot-container, .prok-depth-plot-container, .lr-target-plot-container {
+    .seq-depth-plot-container,
+    .prok-depth-plot-container,
+    .lr-target-plot-container {
         width: 100%;
         border: 1px solid #ddd;
         border-radius: 4px;
@@ -138,7 +140,9 @@ HTML_TEMPLATE = r"""<!DOCTYPE html>
         padding: 4px 4px 0 4px;
         box-sizing: border-box;
     }
-    .seq-depth-svg, .prok-depth-svg, .lr-target-svg {
+    .seq-depth-svg,
+    .prok-depth-svg,
+    .lr-target-svg {
         display: block;
         width: 100%;
         height: 320px;
@@ -637,7 +641,7 @@ function addProkFractionSection(parent, data, depthPerSample) {
 
         let currentTop = y0;
 
-        function makeSeg(height, color, tooltipLabel) {
+        function makeSeg(height, color) {
             if (height <= 0) return null;
             const y = currentTop - height;
             currentTop = y;
@@ -653,9 +657,9 @@ function addProkFractionSection(parent, data, depthPerSample) {
             return rect;
         }
 
-        const segLow = makeSeg(hLow, "#f44336", "Low-quality");
-        const segProk = makeSeg(hProk, "#4caf50", "Prokaryotic");
-        const segOther = makeSeg(hOther, "#9e9e9e", "Other");
+        const segLow = makeSeg(hLow, "#f44336");
+        const segProk = makeSeg(hProk, "#4caf50");
+        const segOther = makeSeg(hOther, "#9e9e9e");
 
         const tooltipText =
             `${d.sample}\n` +
@@ -732,18 +736,41 @@ function addRedundancyReadsSection(parent, data, depthPerSample, redBiplotPerSam
 
     const msg = data.message_redundancy || "";
 
+    const nLR = data.n_samples_with_lr || 0;
+    const nBelow = data.n_samples_lr_exceeds_depth || 0;
+    const nAtOrAbove = nLR ? (nLR - nBelow) : 0;
+    const fracAtOrAbove = nLR ? (100 * nAtOrAbove / nLR) : null;
+
     div.innerHTML = `
         <details>
             <summary>Redundancy (Reads, Nonpareil)</summary>
             <div class="content">
                 <p class="summary-message">${msg}</p>
+                <div class="redundancy-stats">
+                    <div class="redundancy-stat-item">
+                        <div class="redundancy-stat-label">Mean kappa_total</div>
+                        <div class="redundancy-stat-value">${fmtFloat(data.mean_kappa_total, 3)}</div>
+                        <div class="redundancy-stat-note">Average Nonpareil redundancy estimate</div>
+                    </div>
+                    <div class="redundancy-stat-item">
+                        <div class="redundancy-stat-label">Variation in kappa_total</div>
+                        <div class="redundancy-stat-value">${fmtFloat(data.cv_kappa_total, 3)}</div>
+                        <div class="redundancy-stat-note">Coefficient of variation (CV)</div>
+                    </div>
+                    <div class="redundancy-stat-item">
+                        <div class="redundancy-stat-label">Samples at / above LR target</div>
+                        <div class="redundancy-stat-value">
+                            ${fmtInt(nAtOrAbove)} / ${fmtInt(nLR)}
+                        </div>
+                        <div class="redundancy-stat-note">
+                            ${fracAtOrAbove === null ? "NA" : fmtFloat(fracAtOrAbove, 1) + "%"} of samples with LR target
+                        </div>
+                    </div>
+                </div>
                 <ul class="summary-metrics">
                     <li>Samples with kappa estimates: ${fmtInt(data.n_samples_kappa)}</li>
-                    <li>Mean kappa_total: ${fmtFloat(data.mean_kappa_total, 3)}</li>
                     <li>Median kappa_total: ${fmtFloat(data.median_kappa_total, 3)}</li>
-                    <li>Standard deviation: ${fmtFloat(data.sd_kappa_total, 3)}</li>
-                    <li>CV of kappa_total: ${fmtFloat(data.cv_kappa_total, 3)}</li>
-                    <li>Samples with LR_reads target: ${fmtInt(data.n_samples_with_lr)}</li>
+                    <li>Standard deviation of kappa_total: ${fmtFloat(data.sd_kappa_total, 3)}</li>
                     <li>Samples where LR_reads &gt; observed depth: ${fmtInt(data.n_samples_lr_exceeds_depth)}</li>
                     <li>LR target used (if any): ${data.lr_target_used || "NA"}%</li>
                 </ul>
@@ -751,9 +778,10 @@ function addRedundancyReadsSection(parent, data, depthPerSample, redBiplotPerSam
                     <svg id="lr-target-svg" class="lr-target-svg" viewBox="0 0 1000 320" preserveAspectRatio="none"></svg>
                 </div>
                 <p class="small-note">
-                    X axis: samples; Y axis: sequenced depth relative to the LR_reads 95% target (100% = required depth).
-                    Bars show the ratio (sequenced reads / LR_reads target). The red dashed line at 100% indicates the
-                    estimated sequencing effort needed to reach the 95% Nonpareil coverage target.
+                    X axis: samples; Y axis: sequenced depth relative to the LR_reads 95% target.
+                    The red dashed midline corresponds to the LR target (1×). Bars projecting above the
+                    line indicate how many times more than necessary has been sequenced; bars projecting
+                    below the line indicate how many times more sequencing would be needed to reach the target.
                 </p>
             </div>
         </details>
@@ -801,54 +829,82 @@ function addRedundancyReadsSection(parent, data, depthPerSample, redBiplotPerSam
     const svgns = "http://www.w3.org/2000/svg";
 
     const x0 = margin.left;
-    const y0 = height - margin.bottom;
+    const yTop = margin.top;
+    const yBottom = height - margin.bottom;
+    const baselineY = yTop + plotH / 2; // 0 (1×) in the middle
 
-    let maxRatio = 0;
-    combined.forEach(d => {
-        if (d.ratio > maxRatio) maxRatio = d.ratio;
-    });
-    if (maxRatio <= 0) maxRatio = 1;
-
-    // Top of axis: at least 1.0, tops at 2.0 with steps of 0.5
-    let topRatio = Math.max(1.0, maxRatio);
-    if (topRatio > 2.0) {
-        topRatio = 2.0;
-    } else {
-        topRatio = Math.ceil(topRatio * 2) / 2; // step 0.5
+    // Transform ratio -> signed value v:
+    //  - ratio >= 1: v = ratio - 1  (times extra)
+    //  - ratio < 1:  v = -(1/ratio - 1)  (negative, times missing)
+    function transformRatio(r) {
+        if (r >= 1) return r - 1;
+        return -(1 / r - 1);
     }
 
-    function yForRatio(r) {
-        const f = Math.max(0, Math.min(1, r / topRatio));
-        return y0 - f * plotH;
+    // Inverse transform for tick labels: v -> ratio
+    function inverseTransform(v) {
+        if (v >= 0) return 1 + v;
+        return 1 / (1 - v);
+    }
+
+    const values = combined.map(d => transformRatio(d.ratio));
+    let maxAbs = 0;
+    values.forEach(v => {
+        const a = Math.abs(v);
+        if (a > maxAbs) maxAbs = a;
+    });
+    if (maxAbs <= 0) maxAbs = 1;
+
+    // Add a bit of headroom
+    maxAbs *= 1.1;
+
+    function yForVal(v) {
+        // v in [-maxAbs, maxAbs], baseline at 0 -> baselineY
+        const f = v / maxAbs;
+        return baselineY - f * (plotH / 2);
     }
 
     // Axes
     const xAxis = document.createElementNS(svgns, "line");
     xAxis.setAttribute("x1", x0);
-    xAxis.setAttribute("y1", y0);
+    xAxis.setAttribute("y1", yBottom);
     xAxis.setAttribute("x2", x0 + plotW);
-    xAxis.setAttribute("y2", y0);
+    xAxis.setAttribute("y2", yBottom);
     xAxis.setAttribute("stroke", "#555");
     svg.appendChild(xAxis);
 
     const yAxis = document.createElementNS(svgns, "line");
     yAxis.setAttribute("x1", x0);
-    yAxis.setAttribute("y1", y0);
+    yAxis.setAttribute("y1", yBottom);
     yAxis.setAttribute("x2", x0);
-    yAxis.setAttribute("y2", margin.top);
+    yAxis.setAttribute("y2", yTop);
     yAxis.setAttribute("stroke", "#555");
     svg.appendChild(yAxis);
 
-    // Y ticks in % (0–topRatio)
-    const ticks = [];
-    const step = topRatio >= 1.5 ? 0.5 : 0.25;
-    for (let t = 0; t <= topRatio + 1e-9; t += step) {
-        ticks.push(t);
-    }
+    // Baseline (1× target) in the middle, red dashed
+    const baseLine = document.createElementNS(svgns, "line");
+    baseLine.setAttribute("x1", x0);
+    baseLine.setAttribute("y1", baselineY);
+    baseLine.setAttribute("x2", x0 + plotW);
+    baseLine.setAttribute("y2", baselineY);
+    baseLine.setAttribute("stroke", "#e53935");
+    baseLine.setAttribute("stroke-width", "1.4");
+    baseLine.setAttribute("stroke-dasharray", "4,2");
+    svg.appendChild(baseLine);
 
-    ticks.forEach(r => {
-        const y = yForRatio(r);
+    const baseLabel = document.createElementNS(svgns, "text");
+    baseLabel.setAttribute("x", x0 + plotW - 4);
+    baseLabel.setAttribute("y", baselineY - 4);
+    baseLabel.setAttribute("font-size", "10");
+    baseLabel.setAttribute("text-anchor", "end");
+    baseLabel.setAttribute("fill", "#e53935");
+    baseLabel.textContent = "LR target (1×)";
+    svg.appendChild(baseLabel);
 
+    // Y ticks symmetrically around 0 (baseline), integer v from -ceil(maxAbs) to +ceil(maxAbs)
+    const maxTick = Math.max(1, Math.ceil(maxAbs));
+    for (let v = -maxTick; v <= maxTick; v++) {
+        const y = yForVal(v);
         const tick = document.createElementNS(svgns, "line");
         tick.setAttribute("x1", x0 - 4);
         tick.setAttribute("y1", y);
@@ -862,9 +918,17 @@ function addRedundancyReadsSection(parent, data, depthPerSample, redBiplotPerSam
         lab.setAttribute("y", y + 3);
         lab.setAttribute("font-size", "10");
         lab.setAttribute("text-anchor", "end");
-        lab.textContent = (r * 100).toFixed(0) + "%";
+
+        const ratio = inverseTransform(v);
+        let labelStr;
+        if (Math.abs(ratio - 1) < 1e-6) {
+            labelStr = "1×";
+        } else {
+            labelStr = ratio.toFixed(1) + "×";
+        }
+        lab.textContent = labelStr;
         svg.appendChild(lab);
-    });
+    }
 
     const ylabel = document.createElementNS(svgns, "text");
     ylabel.setAttribute("x", 16);
@@ -872,7 +936,7 @@ function addRedundancyReadsSection(parent, data, depthPerSample, redBiplotPerSam
     ylabel.setAttribute("text-anchor", "middle");
     ylabel.setAttribute("font-size", "11");
     ylabel.setAttribute("transform", `rotate(-90 16 ${margin.top + plotH / 2})`);
-    ylabel.textContent = "Sequenced depth / LR target (95%)";
+    ylabel.textContent = "Sequenced depth relative to LR target (95%)";
     svg.appendChild(ylabel);
 
     const xlabel = document.createElementNS(svgns, "text");
@@ -891,25 +955,42 @@ function addRedundancyReadsSection(parent, data, depthPerSample, redBiplotPerSam
 
     combined.forEach((d, i) => {
         const ratio = d.ratio;
+        const v = transformRatio(ratio);
+        const yVal = yForVal(v);
+
         const xCenter = x0 + stepX * i + stepX / 2;
         const x = xCenter - barWidth / 2;
-        const y = yForRatio(ratio);
-        const hBar = y0 - y;
+
+        let yRect, hRect;
+        if (v >= 0) {
+            // Above baseline
+            yRect = yVal;
+            hRect = baselineY - yVal;
+        } else {
+            // Below baseline
+            yRect = baselineY;
+            hRect = yVal - baselineY;
+        }
+        hRect = Math.abs(hRect);
 
         const rect = document.createElementNS(svgns, "rect");
         rect.setAttribute("x", x);
-        rect.setAttribute("y", y);
+        rect.setAttribute("y", yRect);
         rect.setAttribute("width", barWidth);
-        rect.setAttribute("height", hBar);
-        rect.setAttribute("fill", ratio >= 1 ? "#4caf50" : "#ffa000");
+        rect.setAttribute("height", hRect);
+        rect.setAttribute("fill", v >= 0 ? "#4caf50" : "#ffa000");
         rect.setAttribute("fill-opacity", "0.9");
         rect.style.cursor = "pointer";
 
+        const extraOrNeeded = v >= 0 ? (ratio - 1) : (1 / ratio - 1);
         const tooltipText =
             `${d.sample}\n` +
             `Sequenced: ${fmtMillions(d.observed)} reads\n` +
             `Target (95% LR): ${fmtMillions(d.target)} reads\n` +
-            `Relative depth: ${(ratio * 100).toFixed(1)}%`;
+            `Relative depth: ${(ratio * 100).toFixed(1)}%\n` +
+            (v >= 0
+                ? `Excess sequencing: ${extraOrNeeded.toFixed(2)}× above target`
+                : `Additional needed: ${extraOrNeeded.toFixed(2)}× more to reach target`);
 
         rect.addEventListener("mouseenter", (evt) => {
             rect.setAttribute("stroke", "#000");
@@ -936,37 +1017,14 @@ function addRedundancyReadsSection(parent, data, depthPerSample, redBiplotPerSam
         if (show) {
             const lab = document.createElementNS(svgns, "text");
             lab.setAttribute("x", xCenter);
-            lab.setAttribute("y", y0 + 10);
+            lab.setAttribute("y", yBottom + 10);
             lab.setAttribute("font-size", "9");
             lab.setAttribute("text-anchor", "end");
-            lab.setAttribute("transform", `rotate(-60 ${xCenter} ${y0 + 10})`);
+            lab.setAttribute("transform", `rotate(-60 ${xCenter} ${yBottom + 10})`);
             lab.textContent = d.sample;
             svg.appendChild(lab);
         }
     });
-
-    // 100% target line (ratio = 1)
-    if (1 <= topRatio) {
-        const y = yForRatio(1);
-        const line = document.createElementNS(svgns, "line");
-        line.setAttribute("x1", x0);
-        line.setAttribute("y1", y);
-        line.setAttribute("x2", x0 + plotW);
-        line.setAttribute("y2", y);
-        line.setAttribute("stroke", "#e53935");
-        line.setAttribute("stroke-width", "1.4");
-        line.setAttribute("stroke-dasharray", "4,2");
-        svg.appendChild(line);
-
-        const lab = document.createElementNS(svgns, "text");
-        lab.setAttribute("x", x0 + plotW - 4);
-        lab.setAttribute("y", y - 2);
-        lab.setAttribute("font-size", "10");
-        lab.setAttribute("text-anchor", "end");
-        lab.setAttribute("fill", "#e53935");
-        lab.textContent = "LR target (100%)";
-        svg.appendChild(lab);
-    }
 }
 
 function addRedundancyMarkersSection(parent, data) {
@@ -1004,7 +1062,7 @@ function addClustersSection(parent, clusters) {
 
     const msg = clusters.message_clusters || "";
     const markers = clusters.markers || {};
-    const reads = clusters.reads || {};
+       const reads = clusters.reads || {};
 
     const nClustersMarkers = markers.n_clusters != null ? markers.n_clusters : "NA";
     const nClustersReads = reads.n_clusters != null ? reads.n_clusters : "NA";
