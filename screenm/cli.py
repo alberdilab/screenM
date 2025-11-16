@@ -17,6 +17,7 @@ from screenm.utils import *
 
 PACKAGE_DIR = Path(__file__).parent
 CONFIG_PATH = PACKAGE_DIR / "workflow" / "config.yaml"
+VERSION = get_version()
 
 def load_config():
     """Load fixed variables from config.yaml."""
@@ -41,7 +42,7 @@ END = "\033[1;92m"
 # Snakemake launcher
 ###
 
-def run_screenm_pipeline(input, output, reads, threads, kmer, seed, completeness, dpi):
+def run_screenm_pipeline(name, input, output, reads, threads, kmer, seed, completeness, dpi):
     snakemake_command = [
         "/bin/bash", "-c",
         "snakemake "
@@ -50,7 +51,7 @@ def run_screenm_pipeline(input, output, reads, threads, kmer, seed, completeness
         f"--cores {threads} "
         #f"--quiet 2>/dev/null "
         f"--configfile {CONFIG_PATH} "
-        f"--config package_dir={PACKAGE_DIR} input={input} output={output} reads={reads} kmer={kmer} seed={seed} completeness={completeness} dpi={dpi}"
+        f"--config package_dir={PACKAGE_DIR} version={VERSION} name={name} input={input} output={output} reads={reads} kmer={kmer} seed={seed} completeness={completeness} dpi={dpi}"
     ]
     subprocess.run(snakemake_command, shell=False, check=True)
 
@@ -63,6 +64,7 @@ def main():
         description="ScreenM: data screener for genome-resolved metagenomics",
         formatter_class=argparse.RawTextHelpFormatter
     )
+    parser.add_argument("-n", "--name", required=True, type=valid_name, default="ScreenM_run", help="Name of the screenM run. No spaces or special characters.")
     parser.add_argument("-i", "--input", required=True, type=pathlib.Path, help="Path of the directory containing the metagenomic reads.")
     parser.add_argument("-o", "--output", required=False, type=pathlib.Path, default=os.getcwd(), help="Working directory. Default is the directory from which screenM is called.")
     parser.add_argument("-r", "--reads", required=False, type=int, default=1000000, help="Number of reads per sample to be used for screening (Default: 1 million).")   
@@ -99,6 +101,7 @@ def main():
     # 2. Run the screenM Snakemake pipeline
 
     run_screenm_pipeline(
+                args.name,
                 DATA_JSON,
                 Path(args.output).resolve(), 
                 args.reads,

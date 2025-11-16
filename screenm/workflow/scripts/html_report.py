@@ -84,47 +84,6 @@ HTML_TEMPLATE = r"""<!DOCTYPE html>
         font-weight: 500;
     }
 
-    .highlight-summary {
-        display: flex;
-        gap: 24px;
-        justify-content: center;
-        margin: 12px 0 24px 0;
-        flex-wrap: wrap;
-    }
-
-    .highlight-item {
-        min-width: 180px;
-        padding: 10px 14px;
-        border-radius: 8px;
-        background: #ffffff;
-        border: 1px solid #dddddd;
-        box-shadow: 0 1px 2px rgba(0,0,0,0.04);
-        text-align: center;
-    }
-
-    .highlight-label {
-        font-size: 0.85em;
-        text-transform: uppercase;
-        letter-spacing: 0.03em;
-        color: #666;
-        margin-bottom: 4px;
-    }
-
-    .highlight-value {
-        font-size: 1.6em;
-        font-weight: 650;
-    }
-
-    .report-footer {
-        margin-top: 32px;
-        padding-top: 12px;
-        border-top: 1px solid #ddd;
-        font-size: 0.85em;
-        color: #555;
-    }
-
-
-
     .screen-overview-stats,
     .seq-depth-stats,
     .prok-stats,
@@ -229,6 +188,45 @@ HTML_TEMPLATE = r"""<!DOCTYPE html>
         white-space: nowrap;
         transform: translate(8px, -20px);
     }
+
+    .highlight-summary {
+        display: flex;
+        gap: 24px;
+        justify-content: center;
+        margin: 12px 0 24px 0;
+        flex-wrap: wrap;
+    }
+
+    .highlight-item {
+        min-width: 180px;
+        padding: 10px 14px;
+        border-radius: 8px;
+        background: #ffffff;
+        border: 1px solid #dddddd;
+        box-shadow: 0 1px 2px rgba(0,0,0,0.04);
+        text-align: center;
+    }
+
+    .highlight-label {
+        font-size: 0.85em;
+        text-transform: uppercase;
+        letter-spacing: 0.03em;
+        color: #666;
+        margin-bottom: 4px;
+    }
+
+    .highlight-value {
+        font-size: 1.6em;
+        font-weight: 650;
+    }
+
+    .report-footer {
+        margin-top: 32px;
+        padding-top: 12px;
+        border-top: 1px solid #ddd;
+        font-size: 0.85em;
+        color: #555;
+    }
 </style>
 
 </head>
@@ -254,6 +252,7 @@ HTML_TEMPLATE = r"""<!DOCTYPE html>
         should be assessed separately with tools such as CheckM.
     </p>
 </footer>
+
 
 <script>
 const DISTILL_DATA = __DISTILL_JSON__;
@@ -285,6 +284,17 @@ function fmtMillions(x) {
     return v.toString();
 }
 
+function getOrCreateTooltip() {
+    let tooltip = document.querySelector(".chart-tooltip");
+    if (!tooltip) {
+        tooltip = document.createElement("div");
+        tooltip.className = "chart-tooltip";
+        tooltip.style.display = "none";
+        document.body.appendChild(tooltip);
+    }
+    return tooltip;
+}
+
 function renderTopHighlights(parent, totalSamples, totalReads) {
     if (!parent) return;
     if (totalSamples == null && totalReads == null) return;
@@ -312,17 +322,6 @@ function renderTopHighlights(parent, totalSamples, totalReads) {
 
     container.innerHTML = innerHTML;
     parent.appendChild(container);
-}
-
-function getOrCreateTooltip() {
-    let tooltip = document.querySelector(".chart-tooltip");
-    if (!tooltip) {
-        tooltip = document.createElement("div");
-        tooltip.className = "chart-tooltip";
-        tooltip.style.display = "none";
-        document.body.appendChild(tooltip);
-    }
-    return tooltip;
 }
 
 /* ---------- Section-level status (emoji + short text) ---------- */
@@ -375,6 +374,7 @@ function addScreeningOverviewSection(parent, data, depthPerSample) {
             <div class="content">
                 <p class="summary-message">${msg}</p>
                 <div class="screen-overview-stats">
+                    
                     <div class="screen-overview-stat-item">
                         <div class="screen-overview-stat-label">Above read threshold</div>
                         <div class="screen-overview-stat-value">

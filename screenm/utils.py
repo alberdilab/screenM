@@ -5,9 +5,23 @@ from typing import Dict, Any, Optional, Tuple, List
 from datetime import datetime
 import gzip
 from concurrent.futures import ProcessPoolExecutor
+from importlib.metadata import version, PackageNotFoundError
 
 def ts():
     return datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+
+def valid_name(value):
+    if not re.match(r'^[A-Za-z0-9_-]+$', value):
+        raise argparse.ArgumentTypeError(
+            "Invalid name: only letters, numbers, underscores, and hyphens allowed. No spaces or special characters."
+        )
+    return value
+
+def get_version() -> str:
+    try:
+        return version("screenM")
+    except PackageNotFoundError:
+        return "UNKNOWN"
 
 def _count_fastq_reads(path: Path) -> int:
     """

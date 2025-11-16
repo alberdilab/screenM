@@ -4,6 +4,8 @@ from pathlib import Path
 
 # Required CLI config:
 PACKAGE_DIR = config["package_dir"]
+VERSION     = config["version"]
+NAME        = config["name"]
 INPUT_JSON  = config["input"]
 OUTDIR      = config["output"]
 READS       = config["reads"]
@@ -500,7 +502,9 @@ rule merge_json:
         f"{OUTDIR}/results.json"
     threads: 1
     params:
-        package_dir=PACKAGE_DIR
+        package_dir=PACKAGE_DIR,
+        version=VERSION,
+        name=NAME
     shell:
         """
         module load singlem/0.19.0
@@ -508,8 +512,8 @@ rule merge_json:
             -i {input.samples} \
             --mash-markers {input.markers} \
             --mash-reads {input.reads} \
-            --project-name "test_name" \
-            --software-version "1.0.0" \
+            --project-name {params.name} \
+            --software-version {params.version} \
             -o {output} 
         """
 
