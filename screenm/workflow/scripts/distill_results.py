@@ -1214,14 +1214,20 @@ def main():
     redundancy_markers = compute_redundancy_markers(results_json)
     clusters = compute_clusters(results_json)
 
-    distilled: Dict[str, Any] = {
-        "meta": {
-            "n_samples_in_results": int(results_json.get("n_samples", 0)),
-            "source_files": {
-                "data_json": str(data_path),
-                "results_json": str(results_path),
-            },
+    # --- NEW: capture metadata from results.json, but keep old fields unchanged ---
+    meta: Dict[str, Any] = {
+        "n_samples_in_results": int(results_json.get("n_samples", 0)),
+        "source_files": {
+            "data_json": str(data_path),
+            "results_json": str(results_path),
         },
+    }
+    results_metadata = results_json.get("metadata")
+    if isinstance(results_metadata, dict):
+        meta["results_metadata"] = results_metadata
+
+    distilled: Dict[str, Any] = {
+        "meta": meta,
         "summary": {
             "screening_overview": screening_overview,
             "low_quality_reads": low_quality,
