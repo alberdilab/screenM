@@ -1,8 +1,9 @@
 #!/usr/bin/env python3
 import argparse
 import json
+import datetime
 from pathlib import Path
-from typing import Dict, Any, List
+from typing import Dict, Any
 
 
 def load_json(path: Path) -> Dict[str, Any]:
@@ -22,6 +23,7 @@ def main():
             "Mash-based distance summaries (mash_markers.json, mash_reads.json).\n\n"
             "Per-sample JSONs must contain a 'sample' field. The merged structure is:\n"
             "{\n"
+            "  'metadata': { ... },\n"
             "  'n_samples': N,\n"
             "  'samples': {\n"
             "      '<sample1>': { ... },\n"
@@ -54,6 +56,16 @@ def main():
         required=True,
         help="Output merged JSON file",
     )
+    ap.add_argument(
+        "--project-name",
+        required=True,
+        help="Project name to store in top-level metadata.",
+    )
+    ap.add_argument(
+        "--software-version",
+        required=True,
+        help="Software version string to store in top-level metadata (e.g. '1.2.3').",
+    )
     args = ap.parse_args()
 
     samples: Dict[str, Dict[str, Any]] = {}
@@ -77,7 +89,16 @@ def main():
         nested = {k: v for k, v in data.items() if k != "sample"}
         samples[sample_name] = nested
 
+    # --- Metadata block ---
+    metadata: Dict[str, Any] = {
+        "project": args.project_name,
+        "software_version": args.software_version,
+        # ISO 8601 UTC timestamp, second precision
+        "created_at": datetime.datetime.utcnow().isoformat(timespec="seconds") + "Z",
+    }
+
     merged: Dict[str, Any] = {
+        "metadata": metadata,
         "n_samples": len(samples),
         "samples": samples,
     }
@@ -106,7 +127,10 @@ def main():
         msg += f" + mash_markers({args.mash_markers})"
     if args.mash_reads:
         msg += f" + mash_reads({args.mash_reads})"
-    msg += f" → {out_path}"
+    msg += (
+        f" [project={args.project_name}, version={args.software_version}]"
+        f" → {out_path}"
+    )
     print(msg)
 
 

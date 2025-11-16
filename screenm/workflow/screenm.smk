@@ -488,6 +488,8 @@ rule sample_json:
             --singlem {input.singlem} \
             --nonpareil-reads {input.nonpareil_reads} \
             --nonpareil-markers {input.nonpareil_markers} \
+            --project-name "test_name" \
+            --software-version "1.0.0" \
             --output {output} 
         """
 
