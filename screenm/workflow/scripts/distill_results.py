@@ -1215,16 +1215,19 @@ def main():
     clusters = compute_clusters(results_json)
 
     # --- NEW: capture metadata from results.json, but keep old fields unchanged ---
-    meta: Dict[str, Any] = {
-        "n_samples_in_results": int(results_json.get("n_samples", 0)),
-        "source_files": {
-            "data_json": str(data_path),
-            "results_json": str(results_path),
-        },
+    merged_metadata = {
+    "data_json": str(data_path),
+    "results_json": str(results_path),
     }
+
     results_metadata = results_json.get("metadata")
     if isinstance(results_metadata, dict):
-        meta["results_metadata"] = results_metadata
+        merged_metadata.update(results_metadata)
+
+    meta: Dict[str, Any] = {
+        "n_samples_in_results": int(results_json.get("n_samples", 0)),
+        "metadata": merged_metadata,
+    }
 
     distilled: Dict[str, Any] = {
         "meta": meta,
