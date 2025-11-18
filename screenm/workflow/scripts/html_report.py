@@ -2623,7 +2623,26 @@ function main() {
     setSummaryHintBehaviour(document.body);
 }
 
-main();
+    try {
+        main();
+    } catch (e) {
+        const err = document.createElement("pre");
+        err.style.whiteSpace = "pre-wrap";
+        err.style.color = "red";
+        err.textContent = "Error rendering report: " + (e && e.stack ? e.stack : e);
+        document.body.insertBefore(err, document.body.firstChild);
+        console.error(e);
+    }
+</script>
+<script>
+// Simple error catcher to expose runtime issues in the report UI
+window.addEventListener("error", (e) => {
+    const pre = document.createElement("pre");
+    pre.style.whiteSpace = "pre-wrap";
+    pre.style.color = "red";
+    pre.textContent = `Runtime error: ${e.message}`;
+    document.body.insertBefore(pre, document.body.firstChild);
+});
 </script>
 
 </body>
