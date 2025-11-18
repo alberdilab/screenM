@@ -2399,18 +2399,23 @@ function addOverallProkCoverageSection(parent, data) {
 /* Mash distance overview */
 function addMashDistanceSection(parent, clusters) {
     if (!clusters) return;
-    const markers = clusters.markers || {};
-    const reads = clusters.reads || {};
 
-    const withinMarkers = markers.mean_within_distance;
-    const sdWithinMarkers = markers.sd_within_distance;
-    const cvMarkers = (sdWithinMarkers != null && withinMarkers) ? sdWithinMarkers / withinMarkers : null;
-    const betweenMarkers = markers.mean_between_distance;
+    const markersPairs = Array.isArray(clusters.pairwise_markers) ? clusters.pairwise_markers : [];
+    const readsPairs = Array.isArray(clusters.pairwise_reads) ? clusters.pairwise_reads : [];
 
-    const withinReads = reads.mean_within_distance;
-    const sdWithinReads = reads.sd_within_distance;
-    const cvReads = (sdWithinReads != null && withinReads) ? sdWithinReads / withinReads : null;
-    const betweenReads = reads.mean_between_distance;
+    const markersDistances = markersPairs.map(p => Number(p.distance)).filter(d => isFinite(d));
+    const readsDistances = readsPairs.map(p => Number(p.distance)).filter(d => isFinite(d));
+
+    const meanMarkers = markersDistances.length ? markersDistances.reduce((a, b) => a + b, 0) / markersDistances.length : null;
+    const meanReads = readsDistances.length ? readsDistances.reduce((a, b) => a + b, 0) / readsDistances.length : null;
+
+    function calcCV(arr, mean) {
+        if (!arr.length || !mean) return null;
+        const varval = arr.reduce((a, b) => a + Math.pow(b - mean, 2), 0) / arr.length;
+        return Math.sqrt(varval) / mean;
+    }
+    const cvMarkers = calcCV(markersDistances, meanMarkers);
+    const cvReads = calcCV(readsDistances, meanReads);
 
     const div = document.createElement("div");
     div.className = "section " + flagClass(clusters.flag_clusters);
@@ -2419,7 +2424,7 @@ function addMashDistanceSection(parent, clusters) {
     div.innerHTML = `
         <h2 class="section-title">Mash distance overview</h2>
         <p class="section-intro">
-            Average pairwise Mash distances within and between samples, with heatmaps for markers and reads.
+            Average pairwise Mash distances across all samples (markers and reads), with heatmaps for both.
         </p>
         <details>
             <summary>
@@ -2430,100 +2435,77 @@ function addMashDistanceSection(parent, clusters) {
             <div class="content">
                 <div class="redundancy-stats">
                     <div class="redundancy-stat-item">
-                        <div class="redundancy-stat-label">Markers within / between</div>
-                        <div class="redundancy-stat-value">${fmtFloat(withinMarkers, 4)} / ${fmtFloat(betweenMarkers, 4)}</div>
-                        <div class="redundancy-stat-note">Mean Mash distance (markers)</div>
+                        <div class="redundancy-stat-label">Mean distance (markers)</div>
+                        <div class="redundancy-stat-value">${fmtFloat(meanMarkers, 4)}</div>
+                        <div class="redundancy-stat-note">Average pairwise Mash distance</div>
                     </div>
                     <div class="redundancy-stat-item">
-                        <div class="redundancy-stat-label">Markers CV (within)</div>
+                        <div class="redundancy-stat-label">CV (markers)</div>
                         <div class="redundancy-stat-value">${fmtFloat(cvMarkers, 3)}</div>
-                        <div class="redundancy-stat-note">CV of within-marker distances</div>
+                        <div class="redundancy-stat-note">Coefficient of variation</div>
                     </div>
                     <div class="redundancy-stat-item">
-                        <div class="redundancy-stat-label">Reads within / between</div>
-                        <div class="redundancy-stat-value">${fmtFloat(withinReads, 4)} / ${fmtFloat(betweenReads, 4)}</div>
-                        <div class="redundancy-stat-note">Mean Mash distance (reads)</div>
+                        <div class="redundancy-stat-label">Mean distance (reads)</div>
+                        <div class="redundancy-stat-value">${fmtFloat(meanReads, 4)}</div>
+                        <div class="redundancy-stat-note">Average pairwise Mash distance</div>
                     </div>
                     <div class="redundancy-stat-item">
-                        <div class="redundancy-stat-label">Reads CV (within)</div>
+                        <div class="redundancy-stat-label">CV (reads)</div>
                         <div class="redundancy-stat-value">${fmtFloat(cvReads, 3)}</div>
-                        <div class="redundancy-stat-note">CV of within-read distances</div>
+                        <div class="redundancy-stat-note">Coefficient of variation</div>
                     </div>
                 </div>
-                <div class="clusters-heatmap-scroll" style="margin-top:12px;">
-                    <svg id="mash-heatmap-svg" class="clusters-heatmap-svg" viewBox="0 0 1000 260" preserveAspectRatio="none"></svg>
+                <div style="display:flex; gap:12px; flex-wrap:wrap; margin-top:12px;">
+                    <div class="clusters-heatmap-scroll" style="flex:1; min-width:460px;">
+                        <div style="margin-bottom:6px; font-weight:600;">Markers</div>
+                        <svg id="mash-heatmap-markers" class="clusters-heatmap-svg" viewBox="0 0 1000 420" preserveAspectRatio="none"></svg>
+                    </div>
+                    <div class="clusters-heatmap-scroll" style="flex:1; min-width:460px;">
+                        <div style="margin-bottom:6px; font-weight:600;">Reads</div>
+                        <svg id="mash-heatmap-reads" class="clusters-heatmap-svg" viewBox="0 0 1000 420" preserveAspectRatio="none"></svg>
+                    </div>
                 </div>
-                <p class="small-note">
-                    Heatmaps show pairwise Mash distances (top: markers, bottom: reads). Darker tiles indicate larger distances; missing pairs are light grey.
-                </p>
             </div>
         </details>
     `;
     parent.appendChild(div);
 
-    const svg = div.querySelector("#mash-heatmap-svg");
+    const heatMarkers = div.querySelector("#mash-heatmap-markers");
+    const heatReads = div.querySelector("#mash-heatmap-reads");
     const svgns = "http://www.w3.org/2000/svg";
 
-    const markersPairs = Array.isArray(clusters.pairwise_markers) ? clusters.pairwise_markers : [];
-    const readsPairs = Array.isArray(clusters.pairwise_reads) ? clusters.pairwise_reads : [];
+    function drawHeatmap(svg, pairs) {
+        const sampleSet = new Set();
+        pairs.forEach(p => { if (p.sample1) sampleSet.add(p.sample1); if (p.sample2) sampleSet.add(p.sample2); });
+        const samples = Array.from(sampleSet).sort();
+        const n = samples.length;
+        if (!n) {
+            svg.outerHTML = `<div class="small-note">No pairwise distances available.</div>`;
+            return;
+        }
 
-    const sampleSet = new Set();
-    markersPairs.forEach(p => { if (p.sample1) sampleSet.add(p.sample1); if (p.sample2) sampleSet.add(p.sample2); });
-    readsPairs.forEach(p => { if (p.sample1) sampleSet.add(p.sample1); if (p.sample2) sampleSet.add(p.sample2); });
-    const samples = Array.from(sampleSet).sort();
-    const n = samples.length;
-    if (!n) {
-        svg.outerHTML = `<div class="small-note">Pairwise Mash distances not available to draw heatmaps.</div>`;
-        return;
-    }
-
-    function buildMap(arr) {
-        const m = {};
-        arr.forEach(p => {
-            const s1 = p.sample1, s2 = p.sample2;
+        const map = {};
+        let maxD = 0;
+        pairs.forEach(p => {
             const d = Number(p.distance);
-            if (!isFinite(d) || s1 == null || s2 == null) return;
-            m[`${s1}||${s2}`] = d;
-            m[`${s2}||${s1}`] = d;
+            if (!isFinite(d) || p.sample1 == null || p.sample2 == null) return;
+            map[`${p.sample1}||${p.sample2}`] = d;
+            map[`${p.sample2}||${p.sample1}`] = d;
+            if (d > maxD) maxD = d;
         });
-        return m;
-    }
-    const mapMarkers = buildMap(markersPairs);
-    const mapReads = buildMap(readsPairs);
+        if (maxD <= 0) maxD = 1;
 
-    let maxD = 0;
-    [mapMarkers, mapReads].forEach(m => {
-        Object.values(m).forEach(v => { if (v > maxD) maxD = v; });
-    });
-    if (maxD <= 0) maxD = 1;
+        const margin = {left: 120, right: 20, top: 120, bottom: 120};
+        const cellSize = Math.max(18, Math.min(40, (1000 - margin.left - margin.right) / n));
+        const width = margin.left + margin.right + n * cellSize;
+        const height = margin.top + margin.bottom + n * cellSize;
+        svg.setAttribute("viewBox", `0 0 ${width} ${height}`);
 
-    const height = 260;
-    const margin = {left: 100, right: 10, top: 20, bottom: 60};
-    const cellH = (height - margin.top - margin.bottom) / 2;
-    const baseCellW = 18;
-    const width = Math.max(1000, margin.left + margin.right + n * baseCellW);
-    svg.setAttribute("viewBox", `0 0 ${width} ${height}`);
-
-    const plotW = width - margin.left - margin.right;
-    const x0 = margin.left;
-
-    function colorFor(val) {
-        const f = Math.max(0, Math.min(1, val / maxD));
-        const c = Math.round(255 - f * 200);
-        return `rgb(${c},${c + 20},255)`;
-    }
-
-    function drawRow(rowIndex, label, map) {
-        const yRowTop = margin.top + rowIndex * cellH;
-        const labelText = document.createElementNS(svgns, "text");
-        labelText.setAttribute("x", 10);
-        labelText.setAttribute("y", yRowTop + cellH / 2 + 4);
-        labelText.setAttribute("font-size", "11");
-        labelText.setAttribute("text-anchor", "start");
-        labelText.textContent = label;
-        svg.appendChild(labelText);
-
-        const cellW = plotW / n;
+        function colorFor(val) {
+            const f = Math.max(0, Math.min(1, val / maxD));
+            const c = Math.round(255 - f * 220);
+            return `rgb(${c},${c+40},255)`;
+        }
 
         samples.forEach((s1, i) => {
             samples.forEach((s2, j) => {
@@ -2531,13 +2513,13 @@ function addMashDistanceSection(parent, clusters) {
                 const d = map[key];
                 const has = d != null;
                 const fill = has ? colorFor(d) : "#eeeeee";
-                const x = x0 + j * cellW;
-                const y = yRowTop + i * (cellH / n);
+                const x = margin.left + j * cellSize;
+                const y = margin.top + i * cellSize;
                 const rect = document.createElementNS(svgns, "rect");
                 rect.setAttribute("x", x);
                 rect.setAttribute("y", y);
-                rect.setAttribute("width", cellW);
-                rect.setAttribute("height", cellH / n);
+                rect.setAttribute("width", cellSize);
+                rect.setAttribute("height", cellSize);
                 rect.setAttribute("fill", fill);
                 rect.setAttribute("stroke", "#ffffff");
                 rect.setAttribute("stroke-width", "0.5");
@@ -2565,21 +2547,29 @@ function addMashDistanceSection(parent, clusters) {
         });
 
         samples.forEach((s, idx) => {
-            if (n > 40 && idx % 5 !== 0) return;
-            const x = x0 + idx * cellW + cellW / 2;
-            const lab = document.createElementNS(svgns, "text");
-            lab.setAttribute("x", x);
-            lab.setAttribute("y", height - 8);
-            lab.setAttribute("font-size", "9");
-            lab.setAttribute("text-anchor", "end");
-            lab.setAttribute("transform", `rotate(-60 ${x} ${height - 8})`);
-            lab.textContent = s;
-            svg.appendChild(lab);
+            const x = margin.left + idx * cellSize + cellSize / 2;
+            const yTop = margin.top - 8;
+            const labTop = document.createElementNS(svgns, "text");
+            labTop.setAttribute("x", x);
+            labTop.setAttribute("y", yTop);
+            labTop.setAttribute("font-size", "9");
+            labTop.setAttribute("text-anchor", "end");
+            labTop.setAttribute("transform", `rotate(-60 ${x} ${yTop})`);
+            labTop.textContent = s;
+            svg.appendChild(labTop);
+
+            const labLeft = document.createElementNS(svgns, "text");
+            labLeft.setAttribute("x", margin.left - 6);
+            labLeft.setAttribute("y", margin.top + idx * cellSize + cellSize / 2 + 3);
+            labLeft.setAttribute("font-size", "9");
+            labLeft.setAttribute("text-anchor", "end");
+            labLeft.textContent = s;
+            svg.appendChild(labLeft);
         });
     }
 
-    drawRow(0, "Markers", mapMarkers);
-    drawRow(1, "Reads", mapReads);
+    drawHeatmap(heatMarkers, markersPairs);
+    drawHeatmap(heatReads, readsPairs);
 }
 
 /* Sample clusters */
