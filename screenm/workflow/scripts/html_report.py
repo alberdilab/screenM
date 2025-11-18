@@ -2314,34 +2314,24 @@ function addOverallProkCoverageSection(parent, data) {
                 <p class="summary-message">${data.message_overall_prok_coverage || ""}</p>
                 <div class="redundancy-stats">
                     <div class="redundancy-stat-item">
-                        <div class="redundancy-stat-label">Coverage median</div>
-                        <div class="redundancy-stat-value">${data.coverage_median != null ? fmtFloat(data.coverage_median * 100, 1) + "%" : "NA"}</div>
-                        <div class="redundancy-stat-note">Median Nonpareil marker coverage (C_total)</div>
+                        <div class="redundancy-stat-label">Coverage (C_total)</div>
+                        <div class="redundancy-stat-value">${data.coverage_percent != null ? fmtFloat(data.coverage_percent, 1) + "%" : "NA"}</div>
+                        <div class="redundancy-stat-note">Pooled marker coverage across all samples</div>
                     </div>
                     <div class="redundancy-stat-item">
-                        <div class="redundancy-stat-label">Coverage CV</div>
-                        <div class="redundancy-stat-value">${fmtFloat(data.coverage_cv, 3)}</div>
-                        <div class="redundancy-stat-note">Variation in coverage across samples</div>
+                        <div class="redundancy-stat-label">kappa_total</div>
+                        <div class="redundancy-stat-value">${fmtFloat(data.kappa_total, 3)}</div>
+                        <div class="redundancy-stat-note">Nonpareil pooled marker redundancy</div>
                     </div>
                     <div class="redundancy-stat-item">
-                        <div class="redundancy-stat-label">kappa median</div>
-                        <div class="redundancy-stat-value">${fmtFloat(data.median_kappa_total, 3)}</div>
-                        <div class="redundancy-stat-note">Median Nonpareil marker kappa_total</div>
+                        <div class="redundancy-stat-label">Total reads</div>
+                        <div class="redundancy-stat-value">${fmtMillions(data.total_reads)}</div>
+                        <div class="redundancy-stat-note">Sum of reads included in pooled marker Nonpareil</div>
                     </div>
                     <div class="redundancy-stat-item">
-                        <div class="redundancy-stat-label">kappa CV</div>
-                        <div class="redundancy-stat-value">${fmtFloat(data.cv_kappa_total, 3)}</div>
-                        <div class="redundancy-stat-note">Variation in marker kappa_total</div>
-                    </div>
-                    <div class="redundancy-stat-item">
-                        <div class="redundancy-stat-label">Samples with LR target</div>
-                        <div class="redundancy-stat-value">${fmtInt(data.samples_with_lr)}</div>
-                        <div class="redundancy-stat-note">Marker samples with Nonpareil LR targets</div>
-                    </div>
-                    <div class="redundancy-stat-item">
-                        <div class="redundancy-stat-label">Samples below LR target</div>
-                        <div class="redundancy-stat-value">${fmtInt(data.samples_lr_exceeds)}</div>
-                        <div class="redundancy-stat-note">Marker samples where target exceeds depth</div>
+                        <div class="redundancy-stat-label">LR target (95%)</div>
+                        <div class="redundancy-stat-value">${fmtMillions(data.lr_95_reads)}</div>
+                        <div class="redundancy-stat-note">Reads estimated for 95% coverage</div>
                     </div>
                 </div>
             </div>
