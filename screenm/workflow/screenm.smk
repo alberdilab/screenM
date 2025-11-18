@@ -504,7 +504,11 @@ rule merge_json:
     params:
         package_dir=PACKAGE_DIR,
         version=VERSION,
-        name=NAME
+        name=NAME,
+        reads=READS,
+        kmer=KMER,
+        seed=SEED,
+        completeness=COMPLETENESS
     shell:
         """
         module load singlem/0.19.0
@@ -514,6 +518,10 @@ rule merge_json:
             --mash-reads {input.reads} \
             --project-name {params.name} \
             --software-version {params.version} \
+            --reads-threshold {params.reads} \
+            --kmer-length {params.kmer} \
+            --seed {params.seed} \
+            --completeness {params.completeness} \
             -o {output} 
         """
 

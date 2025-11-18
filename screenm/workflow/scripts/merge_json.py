@@ -66,6 +66,30 @@ def main():
         required=True,
         help="Software version string to store in top-level metadata (e.g. '1.2.3').",
     )
+    ap.add_argument(
+        "--reads-threshold",
+        required=True,
+        type=float,
+        help="Read threshold used for screening (e.g. 1000000).",
+    )
+    ap.add_argument(
+        "--kmer-length",
+        required=True,
+        type=int,
+        help="k-mer length used for Mash/Nonpareil analyses.",
+    )
+    ap.add_argument(
+        "--seed",
+        type=int,
+        default=None,
+        help="Random seed used; leave unset to store NA.",
+    )
+    ap.add_argument(
+        "--completeness",
+        required=True,
+        type=float,
+        help="Completeness target (percentage) used for Nonpareil (e.g. 95).",
+    )
     args = ap.parse_args()
 
     samples: Dict[str, Dict[str, Any]] = {}
@@ -93,6 +117,12 @@ def main():
     metadata: Dict[str, Any] = {
         "project": args.project_name,
         "software_version": args.software_version,
+        "parameters": {
+            "reads_threshold": args.reads_threshold,
+            "kmer_length": args.kmer_length,
+            "seed": args.seed if args.seed is not None else "NA",
+            "completeness": args.completeness,
+        },
         # ISO 8601 UTC timestamp, second precision
         "created_at": datetime.datetime.utcnow().isoformat(timespec="seconds") + "Z",
     }
