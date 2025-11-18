@@ -1371,10 +1371,49 @@ def main():
     all_samples_block = results_json.get("all_samples")
     overall_prok_coverage = None
     if isinstance(all_samples_block, dict):
+        comp_target = merged_metadata.get("parameters", {}).get("completeness")
+        try:
+            comp_target = float(comp_target)
+        except Exception:
+            comp_target = 95.0
+
+        coverage_total = all_samples_block.get("C_total")
+        if isinstance(coverage_total, str):
+            try:
+                coverage_total = float(coverage_total)
+            except ValueError:
+                coverage_total = None
+
+        coverage_pct = coverage_total * 100 if coverage_total is not None else None
+
+        if coverage_pct is None:
+            flag_overall = 3
+            msg_overall = "Overall marker coverage could not be assessed from all_samples Nonpareil output."
+        else:
+            if coverage_pct >= comp_target:
+                flag_overall = 1
+                msg_overall = (
+                    f"Overall marker coverage meets the {comp_target:.0f}% completeness target "
+                    f"({coverage_pct:.1f}%)."
+                )
+            elif coverage_pct >= 0.8 * comp_target:
+                flag_overall = 2
+                msg_overall = (
+                    f"Overall marker coverage is within 20% of the {comp_target:.0f}% completeness target "
+                    f"({coverage_pct:.1f}%)."
+                )
+            else:
+                flag_overall = 3
+                msg_overall = (
+                    f"Overall marker coverage is below 80% of the {comp_target:.0f}% completeness target "
+                    f"({coverage_pct:.1f}%)."
+                )
+
         overall_prok_coverage = {
             "sample": all_samples_block.get("sample"),
             "kappa_total": all_samples_block.get("kappa_total"),
             "coverage_total": all_samples_block.get("C_total"),
+            "coverage_percent": coverage_pct,
             "subset_reads": all_samples_block.get("subset_reads"),
             "total_reads": all_samples_block.get("total_reads"),
             "lr_95_reads": (
@@ -1382,8 +1421,8 @@ def main():
                 if isinstance(all_samples_block.get("targets"), dict)
                 else None
             ),
-            "flag_overall_prok_coverage": redundancy_markers.get("flag_redundancy_markers"),
-            "message_overall_prok_coverage": redundancy_markers.get("message_redundancy_markers"),
+            "flag_overall_prok_coverage": flag_overall,
+            "message_overall_prok_coverage": msg_overall,
         }
 
     distilled: Dict[str, Any] = {
