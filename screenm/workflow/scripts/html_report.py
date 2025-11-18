@@ -2489,10 +2489,55 @@ function addMashDistanceSection(parent, clusters) {
     const tabReads = div.querySelector("#mash-tab-reads");
     const svgns = "http://www.w3.org/2000/svg";
 
+    const allSamples = Array.from(new Set(
+        [...markersPairs, ...readsPairs].flatMap(p => [p.sample1, p.sample2])
+    )).filter(Boolean);
+
+    function orderSamples(pairs) {
+        const dist = {};
+        pairs.forEach(p => {
+            const d = Number(p.distance);
+            if (!isFinite(d) || p.sample1 == null || p.sample2 == null) return;
+            dist[`${p.sample1}||${p.sample2}`] = d;
+            dist[`${p.sample2}||${p.sample1}`] = d;
+        });
+        if (allSamples.length <= 2) return allSamples.slice().sort();
+        const remaining = new Set(allSamples);
+        let current = allSamples[0];
+        const order = [current];
+        remaining.delete(current);
+        while (remaining.size) {
+            let best = null, bestD = Infinity;
+            remaining.forEach(s => {
+                const d = dist[`${current}||${s}`];
+                const val = isFinite(d) ? d : Infinity;
+                if (val < bestD) {
+                    bestD = val;
+                    best = s;
+                }
+            });
+            if (!best) {
+                remaining.forEach(s => order.push(s));
+                break;
+            }
+            order.push(best);
+            remaining.delete(best);
+            current = best;
+        }
+        return order;
+    }
+
+    const sharedOrder = orderSamples(markersPairs.length ? markersPairs : readsPairs);
+
     function drawHeatmap(svg, pairs) {
         const sampleSet = new Set();
         pairs.forEach(p => { if (p.sample1) sampleSet.add(p.sample1); if (p.sample2) sampleSet.add(p.sample2); });
-        const samples = Array.from(sampleSet).sort();
+        let samples = Array.from(sampleSet);
+        if (sharedOrder && sharedOrder.length === samples.length) {
+            samples = sharedOrder;
+        } else {
+            samples.sort();
+        }
         const n = samples.length;
         if (!n) {
             svg.outerHTML = `<div class="small-note">No pairwise distances available.</div>`;
@@ -2565,20 +2610,20 @@ function addMashDistanceSection(parent, clusters) {
 
         samples.forEach((s, idx) => {
             const x = margin.left + idx * cellSize + cellSize / 2;
-            const yTop = margin.top - 14;
+            const yTop = margin.top - 18;
             const labTop = document.createElementNS(svgns, "text");
             labTop.setAttribute("x", x);
             labTop.setAttribute("y", yTop);
-            labTop.setAttribute("font-size", "9");
+            labTop.setAttribute("font-size", "10");
             labTop.setAttribute("text-anchor", "end");
             labTop.setAttribute("transform", `rotate(-60 ${x} ${yTop})`);
             labTop.textContent = s;
             svg.appendChild(labTop);
 
             const labLeft = document.createElementNS(svgns, "text");
-            labLeft.setAttribute("x", margin.left - 8);
-            labLeft.setAttribute("y", margin.top + idx * cellSize + cellSize / 2 + 3);
-            labLeft.setAttribute("font-size", "9");
+            labLeft.setAttribute("x", margin.left - 10);
+            labLeft.setAttribute("y", margin.top + idx * cellSize + cellSize / 2 + 4);
+            labLeft.setAttribute("font-size", "10");
             labLeft.setAttribute("text-anchor", "end");
             labLeft.textContent = s;
             svg.appendChild(labLeft);
