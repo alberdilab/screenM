@@ -1193,44 +1193,85 @@ def compute_recommendations(summary: Dict[str, Any]) -> Dict[str, Any]:
     lowq_flag = lowq.get("flag_low_quality", 3)
     prok_flag = prok.get("flag_prokaryotic_fraction", 3)
 
-    n_clusters = (clusters.get("markers", {}) or {}).get("n_clusters") or (clusters.get("reads", {}) or {}).get("n_clusters")
+    markers_block = clusters.get("markers", {}) or {}
+    reads_block = clusters.get("reads", {}) or {}
+    n_clusters = markers_block.get("n_clusters") or reads_block.get("n_clusters")
     clusters_flag = clusters.get("flag_clusters", 3)
+    cluster_ratio_ok = (
+        (markers_block.get("ratio_between_over_within") or 0) >= THRESH_CLUSTER_RATIO_GOOD
+        or (reads_block.get("ratio_between_over_within") or 0) >= THRESH_CLUSTER_RATIO_GOOD
+    )
 
-    if worst_cov_flag == 1:
-        overall = "Genome-resolved metagenomics is well supported by the current coverage."
+    # All sections green → straightforward genome-resolved path
+    all_flags = [
+        screen.get("flag_screening_overview"),
+        lowq_flag,
+        prok_flag,
+        red_reads.get("flag_redundancy"),
+        red_mark.get("flag_redundancy_markers"),
+        clusters_flag,
+    ]
+    all_green = all(f == 1 for f in all_flags if f is not None)
+
+    if all_green:
+        overall = "Data quality and coverage are excellent; individual assemblies for genome-resolved MAG recovery are recommended."
         items.append({
             "priority": "high",
-            "text": "Proceed with genome-resolved MAG recovery; coverage meets LR targets."
+            "text": "Proceed with genome-resolved metagenomics using individual assemblies; coassemblies not required."
         })
-    elif worst_cov_flag == 2:
-        overall = "Coverage is mixed; expect uneven genome-resolved performance."
+    elif worst_cov_flag == 1 and prok_flag == 1:
+        overall = "Coverage supports genome-resolved work; most samples look strong."
         items.append({
             "priority": "high",
-            "text": "Genome-resolved MAG recovery is feasible for better-covered samples; consider filtering low-depth libraries."
+            "text": "Individual assemblies are recommended; cluster-based coassemblies are optional for nuanced comparisons."
         })
+    elif worst_cov_flag <= 2 and prok_flag == 1:
+        overall = "Coverage is mixed; genome-resolved performance will vary."
+        if clusters_flag == 1 and n_clusters and n_clusters > 1 and cluster_ratio_ok:
+            items.append({
+                "priority": "high",
+                "text": "Use coassemblies per cluster to mitigate uneven coverage; retain individual assemblies for well-covered samples."
+            })
+        else:
+            items.append({
+                "priority": "high",
+                "text": "Genome-resolved MAG recovery is feasible for better-covered samples; filter or down-weight low-depth libraries."
+            })
+    elif prok_flag in (1, 2):
+        overall = "Prokaryotic signal is present but coverage is limited."
+        if clusters_flag == 1 and n_clusters and n_clusters > 1 and cluster_ratio_ok:
+            items.append({
+                "priority": "high",
+                "text": "Cluster-driven coassemblies are recommended to pool reads and boost prokaryotic coverage."
+            })
+        else:
+            items.append({
+                "priority": "high",
+                "text": "Whole-dataset coassembly may be needed to increase effective coverage; expect fragmented MAG recovery."
+            })
     else:
-        overall = "Coverage is low; genome-resolved analysis will be challenging."
+        overall = "Low prokaryotic signal and/or poor coverage; assemblies will struggle."
         items.append({
             "priority": "high",
-            "text": "Prioritise read-based and community-level analyses; genome-resolved MAG recovery may have low yield."
+            "text": "Prioritise read-based profiling; use community-level assemblies only for broad functional overviews."
         })
 
     # Assembly strategy
-    if worst_cov_flag <= 2:
+    if worst_cov_flag <= 2 and not all_green:
         if depth_cv is not None and depth_cv < 0.2:
             items.append({
                 "priority": "info",
-                "text": "Individual assemblies are appropriate because sequencing depth is relatively balanced."
+                "text": "Depth is balanced; individual assemblies remain a solid default."
             })
-        elif clusters_flag == 1 and isinstance(n_clusters, int) and n_clusters > 1:
+        elif clusters_flag == 1 and isinstance(n_clusters, int) and n_clusters > 1 and cluster_ratio_ok:
             items.append({
                 "priority": "info",
-                "text": "Co-assemblies per cluster are recommended to harmonise uneven depth while respecting sample structure."
+                "text": "Coassemblies per well-separated cluster can improve recovery while respecting sample structure."
             })
         else:
             items.append({
                 "priority": "info",
-                "text": "Consider hybrid strategy: individual assemblies for high-depth samples, co-assemblies for low-depth groups."
+                "text": "Hybrid approach: assemble high-depth samples individually and coassemble weaker groups."
             })
 
     # Quality / prokaryotic content
