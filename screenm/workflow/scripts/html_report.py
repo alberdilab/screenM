@@ -2122,8 +2122,8 @@ function addClustersSection(parent, clusters) {
     const markerColors = buildClusterColorMap(markersMap, markerPalette);
     const readColors = buildClusterColorMap(readsMap, readPalette);
 
-    const height = 210;
-    const margin = {left: 80, right: 20, top: 20, bottom: 80};
+    const height = 240;
+    const margin = {left: 80, right: 20, top: 20, bottom: 60};
     const rows = 2;
     const cellH = (height - margin.top - margin.bottom) / rows;
     const baseCellW = 20;
@@ -2195,12 +2195,12 @@ function addClustersSection(parent, clusters) {
                 if (show) {
                     const lab = document.createElementNS(svgns, "text");
                     lab.setAttribute("x", x + cellW / 2);
-                    lab.setAttribute("y", height - 22);
+                    lab.setAttribute("y", height - 8);
                     lab.setAttribute("font-size", "9");
                     lab.setAttribute("text-anchor", "end");
                     lab.setAttribute(
                         "transform",
-                        `rotate(-60 ${x + cellW / 2} ${height - 22})`
+                        `rotate(-60 ${x + cellW / 2} ${height - 8})`
                     );
                     lab.textContent = sampleName;
                     svg.appendChild(lab);
