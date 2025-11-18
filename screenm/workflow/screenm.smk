@@ -542,7 +542,8 @@ rule merge_json:
     input:
        samples=expand(f"{OUTDIR}/json/{{sample}}.json", sample=SAMPLES),
        markers=f"{OUTDIR}/mash/mash_markers.json",
-       reads=f"{OUTDIR}/mash/mash_reads.json"
+       reads=f"{OUTDIR}/mash/mash_reads.json",
+       all_samples=f"{OUTDIR}/nonpareil_markers/all_samples.json"
     output:
         f"{OUTDIR}/results.json"
     threads: 1
@@ -567,6 +568,7 @@ rule merge_json:
             --kmer-length {params.kmer} \
             --seed {params.seed} \
             --completeness {params.completeness} \
+            --all-samples {input.all_samples} \
             -o {output} 
         """
 

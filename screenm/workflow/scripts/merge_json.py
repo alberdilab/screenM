@@ -90,9 +90,16 @@ def main():
         type=float,
         help="Completeness target (percentage) used for Nonpareil (e.g. 95).",
     )
+    ap.add_argument(
+        "--all-samples",
+        required=True,
+        help="Path to all_samples.json containing per-sample metadata/paths.",
+    )
     args = ap.parse_args()
 
     samples: Dict[str, Dict[str, Any]] = {}
+
+    all_samples_json = load_json(Path(args.all_samples))
 
     # --- Merge per-sample JSONs ---
     for p_str in args.input:
@@ -131,6 +138,7 @@ def main():
         "metadata": metadata,
         "n_samples": len(samples),
         "samples": samples,
+        "all_samples": all_samples_json,
     }
 
     # --- Optionally attach Mash markers summary ---
