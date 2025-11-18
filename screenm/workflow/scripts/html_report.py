@@ -2396,6 +2396,193 @@ function addOverallProkCoverageSection(parent, data) {
     parent.appendChild(div);
 }
 
+/* Mash distance overview */
+function addMashDistanceSection(parent, clusters) {
+    if (!clusters) return;
+    const markers = clusters.markers || {};
+    const reads = clusters.reads || {};
+
+    const withinMarkers = markers.mean_within_distance;
+    const sdWithinMarkers = markers.sd_within_distance;
+    const cvMarkers = (sdWithinMarkers != null && withinMarkers) ? sdWithinMarkers / withinMarkers : null;
+    const betweenMarkers = markers.mean_between_distance;
+
+    const withinReads = reads.mean_within_distance;
+    const sdWithinReads = reads.sd_within_distance;
+    const cvReads = (sdWithinReads != null && withinReads) ? sdWithinReads / withinReads : null;
+    const betweenReads = reads.mean_between_distance;
+
+    const div = document.createElement("div");
+    div.className = "section " + flagClass(clusters.flag_clusters);
+    const status = sectionStatus("Mash distance overview", clusters.flag_clusters);
+
+    div.innerHTML = `
+        <h2 class="section-title">Mash distance overview</h2>
+        <p class="section-intro">
+            Average pairwise Mash distances within and between samples, with heatmaps for markers and reads.
+        </p>
+        <details>
+            <summary>
+                <span class="status-emoji">${status.emoji}</span>
+                <span class="status-text">${status.text}</span>
+                <span class="summary-hint">(click to expand)</span>
+            </summary>
+            <div class="content">
+                <div class="redundancy-stats">
+                    <div class="redundancy-stat-item">
+                        <div class="redundancy-stat-label">Markers within / between</div>
+                        <div class="redundancy-stat-value">${fmtFloat(withinMarkers, 4)} / ${fmtFloat(betweenMarkers, 4)}</div>
+                        <div class="redundancy-stat-note">Mean Mash distance (markers)</div>
+                    </div>
+                    <div class="redundancy-stat-item">
+                        <div class="redundancy-stat-label">Markers CV (within)</div>
+                        <div class="redundancy-stat-value">${fmtFloat(cvMarkers, 3)}</div>
+                        <div class="redundancy-stat-note">CV of within-marker distances</div>
+                    </div>
+                    <div class="redundancy-stat-item">
+                        <div class="redundancy-stat-label">Reads within / between</div>
+                        <div class="redundancy-stat-value">${fmtFloat(withinReads, 4)} / ${fmtFloat(betweenReads, 4)}</div>
+                        <div class="redundancy-stat-note">Mean Mash distance (reads)</div>
+                    </div>
+                    <div class="redundancy-stat-item">
+                        <div class="redundancy-stat-label">Reads CV (within)</div>
+                        <div class="redundancy-stat-value">${fmtFloat(cvReads, 3)}</div>
+                        <div class="redundancy-stat-note">CV of within-read distances</div>
+                    </div>
+                </div>
+                <div class="clusters-heatmap-scroll" style="margin-top:12px;">
+                    <svg id="mash-heatmap-svg" class="clusters-heatmap-svg" viewBox="0 0 1000 260" preserveAspectRatio="none"></svg>
+                </div>
+                <p class="small-note">
+                    Heatmaps show pairwise Mash distances (top: markers, bottom: reads). Darker tiles indicate larger distances; missing pairs are light grey.
+                </p>
+            </div>
+        </details>
+    `;
+    parent.appendChild(div);
+
+    const svg = div.querySelector("#mash-heatmap-svg");
+    const svgns = "http://www.w3.org/2000/svg";
+
+    const markersPairs = Array.isArray(clusters.pairwise_markers) ? clusters.pairwise_markers : [];
+    const readsPairs = Array.isArray(clusters.pairwise_reads) ? clusters.pairwise_reads : [];
+
+    const sampleSet = new Set();
+    markersPairs.forEach(p => { if (p.sample1) sampleSet.add(p.sample1); if (p.sample2) sampleSet.add(p.sample2); });
+    readsPairs.forEach(p => { if (p.sample1) sampleSet.add(p.sample1); if (p.sample2) sampleSet.add(p.sample2); });
+    const samples = Array.from(sampleSet).sort();
+    const n = samples.length;
+    if (!n) {
+        svg.outerHTML = `<div class="small-note">Pairwise Mash distances not available to draw heatmaps.</div>`;
+        return;
+    }
+
+    function buildMap(arr) {
+        const m = {};
+        arr.forEach(p => {
+            const s1 = p.sample1, s2 = p.sample2;
+            const d = Number(p.distance);
+            if (!isFinite(d) || s1 == null || s2 == null) return;
+            m[`${s1}||${s2}`] = d;
+            m[`${s2}||${s1}`] = d;
+        });
+        return m;
+    }
+    const mapMarkers = buildMap(markersPairs);
+    const mapReads = buildMap(readsPairs);
+
+    let maxD = 0;
+    [mapMarkers, mapReads].forEach(m => {
+        Object.values(m).forEach(v => { if (v > maxD) maxD = v; });
+    });
+    if (maxD <= 0) maxD = 1;
+
+    const height = 260;
+    const margin = {left: 100, right: 10, top: 20, bottom: 60};
+    const cellH = (height - margin.top - margin.bottom) / 2;
+    const baseCellW = 18;
+    const width = Math.max(1000, margin.left + margin.right + n * baseCellW);
+    svg.setAttribute("viewBox", `0 0 ${width} ${height}`);
+
+    const plotW = width - margin.left - margin.right;
+    const x0 = margin.left;
+
+    function colorFor(val) {
+        const f = Math.max(0, Math.min(1, val / maxD));
+        const c = Math.round(255 - f * 200);
+        return `rgb(${c},${c + 20},255)`;
+    }
+
+    function drawRow(rowIndex, label, map) {
+        const yRowTop = margin.top + rowIndex * cellH;
+        const labelText = document.createElementNS(svgns, "text");
+        labelText.setAttribute("x", 10);
+        labelText.setAttribute("y", yRowTop + cellH / 2 + 4);
+        labelText.setAttribute("font-size", "11");
+        labelText.setAttribute("text-anchor", "start");
+        labelText.textContent = label;
+        svg.appendChild(labelText);
+
+        const cellW = plotW / n;
+
+        samples.forEach((s1, i) => {
+            samples.forEach((s2, j) => {
+                const key = `${s1}||${s2}`;
+                const d = map[key];
+                const has = d != null;
+                const fill = has ? colorFor(d) : "#eeeeee";
+                const x = x0 + j * cellW;
+                const y = yRowTop + i * (cellH / n);
+                const rect = document.createElementNS(svgns, "rect");
+                rect.setAttribute("x", x);
+                rect.setAttribute("y", y);
+                rect.setAttribute("width", cellW);
+                rect.setAttribute("height", cellH / n);
+                rect.setAttribute("fill", fill);
+                rect.setAttribute("stroke", "#ffffff");
+                rect.setAttribute("stroke-width", "0.5");
+                if (has) {
+                    rect.style.cursor = "pointer";
+                    rect.addEventListener("mouseenter", (evt) => {
+                        const tooltip = getOrCreateTooltip();
+                        tooltip.style.display = "block";
+                        tooltip.textContent = `${s1} vs ${s2}\nMash distance: ${fmtFloat(d, 4)}`;
+                        tooltip.style.left = evt.clientX + "px";
+                        tooltip.style.top = evt.clientY + "px";
+                    });
+                    rect.addEventListener("mousemove", (evt) => {
+                        const tooltip = getOrCreateTooltip();
+                        tooltip.style.left = evt.clientX + "px";
+                        tooltip.style.top = evt.clientY + "px";
+                    });
+                    rect.addEventListener("mouseleave", () => {
+                        const tooltip = getOrCreateTooltip();
+                        tooltip.style.display = "none";
+                    });
+                }
+                svg.appendChild(rect);
+            });
+        });
+
+        samples.forEach((s, idx) => {
+            if (n > 40 && idx % 5 !== 0) return;
+            const x = x0 + idx * cellW + cellW / 2;
+            const lab = document.createElementNS(svgns, "text");
+            lab.setAttribute("x", x);
+            lab.setAttribute("y", height - 8);
+            lab.setAttribute("font-size", "9");
+            lab.setAttribute("text-anchor", "end");
+            lab.setAttribute("transform", `rotate(-60 ${x} ${height - 8})`);
+            lab.textContent = s;
+            svg.appendChild(lab);
+        });
+    }
+
+    drawRow(0, "Markers", mapMarkers);
+    drawRow(1, "Reads", mapReads);
+}
+
+/* Sample clusters */
 /* Main JS entry */
 function main() {
     const distill = DISTILL_DATA;
@@ -2424,6 +2611,7 @@ function main() {
     addOverallReadCoverageSection(summaryDiv, S.overall_metagenomic_coverage);
     addRedundancyMarkersSection(summaryDiv, S.redundancy_markers, redBiplotPerSample);
     addOverallProkCoverageSection(summaryDiv, S.overall_prokaryotic_coverage);
+    addMashDistanceSection(summaryDiv, S.clusters);
     addClustersSection(summaryDiv, S.clusters);
     addRecommendationsSection(summaryDiv, S.recommendations);
     setSummaryHintBehaviour(document.body);
