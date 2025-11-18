@@ -2414,9 +2414,9 @@ function main() {
     addProjectHighlights(highlightsDiv, distill, S);
     addScreeningOverviewSection(summaryDiv, S.screening_overview, depthPerSample);
     addLowQualitySection(summaryDiv, S.low_quality_reads, depthPerSample);
-    addOverallReadCoverageSection(summaryDiv, S.overall_metagenomic_coverage);
     addProkFractionSection(summaryDiv, S.prokaryotic_fraction, depthPerSample);
     addRedundancyReadsSection(summaryDiv, S.redundancy_reads, depthPerSample);
+    addOverallReadCoverageSection(summaryDiv, S.overall_metagenomic_coverage);
     addRedundancyMarkersSection(summaryDiv, S.redundancy_markers, redBiplotPerSample);
     addOverallProkCoverageSection(summaryDiv, S.overall_prokaryotic_coverage);
     addClustersSection(summaryDiv, S.clusters);
