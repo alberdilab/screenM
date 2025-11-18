@@ -2008,6 +2008,10 @@ function addClustersSection(parent, clusters) {
 
     const nClustersMarkers = markers.n_clusters != null ? markers.n_clusters : "NA";
     const nClustersReads = reads.n_clusters != null ? reads.n_clusters : "NA";
+    const withinMarkers = markers.mean_within_distance != null ? markers.mean_within_distance : null;
+    const betweenMarkers = markers.mean_between_distance != null ? markers.mean_between_distance : null;
+    const withinReads = reads.mean_within_distance != null ? reads.mean_within_distance : null;
+    const betweenReads = reads.mean_between_distance != null ? reads.mean_between_distance : null;
 
     const status = sectionStatus("Sample clusters", clusters.flag_clusters);
 
@@ -2034,6 +2038,16 @@ function addClustersSection(parent, clusters) {
                         <div class="cluster-stat-label">Read-based clusters</div>
                         <div class="cluster-stat-value">${fmtInt(nClustersReads)}</div>
                         <div class="cluster-stat-note">Clusters inferred from read-based Mash distances</div>
+                    </div>
+                    <div class="cluster-stat-item">
+                        <div class="cluster-stat-label">Within / between (markers)</div>
+                        <div class="cluster-stat-value">${fmtFloat(withinMarkers, 3)} / ${fmtFloat(betweenMarkers, 3)}</div>
+                        <div class="cluster-stat-note">Mean Mash distance within / between marker clusters</div>
+                    </div>
+                    <div class="cluster-stat-item">
+                        <div class="cluster-stat-label">Within / between (reads)</div>
+                        <div class="cluster-stat-value">${fmtFloat(withinReads, 3)} / ${fmtFloat(betweenReads, 3)}</div>
+                        <div class="cluster-stat-note">Mean Mash distance within / between read clusters</div>
                     </div>
                 </div>
                 <p class="small-note">
