@@ -590,12 +590,22 @@ def compute_redundancy_reads(results_json: Dict[str, Any]) -> Dict[str, Any]:
     lr_exceeds = 0
     n_with_lr = 0
     coverage_ratios: List[float] = []
+    coverage_estimates: List[float] = []
     lr_target_used: Optional[str] = None
 
     for name, sample_data in samples.items():
         npr = sample_data.get("nonpareil_reads", {}) or {}
         if not npr:
             continue
+
+        cov = npr.get("C_total")
+        if isinstance(cov, str):
+            try:
+                cov = float(cov)
+            except ValueError:
+                cov = None
+        if isinstance(cov, (int, float)) and cov >= 0:
+            coverage_estimates.append(float(cov))
 
         # kappa_total
         kappa = npr.get("kappa_total")
@@ -654,6 +664,13 @@ def compute_redundancy_reads(results_json: Dict[str, Any]) -> Dict[str, Any]:
     median_k = stats.median(kappas)
     sd_k = stats.pstdev(kappas) if n_kappa > 1 else 0.0
     cv_k = sd_k / mean_k if mean_k > 0 else None
+    cov_median = stats.median(coverage_estimates) if coverage_estimates else None
+    cov_cv = None
+    if coverage_estimates:
+        mean_cov = stats.mean(coverage_estimates)
+        if mean_cov > 0:
+            sd_cov = stats.pstdev(coverage_estimates) if len(coverage_estimates) > 1 else 0.0
+            cov_cv = sd_cov / mean_cov
 
     # Coverage-based flags (primary)
     n_cov = len(coverage_ratios)
@@ -710,6 +727,8 @@ def compute_redundancy_reads(results_json: Dict[str, Any]) -> Dict[str, Any]:
         "median_kappa_total": median_k,
         "sd_kappa_total": sd_k,
         "cv_kappa_total": cv_k,
+        "coverage_median": cov_median,
+        "coverage_cv": cov_cv,
         "flag_redundancy": flag_redundancy,
         "n_samples_with_lr": n_with_lr,
         "n_samples_lr_exceeds_depth": lr_exceeds,
@@ -734,12 +753,22 @@ def compute_redundancy_markers(results_json: Dict[str, Any]) -> Dict[str, Any]:
     lr_exceeds = 0
     n_with_lr = 0
     coverage_ratios: List[float] = []
+    coverage_estimates: List[float] = []
     lr_target_used: Optional[str] = None
 
     for name, sample_data in samples.items():
         npr = sample_data.get("nonpareil_markers", {}) or {}
         if not npr:
             continue
+
+        cov = npr.get("C_total")
+        if isinstance(cov, str):
+            try:
+                cov = float(cov)
+            except ValueError:
+                cov = None
+        if isinstance(cov, (int, float)) and cov >= 0:
+            coverage_estimates.append(float(cov))
 
         # kappa_total for markers
         kappa = npr.get("kappa_total")
@@ -798,6 +827,13 @@ def compute_redundancy_markers(results_json: Dict[str, Any]) -> Dict[str, Any]:
     median_k = stats.median(kappas)
     sd_k = stats.pstdev(kappas) if n_kappa > 1 else 0.0
     cv_k = sd_k / mean_k if mean_k > 0 else None
+    cov_median = stats.median(coverage_estimates) if coverage_estimates else None
+    cov_cv = None
+    if coverage_estimates:
+        mean_cov = stats.mean(coverage_estimates)
+        if mean_cov > 0:
+            sd_cov = stats.pstdev(coverage_estimates) if len(coverage_estimates) > 1 else 0.0
+            cov_cv = sd_cov / mean_cov
 
     # Coverage-based flags (primary)
     n_cov = len(coverage_ratios)
@@ -854,6 +890,8 @@ def compute_redundancy_markers(results_json: Dict[str, Any]) -> Dict[str, Any]:
         "median_kappa_total": median_k,
         "sd_kappa_total": sd_k,
         "cv_kappa_total": cv_k,
+        "coverage_median": cov_median,
+        "coverage_cv": cov_cv,
         "flag_redundancy_markers": flag_redundancy,
         "n_samples_with_lr": n_with_lr,
         "n_samples_lr_exceeds_depth": lr_exceeds,

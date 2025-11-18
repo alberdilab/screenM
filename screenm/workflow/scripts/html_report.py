@@ -1319,11 +1319,11 @@ function addRedundancyReadsSection(parent, data, depthPerSample) {
     const nBelow = data.n_samples_lr_exceeds_depth || 0;
     const nAtOrAbove = nLR ? (nLR - nBelow) : 0;
     const fracAtOrAbove = nLR ? (100 * nAtOrAbove / nLR) : null;
-    const coverageRatios = Array.isArray(data.coverage_ratios)
+    const coverageVals = (Array.isArray(data.coverage_ratios) && data.coverage_ratios.length)
         ? data.coverage_ratios.filter(v => typeof v === "number" && isFinite(v))
-        : [];
-    const covMedian = median(coverageRatios);
-    const covCV = coeffVar(coverageRatios);
+        : (data.coverage_median !== undefined ? [data.coverage_median] : []);
+    const covMedian = data.coverage_median != null ? data.coverage_median : median(coverageVals);
+    const covCV = data.coverage_cv != null ? data.coverage_cv : coeffVar(coverageVals);
 
     const status = sectionStatus("Overall metagenomic coverage", data.flag_redundancy);
 
@@ -1343,13 +1343,13 @@ function addRedundancyReadsSection(parent, data, depthPerSample) {
                 <div class="redundancy-stats">
                     <div class="redundancy-stat-item">
                         <div class="redundancy-stat-label">Coverage median</div>
-                        <div class="redundancy-stat-value">${covMedian === null ? "NA" : fmtFloat(covMedian, 2)}×</div>
-                        <div class="redundancy-stat-note">Median observed / target LR_reads</div>
+                        <div class="redundancy-stat-value">${covMedian === null ? "NA" : fmtFloat(covMedian * 100, 1)}%</div>
+                        <div class="redundancy-stat-note">Estimated Nonpareil coverage (C_total)</div>
                     </div>
                     <div class="redundancy-stat-item">
                         <div class="redundancy-stat-label">Coverage CV</div>
                         <div class="redundancy-stat-value">${covCV === null ? "NA" : fmtFloat(covCV, 3)}</div>
-                        <div class="redundancy-stat-note">Coefficient of variation of coverage ratios</div>
+                        <div class="redundancy-stat-note">Coefficient of variation of coverage estimates</div>
                     </div>
                     <div class="redundancy-stat-item">
                         <div class="redundancy-stat-label">kappa median</div>
@@ -1644,11 +1644,11 @@ function addRedundancyMarkersSection(parent, data, redBiplotPerSample) {
     const nBelow = data.n_samples_lr_exceeds_depth || 0;
     const nAtOrAbove = nLR ? (nLR - nBelow) : 0;
     const fracAtOrAbove = nLR ? (100 * nAtOrAbove / nLR) : null;
-    const coverageRatios = Array.isArray(data.coverage_ratios)
+    const coverageVals = (Array.isArray(data.coverage_ratios) && data.coverage_ratios.length)
         ? data.coverage_ratios.filter(v => typeof v === "number" && isFinite(v))
-        : [];
-    const covMedian = median(coverageRatios);
-    const covCV = coeffVar(coverageRatios);
+        : (data.coverage_median !== undefined ? [data.coverage_median] : []);
+    const covMedian = data.coverage_median != null ? data.coverage_median : median(coverageVals);
+    const covCV = data.coverage_cv != null ? data.coverage_cv : coeffVar(coverageVals);
 
     const status = sectionStatus("Prokaryotic coverage", data.flag_redundancy_markers);
 
@@ -1668,13 +1668,13 @@ function addRedundancyMarkersSection(parent, data, redBiplotPerSample) {
                 <div class="redundancy-stats">
                     <div class="redundancy-stat-item">
                         <div class="redundancy-stat-label">Coverage median</div>
-                        <div class="redundancy-stat-value">${covMedian === null ? "NA" : fmtFloat(covMedian, 2)}×</div>
-                        <div class="redundancy-stat-note">Median observed / target LR_reads</div>
+                        <div class="redundancy-stat-value">${covMedian === null ? "NA" : fmtFloat(covMedian * 100, 1)}%</div>
+                        <div class="redundancy-stat-note">Estimated Nonpareil coverage (C_total)</div>
                     </div>
                     <div class="redundancy-stat-item">
                         <div class="redundancy-stat-label">Coverage CV</div>
                         <div class="redundancy-stat-value">${covCV === null ? "NA" : fmtFloat(covCV, 3)}</div>
-                        <div class="redundancy-stat-note">Coefficient of variation of coverage ratios</div>
+                        <div class="redundancy-stat-note">Coefficient of variation of coverage estimates</div>
                     </div>
                     <div class="redundancy-stat-item">
                         <div class="redundancy-stat-label">kappa median</div>
