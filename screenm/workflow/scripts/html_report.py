@@ -336,6 +336,7 @@ function addProjectHighlights(container, distill, summary) {
 
     const meta = distill.meta || {};
     const metadata = meta.metadata || {};
+    const parameters = metadata.parameters || {};
     const screening = summary.screening_overview || {};
 
     const projectName =
@@ -359,7 +360,9 @@ function addProjectHighlights(container, distill, summary) {
         {
             label: "Total reads",
             value: fmtMillions(
-                (summary.low_quality_reads || {}).total_reads
+                summary.total_reads_all_samples !== undefined && summary.total_reads_all_samples !== null
+                    ? summary.total_reads_all_samples
+                    : (summary.low_quality_reads || {}).total_reads
             ),
             note: "Sum of input reads across samples"
         },
@@ -372,6 +375,7 @@ function addProjectHighlights(container, distill, summary) {
             label: "Completeness target",
             value: (() => {
                 const comp =
+                    parameters.completeness ??
                     metadata.completeness ??
                     metadata.completeness_target ??
                     metadata.targets ??

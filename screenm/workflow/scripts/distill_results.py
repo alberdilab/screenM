@@ -261,6 +261,30 @@ def compute_screening_overview(
     }
 
 
+def compute_total_reads_all(results_json: Dict[str, Any]) -> Optional[float]:
+    """
+    Sum total reads across all samples using count.reads (or count.total_reads).
+    Returns None if no numeric counts are found.
+    """
+    samples = results_json.get("samples", {}) or {}
+    total_reads_all = 0.0
+    found = False
+
+    for sample_data in samples.values():
+        count_block = sample_data.get("count", {}) or {}
+        reads = count_block.get("reads", count_block.get("total_reads"))
+        if isinstance(reads, str):
+            try:
+                reads = float(reads)
+            except ValueError:
+                reads = None
+        if isinstance(reads, (int, float)) and reads >= 0:
+            total_reads_all += float(reads)
+            found = True
+
+    return total_reads_all if found else None
+
+
 # ---------- 3) Low-quality reads (fastp-based) ----------
 
 def compute_low_quality(results_json: Dict[str, Any]) -> Dict[str, Any]:
@@ -1213,6 +1237,7 @@ def main():
     redundancy_reads = compute_redundancy_reads(results_json)
     redundancy_markers = compute_redundancy_markers(results_json)
     clusters = compute_clusters(results_json)
+    total_reads_all = compute_total_reads_all(results_json)
 
     # --- NEW: capture metadata from results.json, but keep old fields unchanged ---
     merged_metadata = {
@@ -1238,6 +1263,8 @@ def main():
             "redundancy_reads": redundancy_reads,
             "redundancy_markers": redundancy_markers,
             "clusters": clusters,
+            # aggregate total reads across all samples
+            "total_reads_all_samples": total_reads_all,
         },
     }
 
