@@ -320,6 +320,34 @@ function coeffVar(arr) {
     return Math.sqrt(variance) / mean;
 }
 
+function makeTicksAroundTen(maxVal) {
+    if (maxVal <= 0) return [0];
+    const niceSteps = [
+        0.0005, 0.001, 0.0025, 0.005,
+        0.01, 0.02, 0.025, 0.05,
+        0.1, 0.2, 0.25, 0.5, 1, 2, 2.5, 5, 10
+    ];
+    const targetTicks = 10;
+    let best = niceSteps[0];
+    let bestDiff = Number.POSITIVE_INFINITY;
+    niceSteps.forEach(step => {
+        const nTicks = maxVal / step;
+        const diff = Math.abs(nTicks - targetTicks);
+        if (diff < bestDiff) {
+            bestDiff = diff;
+            best = step;
+        }
+    });
+    const ticks = [];
+    for (let v = 0; v <= maxVal + 1e-9; v += best) {
+        ticks.push(v);
+    }
+    if (ticks[ticks.length - 1] < maxVal - best * 0.25) {
+        ticks.push(maxVal);
+    }
+    return ticks;
+}
+
 function getOrCreateTooltip() {
     let tooltip = document.querySelector(".chart-tooltip");
     if (!tooltip) {
@@ -867,31 +895,7 @@ function addLowQualitySection(parent, data, depthPerSample) {
     yAxis.setAttribute("stroke", "#555");
     svg.appendChild(yAxis);
 
-    function makeTicks(maxVal) {
-        if (maxVal <= 0) return [0];
-        let step;
-        if (maxVal <= 0.01) {
-            step = 0.0025; // 0.25%
-        } else if (maxVal <= 0.02) {
-            step = 0.005; // 0.5%
-        } else if (maxVal <= 0.05) {
-            step = 0.01; // 1%
-        } else if (maxVal <= 0.10) {
-            step = 0.02; // 2%
-        } else {
-            step = 0.05; // 5%
-        }
-        const ticks = [];
-        for (let f = 0; f <= maxVal + 1e-9; f += step) {
-            ticks.push(f);
-        }
-        if (ticks[ticks.length - 1] < maxVal - step * 0.25) {
-            ticks.push(maxVal);
-        }
-        return ticks;
-    }
-
-    const tickPercs = makeTicks(maxFrac);
+    const tickPercs = makeTicksAroundTen(maxFrac);
     tickPercs.forEach(frac => {
         const y = yForFrac(frac);
         const tick = document.createElementNS(svgns, "line");
@@ -1161,7 +1165,7 @@ function addProkFractionSection(parent, data, depthPerSample) {
     yAxis.setAttribute("stroke", "#555");
     svg.appendChild(yAxis);
 
-    [0, 0.25, 0.5, 0.75, 1].filter(frac => frac <= maxFrac + 1e-9).forEach(frac => {
+    makeTicksAroundTen(maxFrac).forEach(frac => {
         const y = yForFrac(frac);
         const tick = document.createElementNS(svgns, "line");
         tick.setAttribute("x1", x0 - 4);
@@ -1516,7 +1520,8 @@ function addRedundancyReadsSection(parent, data, depthPerSample) {
     svg.appendChild(baseLabel);
 
     const maxTick = Math.max(1, Math.ceil(maxAbs));
-    for (let v = -maxTick; v <= maxTick; v++) {
+    const stepTick = Math.max(1, Math.round(maxTick / 5));
+    for (let v = -maxTick; v <= maxTick; v += stepTick) {
         const y = yForVal(v);
         const tick = document.createElementNS(svgns, "line");
         tick.setAttribute("x1", x0 - 4);
@@ -1837,7 +1842,8 @@ function addRedundancyMarkersSection(parent, data, redBiplotPerSample) {
     svg.appendChild(baseLabel);
 
     const maxTick = Math.max(1, Math.ceil(maxAbs));
-    for (let v = -maxTick; v <= maxTick; v++) {
+    const stepTick = Math.max(1, Math.round(maxTick / 5));
+    for (let v = -maxTick; v <= maxTick; v += stepTick) {
         const y = yForVal(v);
         const tick = document.createElementNS(svgns, "line");
         tick.setAttribute("x1", x0 - 4);

@@ -443,12 +443,12 @@ def compute_prokaryotic_fraction(results_json: Dict[str, Any]) -> Dict[str, Any]
     else:
         if mean_frac > THRESH_PROK_HIGH:
             mean_frac_msg = (
-                f"Average prokaryotic fraction of the dataset is high ({mean_frac:.3f}), "
+                f"Average prokaryotic fraction of the dataset is high ({mean_frac:.2f}%), "
                 "indicating that marginal amounts of host and other non-prokaryotic DNA are unlikely to affect the analyses. "
             )
         elif mean_frac > THRESH_PROK_MODERATE:
             mean_frac_msg = (
-                f"Average prokaryotic fraction of the dataset is moderate ({mean_frac:.3f}), "
+                f"Average prokaryotic fraction of the dataset is moderate ({mean_frac:.2f}%), "
                 "indicating that samples may contain significant amounts of host or other non-prokaryotic DNA "
                 "that could affect the analyses (e.g., slow down or disrupt assembly, reduce binning efficacy etc.). "
                 "If the host genome is available, consider removing host reads prior to assembly, but bear in mind that the resulting "
@@ -456,7 +456,7 @@ def compute_prokaryotic_fraction(results_json: Dict[str, Any]) -> Dict[str, Any]
             )
         else:
             mean_frac_msg = (
-                f"Average prokaryotic fraction of the dataset is low ({mean_frac:.3f}), "
+                f"Average prokaryotic fraction of the dataset is low ({mean_frac:.2f}%), "
                 "indicating that samples likely contain high amounts of host or other non-prokaryotic (e.g., dietary remains) DNA. "
                 "This could severely affect downstream analyses, by affecting assembly quality and binning success. "
                 "If the host genome is available, remove host reads prior to assembly, but bear in mind that the resulting "
@@ -468,18 +468,18 @@ def compute_prokaryotic_fraction(results_json: Dict[str, Any]) -> Dict[str, Any]
     else:
         if cv_frac < THRESH_CV_BALANCED:
             var_msg = (
-                f"Prokaryotic fraction is consistent across samples (CV = {cv_frac:.3f}), "
+                f"Prokaryotic fraction is consistent across samples (CV = {cv_frac:.2f}), "
                 "so average estimates should be representative of the dataset. "
             )
         elif cv_frac < THRESH_CV_MODERATE:
             var_msg = (
-                f"Prokaryotic fraction shows moderate variation across samples (CV = {cv_frac:.3f}), "
+                f"Prokaryotic fraction shows moderate variation across samples (CV = {cv_frac:.2f}), "
                 "so some samples may differ from the average estimate. Consider looking at individual sample values "
                 "to assess whether any samples deviate significantly from the average patterns. "
             )
         else:
             var_msg = (
-                f"Prokaryotic fraction is highly variable across samples (CV = {cv_frac:.3f}), "
+                f"Prokaryotic fraction is highly variable across samples (CV = {cv_frac:.2f}), "
                 "so average estimates may not reflect individual sample compositions. Have a look at the per-sample "
                 "prokaryotic fractions to understand the variation in microbial content across your dataset. "
             )
