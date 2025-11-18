@@ -381,7 +381,7 @@ rule nonpareil_reads_all:
         """
         echo "[`date '+%Y-%m-%d %H:%M:%S'`] Estimating marker redundancy of all samples"
         module load singlem/0.19.0
-        nonpareil -s {input} -T kmer -f fasfastqfastqta -b {params.workdir} -k {params.kmer} -t {threads} > /dev/null 2>&1
+        nonpareil -s {input} -T kmer -f fastq -b {params.workdir} -k {params.kmer} -t {threads} > /dev/null 2>&1
         """
 
 rule nonpareil_reads_all_out:
