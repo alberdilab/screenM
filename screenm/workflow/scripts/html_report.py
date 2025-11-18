@@ -259,7 +259,7 @@ HTML_TEMPLATE = r"""<!DOCTYPE html>
         border-radius: 4px;
         font-size: 0.8em;
         z-index: 1000;
-        white-space: nowrap;
+        white-space: pre-line;
         transform: translate(8px, -20px);
     }
 </style>
@@ -867,7 +867,31 @@ function addLowQualitySection(parent, data, depthPerSample) {
     yAxis.setAttribute("stroke", "#555");
     svg.appendChild(yAxis);
 
-    const tickPercs = [0, 0.05, 0.10, 0.15, 0.20, 0.25].filter(p => p <= maxFrac + 1e-9);
+    function makeTicks(maxVal) {
+        if (maxVal <= 0) return [0];
+        let step;
+        if (maxVal <= 0.01) {
+            step = 0.0025; // 0.25%
+        } else if (maxVal <= 0.02) {
+            step = 0.005; // 0.5%
+        } else if (maxVal <= 0.05) {
+            step = 0.01; // 1%
+        } else if (maxVal <= 0.10) {
+            step = 0.02; // 2%
+        } else {
+            step = 0.05; // 5%
+        }
+        const ticks = [];
+        for (let f = 0; f <= maxVal + 1e-9; f += step) {
+            ticks.push(f);
+        }
+        if (ticks[ticks.length - 1] < maxVal - step * 0.25) {
+            ticks.push(maxVal);
+        }
+        return ticks;
+    }
+
+    const tickPercs = makeTicks(maxFrac);
     tickPercs.forEach(frac => {
         const y = yForFrac(frac);
         const tick = document.createElementNS(svgns, "line");
@@ -1449,8 +1473,7 @@ function addRedundancyReadsSection(parent, data, depthPerSample) {
         const a = Math.abs(v);
         if (a > maxAbs) maxAbs = a;
     });
-    maxAbs = Math.max(maxAbs, 3);
-    maxAbs *= 1.05;
+    maxAbs = Math.max(maxAbs * 1.05, 1);
 
     function yForVal(v) {
         const f = v / maxAbs;
@@ -1492,7 +1515,7 @@ function addRedundancyReadsSection(parent, data, depthPerSample) {
     baseLabel.textContent = "LR target";
     svg.appendChild(baseLabel);
 
-    const maxTick = Math.max(3, Math.ceil(maxAbs));
+    const maxTick = Math.max(1, Math.ceil(maxAbs));
     for (let v = -maxTick; v <= maxTick; v++) {
         const y = yForVal(v);
         const tick = document.createElementNS(svgns, "line");
@@ -1771,8 +1794,7 @@ function addRedundancyMarkersSection(parent, data, redBiplotPerSample) {
         const a = Math.abs(v);
         if (a > maxAbs) maxAbs = a;
     });
-    maxAbs = Math.max(maxAbs, 3);
-    maxAbs *= 1.05;
+    maxAbs = Math.max(maxAbs * 1.05, 1);
 
     function yForVal(v) {
         const f = v / maxAbs;
@@ -1814,7 +1836,7 @@ function addRedundancyMarkersSection(parent, data, redBiplotPerSample) {
     baseLabel.textContent = "95% coverage target";
     svg.appendChild(baseLabel);
 
-    const maxTick = Math.max(3, Math.ceil(maxAbs));
+    const maxTick = Math.max(1, Math.ceil(maxAbs));
     for (let v = -maxTick; v <= maxTick; v++) {
         const y = yForVal(v);
         const tick = document.createElementNS(svgns, "line");
