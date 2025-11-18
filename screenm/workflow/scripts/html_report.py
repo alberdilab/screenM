@@ -2440,7 +2440,6 @@ function addOverallReadCoverageSection(parent, data) {
         svg.appendChild(lab);
     }
 }
-}
 
 /* Overall marker coverage summary */
 function addOverallProkCoverageSection(parent, data) {
