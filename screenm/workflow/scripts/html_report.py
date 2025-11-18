@@ -300,6 +300,11 @@ HTML_TEMPLATE = r"""<!DOCTYPE html>
 <body>
 
 <h1>ScreenM Summary Report</h1>
+<p class="section-intro" style="text-align:center; max-width: 900px; margin: -10px auto 24px auto;">
+    ScreenM screens metagenomic datasets for suitability in downstream analyses by combining quality, coverage,
+    and clustering checks. Use this report to gauge whether genome-resolved, coassembly, or read-based approaches
+    are most appropriate for your samples.
+</p>
 
 <div id="project-highlights"></div>
 <div id="summary-sections"></div>
