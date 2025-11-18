@@ -578,14 +578,18 @@ def _pick_target_lr_reads(npr_block: Dict[str, Any]) -> Optional[Tuple[str, floa
 
 def compute_redundancy_reads(results_json: Dict[str, Any]) -> Dict[str, Any]:
     """
-    Summarise redundancy using Nonpareil kappa_total and LR_reads from
-    samples[*].nonpareil_reads.targets, compared to total sample reads.
+    Summarise coverage/completeness on metagenome reads using Nonpareil LR targets.
+
+    We still report kappa_total statistics for reference, but colour/flags and
+    messaging are based on how many samples meet the LR target (coverage ratio)
+    rather than on redundancy alone.
     """
     samples = results_json.get("samples", {}) or {}
 
     kappas: List[float] = []
     lr_exceeds = 0
     n_with_lr = 0
+    coverage_ratios: List[float] = []
     lr_target_used: Optional[str] = None
 
     for name, sample_data in samples.items():
@@ -622,6 +626,8 @@ def compute_redundancy_reads(results_json: Dict[str, Any]) -> Dict[str, Any]:
                 n_with_lr += 1
                 if (lr_reads != float("inf")) and (lr_reads > total_reads):
                     lr_exceeds += 1
+                if lr_reads and lr_reads not in (0, float("inf")):
+                    coverage_ratios.append(total_reads / lr_reads)
 
     n_kappa = len(kappas)
 
@@ -649,60 +655,31 @@ def compute_redundancy_reads(results_json: Dict[str, Any]) -> Dict[str, Any]:
     sd_k = stats.pstdev(kappas) if n_kappa > 1 else 0.0
     cv_k = sd_k / mean_k if mean_k > 0 else None
 
-    if mean_k > THRESH_KAPPA_HIGH:
-        flag_redundancy = 1
-    elif mean_k > THRESH_KAPPA_MODERATE:
-        flag_redundancy = 2
-    else:
+    # Coverage-based flags (primary)
+    n_cov = len(coverage_ratios)
+    n_meet = sum(1 for r in coverage_ratios if r >= 1.0)
+    frac_meet = (n_meet / n_cov) if n_cov else 0.0
+    if n_cov == 0:
         flag_redundancy = 3
-
-    if mean_k is None:
-        mean_k_msg = "Variation in redundancy cannot be evaluated."
+        coverage_msg = (
+            "No LR_reads targets with valid coverage ratios were found; cannot assess completeness for metagenomic reads."
+        )
     else:
-        if mean_k > THRESH_KAPPA_HIGH:
-            mean_k_msg = (
-                f"Average estimated read redundancy is high ({mean_k:.3f}), "
-                "indicating that the sequencing data captures most of the "
-                "metagenomic diversity estimated in the samples. "
-            )
-        elif mean_k > THRESH_KAPPA_MODERATE:
-            mean_k_msg = (
-                f"Average estimated read redundancy is moderate ({mean_k:.3f}), "
-                "indicating that a significant portion of the metagenomic diversity is "
-                "likely not to be captured by the sequencing data. "
-                ""
-            )
+        if n_meet == n_cov:
+            flag_redundancy = 1
+        elif frac_meet >= (1 - THRESH_LR_EXCEEDS_FRACTION):
+            flag_redundancy = 2
         else:
-            mean_k_msg = (
-                f"Average estimated read redundancy is low ({mean_k:.3f}), "
-                "indicating that a significant portion of the metagenomic diversity "
-                "remains unsampled. Consider increasing sequencing depth to better "
-                "capture the diversity. "
-            )
+            flag_redundancy = 3
+        coverage_msg = (
+            f"{n_meet}/{n_cov} samples meet or exceed the LR target ({lr_target_used}%). "
+            f"Median coverage ratio is {stats.median(coverage_ratios):.2f}× "
+            f"(mean {stats.mean(coverage_ratios):.2f}×)."
+        )
 
-    if cv_k is None:
-        var_msg = "Variation in redundancy cannot be evaluated."
-    else:
-        if cv_k < THRESH_CV_BALANCED:
-            var_msg = (
-                f"Read redundancy is consistent across samples (CV = {cv_k:.3f}), "
-                "indicating that average estimates should be applicable to most samples. "
-            )
-        elif cv_k < THRESH_CV_MODERATE:
-            var_msg = (
-                f"Marker redundancy shows moderate variation across samples (CV = {cv_k:.3f}), "
-                "indicating that average estimates may not fully reflect all samples. "
-                "Consider looking at individual sample redundancy estimates to assess the variation. "
-            )
-        else:
-            var_msg = (
-                f"Marker redundancy is highly variable across samples (CV = {cv_k:.3f}), "
-                "indicating that average estimates may be misleading for some libraries. "
-                "Look at individual sample redundancy estimates to assess the variation. "
-            )
-
+    # LR vs depth flag (always 1/2/3 when data exist)
     if n_with_lr == 0:
-        flag_lr = None
+        flag_lr = 3
         lr_msg = (
             "No LR_reads targets were available from Nonpareil (reads); "
             "cannot compare required sequencing effort to observed depth."
@@ -712,30 +689,20 @@ def compute_redundancy_reads(results_json: Dict[str, Any]) -> Dict[str, Any]:
         if lr_exceeds == 0:
             flag_lr = 1
             lr_msg = (
-                f"For all {n_with_lr} samples, the sequencing depth required to capture {lr_target_used}% "
-                "of the metagenomic diversity is lower than the depth achieved, "
-                "indicating that the sequencing effort was most likely sufficient. "
+                f"All {n_with_lr} samples are at or above the sequencing depth needed for {lr_target_used}% completeness."
             )
         elif frac_exceeds < THRESH_LR_EXCEEDS_FRACTION:
             flag_lr = 2
             lr_msg = (
-                f"In {lr_exceeds}/{n_with_lr} samples, he sequencing depth required to capture {lr_target_used}% "
-                "of the metagenomic diversity is above the conducted sequencing depth, indicating that these samples "
-                "may not be able to represent the complexity of the samples adequately. "
+                f"{lr_exceeds}/{n_with_lr} samples fall below the depth needed for {lr_target_used}% completeness."
             )
         else:
             flag_lr = 3
             lr_msg = (
-                f"In most ({lr_exceeds}/{n_with_lr}) samples, the sequencing depth required to capture {lr_target_used}% "
-                "of the metagenomic diversity is above the conducted sequencing depth, indicating that a substantial fraction of "
-                "the dataset will likely be unable to represent the complexity of the samples adequately. "
+                f"Most samples ({lr_exceeds}/{n_with_lr}) fall below the depth needed for {lr_target_used}% completeness."
             )
 
-    message = (
-        mean_k_msg + " "
-        + var_msg + " "
-        + lr_msg
-    )
+    message = coverage_msg + " " + lr_msg
 
     return {
         "n_samples_kappa": n_kappa,
@@ -748,6 +715,7 @@ def compute_redundancy_reads(results_json: Dict[str, Any]) -> Dict[str, Any]:
         "n_samples_lr_exceeds_depth": lr_exceeds,
         "flag_LR_vs_depth": flag_lr,
         "lr_target_used": lr_target_used,
+        "coverage_ratios": coverage_ratios if coverage_ratios else None,
         "message_redundancy": message,
     }
 
@@ -756,15 +724,16 @@ def compute_redundancy_reads(results_json: Dict[str, Any]) -> Dict[str, Any]:
 
 def compute_redundancy_markers(results_json: Dict[str, Any]) -> Dict[str, Any]:
     """
-    Summarise redundancy using Nonpareil kappa_total and LR_reads from
-    samples[*].nonpareil_markers.targets, compared to marker read depth
-    recorded in the same block (total_reads or subset_reads).
+    Summarise marker-based coverage/completeness using Nonpareil LR targets.
+
+    Flags and explanations are based on target coverage; kappa_total is kept for reference.
     """
     samples = results_json.get("samples", {}) or {}
 
     kappas: List[float] = []
     lr_exceeds = 0
     n_with_lr = 0
+    coverage_ratios: List[float] = []
     lr_target_used: Optional[str] = None
 
     for name, sample_data in samples.items():
@@ -801,6 +770,8 @@ def compute_redundancy_markers(results_json: Dict[str, Any]) -> Dict[str, Any]:
                 n_with_lr += 1
                 if (lr_reads != float("inf")) and (lr_reads > depth):
                     lr_exceeds += 1
+                if lr_reads and lr_reads not in (0, float("inf")):
+                    coverage_ratios.append(depth / lr_reads)
 
     n_kappa = len(kappas)
 
@@ -828,60 +799,31 @@ def compute_redundancy_markers(results_json: Dict[str, Any]) -> Dict[str, Any]:
     sd_k = stats.pstdev(kappas) if n_kappa > 1 else 0.0
     cv_k = sd_k / mean_k if mean_k > 0 else None
 
-    if mean_k > THRESH_KAPPA_HIGH:
-        flag_redundancy = 1
-    elif mean_k > THRESH_KAPPA_MODERATE:
-        flag_redundancy = 2
-    else:
+    # Coverage-based flags (primary)
+    n_cov = len(coverage_ratios)
+    n_meet = sum(1 for r in coverage_ratios if r >= 1.0)
+    frac_meet = (n_meet / n_cov) if n_cov else 0.0
+    if n_cov == 0:
         flag_redundancy = 3
-
-    if mean_k is None:
-        mean_k_msg = "Variation in redundancy cannot be evaluated."
+        coverage_msg = (
+            "No LR_reads targets with valid coverage ratios were found; cannot assess completeness for marker genes."
+        )
     else:
-        if mean_k > THRESH_KAPPA_HIGH:
-            mean_k_msg = (
-                f"Average estimated marker redundancy is high ({mean_k:.3f}), "
-                "indicating that the sequencing data captures most of the "
-                "microbial diversity estimated in the samples."
-            )
-        elif mean_k > THRESH_KAPPA_MODERATE:
-            mean_k_msg = (
-                f"Average estimated marker redundancy is moderate ({mean_k:.3f}), "
-                "indicating that a significant portion of the microbial diversity is "
-                "likely not to be captured by the sequencing data."
-                ""
-            )
+        if n_meet == n_cov:
+            flag_redundancy = 1
+        elif frac_meet >= (1 - THRESH_LR_EXCEEDS_FRACTION):
+            flag_redundancy = 2
         else:
-            mean_k_msg = (
-                f"Average estimated marker redundancy is low ({mean_k:.3f}), "
-                "indicating that a significant portion of the microbial diversity "
-                "remains unsampled. Consider increasing sequencing depth to better "
-                "capture the microbial community. "
-            )
+            flag_redundancy = 3
+        coverage_msg = (
+            f"{n_meet}/{n_cov} samples meet or exceed the LR target ({lr_target_used}%). "
+            f"Median coverage ratio is {stats.median(coverage_ratios):.2f}× "
+            f"(mean {stats.mean(coverage_ratios):.2f}×)."
+        )
 
-    if cv_k is None:
-        var_msg = "Variation in marker redundancy cannot be evaluated."
-    else:
-        if cv_k < THRESH_CV_BALANCED:
-            var_msg = (
-                f"Marker redundancy is consistent across samples (CV = {cv_k:.3f}), "
-                "indicating that average estimates should be applicable to most samples."
-            )
-        elif cv_k < THRESH_CV_MODERATE:
-            var_msg = (
-                f"Marker redundancy shows moderate variation across samples (CV = {cv_k:.3f}), "
-                "indicating that average estimates may not fully reflect all samples. "
-                "Consider looking at individual sample redundancy estimates to assess the variation."
-            )
-        else:
-            var_msg = (
-                f"Marker redundancy is highly variable across samples (CV = {cv_k:.3f}), "
-                "indicating that average estimates may be misleading for some libraries. "
-                "Look at individual sample redundancy estimates to assess the variation."
-            )
-
+    # LR vs depth flag (always 1/2/3 when data exist)
     if n_with_lr == 0:
-        flag_lr = None
+        flag_lr = 3
         lr_msg = (
             "No LR_reads targets were available from Nonpareil (markers); "
             "cannot compare required marker sequencing effort to observed marker depth."
@@ -891,30 +833,20 @@ def compute_redundancy_markers(results_json: Dict[str, Any]) -> Dict[str, Any]:
         if lr_exceeds == 0:
             flag_lr = 1
             lr_msg = (
-                f"For all {n_with_lr} samples, the sequencing depth estimated to be needed to capture {lr_target_used}% "
-                "of the microbial diversity is below the conducted sequencing depth, "
-                "indicating sufficient sequencing effort."
+                f"All {n_with_lr} samples are at or above the marker depth needed for {lr_target_used}% completeness."
             )
         elif frac_exceeds < THRESH_LR_EXCEEDS_FRACTION:
             flag_lr = 2
             lr_msg = (
-                f"In {lr_exceeds}/{n_with_lr} samples, the sequencing depth estimated to be needed to capture {lr_target_used}% "
-                "of the microbial diversity is above the conducted sequencing depth, indicating that these samples "
-                "may not be able to represent the complexity of the communities adequately."
+                f"{lr_exceeds}/{n_with_lr} samples fall below the marker depth needed for {lr_target_used}% completeness."
             )
         else:
             flag_lr = 3
             lr_msg = (
-                f"In most ({lr_exceeds}/{n_with_lr}) samples, the sequencing depth estimated to be needed to capture {lr_target_used}% "
-                "of the microbial diversity is above the conducted sequencing depth, indicating that a substantial fraction of "
-                "the dataset will likely be unable to represent the complexity of the communities adequately. "
+                f"Most samples ({lr_exceeds}/{n_with_lr}) fall below the marker depth needed for {lr_target_used}% completeness."
             )
 
-    message = (
-        mean_k_msg + " "
-        + var_msg + " "
-        + lr_msg
-    )
+    message = coverage_msg + " " + lr_msg
 
     return {
         "n_samples_kappa": n_kappa,
@@ -927,6 +859,7 @@ def compute_redundancy_markers(results_json: Dict[str, Any]) -> Dict[str, Any]:
         "n_samples_lr_exceeds_depth": lr_exceeds,
         "flag_LR_vs_depth_markers": flag_lr,
         "lr_target_used": lr_target_used,
+        "coverage_ratios": coverage_ratios if coverage_ratios else None,
         "message_redundancy_markers": message,
     }
 
