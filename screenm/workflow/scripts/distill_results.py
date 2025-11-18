@@ -1166,6 +1166,98 @@ def compute_clusters(results_json: Dict[str, Any]) -> Dict[str, Any]:
     }
 
 
+def compute_recommendations(summary: Dict[str, Any]) -> Dict[str, Any]:
+    """
+    Build a simple recommendation block based on existing section flags/metrics.
+    The HTML report will later render these as itemised suggestions.
+    """
+    items: List[Dict[str, Any]] = []
+
+    screen = summary.get("screening_overview", {}) or {}
+    lowq = summary.get("low_quality_reads", {}) or {}
+    prok = summary.get("prokaryotic_fraction", {}) or {}
+    red_reads = summary.get("redundancy_reads", {}) or {}
+    red_mark = summary.get("redundancy_markers", {}) or {}
+    clusters = summary.get("clusters", {}) or {}
+
+    # Coverage signals
+    cov_flags = [
+        red_reads.get("flag_redundancy"),
+        red_mark.get("flag_redundancy_markers"),
+    ]
+    cov_flags = [f for f in cov_flags if f is not None]
+    worst_cov_flag = max(cov_flags) if cov_flags else 3
+
+    # Depth balance / quality / prok signals
+    depth_cv = screen.get("cv_reads")
+    lowq_flag = lowq.get("flag_low_quality", 3)
+    prok_flag = prok.get("flag_prokaryotic_fraction", 3)
+
+    n_clusters = (clusters.get("markers", {}) or {}).get("n_clusters") or (clusters.get("reads", {}) or {}).get("n_clusters")
+    clusters_flag = clusters.get("flag_clusters", 3)
+
+    if worst_cov_flag == 1:
+        overall = "Genome-resolved metagenomics is well supported by the current coverage."
+        items.append({
+            "priority": "high",
+            "text": "Proceed with genome-resolved MAG recovery; coverage meets LR targets."
+        })
+    elif worst_cov_flag == 2:
+        overall = "Coverage is mixed; expect uneven genome-resolved performance."
+        items.append({
+            "priority": "high",
+            "text": "Genome-resolved MAG recovery is feasible for better-covered samples; consider filtering low-depth libraries."
+        })
+    else:
+        overall = "Coverage is low; genome-resolved analysis will be challenging."
+        items.append({
+            "priority": "high",
+            "text": "Prioritise read-based and community-level analyses; genome-resolved MAG recovery may have low yield."
+        })
+
+    # Assembly strategy
+    if worst_cov_flag <= 2:
+        if depth_cv is not None and depth_cv < 0.2:
+            items.append({
+                "priority": "info",
+                "text": "Individual assemblies are appropriate because sequencing depth is relatively balanced."
+            })
+        elif clusters_flag == 1 and isinstance(n_clusters, int) and n_clusters > 1:
+            items.append({
+                "priority": "info",
+                "text": "Co-assemblies per cluster are recommended to harmonise uneven depth while respecting sample structure."
+            })
+        else:
+            items.append({
+                "priority": "info",
+                "text": "Consider hybrid strategy: individual assemblies for high-depth samples, co-assemblies for low-depth groups."
+            })
+
+    # Quality / prokaryotic content
+    if lowq_flag == 3:
+        items.append({
+            "priority": "warn",
+            "text": "Low sequencing quality in several samples suggests aggressive QC or dropping worst libraries before assembly."
+        })
+    if prok_flag == 3:
+        items.append({
+            "priority": "warn",
+            "text": "Low prokaryotic fraction indicates contamination/human/host signal; enrichment or read-based profiling may be safer."
+        })
+
+    # Read-based fallback
+    if worst_cov_flag == 3 or lowq_flag == 3 or prok_flag == 3:
+        items.append({
+            "priority": "info",
+            "text": "Read-based taxonomic/functional profiling will provide robust community overviews even if assemblies underperform."
+        })
+
+    return {
+        "overall": overall,
+        "items": items,
+    }
+
+
 
 # ---------- Main ----------
 
@@ -1210,6 +1302,15 @@ def main():
     clusters = compute_clusters(results_json)
     total_reads_all = compute_total_reads_all(results_json)
 
+    recommendations = compute_recommendations({
+        "screening_overview": screening_overview,
+        "low_quality_reads": low_quality,
+        "prokaryotic_fraction": prok_fraction,
+        "redundancy_reads": redundancy_reads,
+        "redundancy_markers": redundancy_markers,
+        "clusters": clusters,
+    })
+
     # --- NEW: capture metadata from results.json, but keep old fields unchanged ---
     merged_metadata = {
     "data_json": str(data_path),
@@ -1236,6 +1337,7 @@ def main():
             "clusters": clusters,
             # aggregate total reads across all samples
             "total_reads_all_samples": total_reads_all,
+            "recommendations": recommendations,
         },
     }
 
