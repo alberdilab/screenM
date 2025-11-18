@@ -1365,6 +1365,18 @@ def main():
     meta: Dict[str, Any] = {
         "n_samples_in_results": int(results_json.get("n_samples", 0)),
         "metadata": merged_metadata,
+        "all_samples": results_json.get("all_samples"),
+    }
+
+    overall_prok_coverage = {
+        "coverage_median": redundancy_markers.get("coverage_median"),
+        "coverage_cv": redundancy_markers.get("coverage_cv"),
+        "median_kappa_total": redundancy_markers.get("median_kappa_total"),
+        "cv_kappa_total": redundancy_markers.get("cv_kappa_total"),
+        "samples_with_lr": redundancy_markers.get("n_samples_with_lr"),
+        "samples_lr_exceeds": redundancy_markers.get("n_samples_lr_exceeds_depth"),
+        "flag_overall_prok_coverage": redundancy_markers.get("flag_redundancy_markers"),
+        "message_overall_prok_coverage": redundancy_markers.get("message_redundancy_markers"),
     }
 
     distilled: Dict[str, Any] = {
@@ -1379,6 +1391,7 @@ def main():
             # aggregate total reads across all samples
             "total_reads_all_samples": total_reads_all,
             "recommendations": recommendations,
+            "overall_prokaryotic_coverage": overall_prok_coverage,
         },
     }
 

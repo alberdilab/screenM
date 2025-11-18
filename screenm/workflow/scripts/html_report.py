@@ -1435,7 +1435,7 @@ function addRedundancyReadsSection(parent, data, depthPerSample) {
     const status = sectionStatus("Overall metagenomic coverage", data.flag_redundancy);
 
     div.innerHTML = `
-        <h2 class="section-title">Overall metagenomic coverage</h2>
+        <h2 class="section-title">Metagenomic coverage of samples</h2>
         <p class="section-intro">
             This section evaluates how close the sequencing depth is to the Nonpareil LR target for metagenomic reads.
         </p>
@@ -1760,7 +1760,7 @@ function addRedundancyMarkersSection(parent, data, redBiplotPerSample) {
     const status = sectionStatus("Prokaryotic coverage", data.flag_redundancy_markers);
 
     div.innerHTML = `
-        <h2 class="section-title">Prokaryotic coverage</h2>
+        <h2 class="section-title">Prokaryotic coverage of samples</h2>
         <p class="section-intro">
             This section evaluates coverage of marker genes relative to the 95% Nonpareil target.
         </p>
@@ -2291,6 +2291,66 @@ function addClustersSection(parent, clusters) {
     drawRow(1, "Reads", readsMap, readColors, "#fcae91");
 }
 
+/* Overall marker coverage summary */
+function addOverallProkCoverageSection(parent, data) {
+    if (!data) return;
+    const div = document.createElement("div");
+    div.className = "section " + flagClass(data.flag_overall_prok_coverage);
+
+    const status = sectionStatus("Overall prokaryotic coverage", data.flag_overall_prok_coverage);
+
+    div.innerHTML = `
+        <h2 class="section-title">Overall prokaryotic coverage</h2>
+        <p class="section-intro">
+            Aggregated Nonpareil marker coverage across samples.
+        </p>
+        <details>
+            <summary>
+                <span class="status-emoji">${status.emoji}</span>
+                <span class="status-text">${status.text}</span>
+                <span class="summary-hint">(click to expand)</span>
+            </summary>
+            <div class="content">
+                <p class="summary-message">${data.message_overall_prok_coverage || ""}</p>
+                <div class="redundancy-stats">
+                    <div class="redundancy-stat-item">
+                        <div class="redundancy-stat-label">Coverage median</div>
+                        <div class="redundancy-stat-value">${data.coverage_median != null ? fmtFloat(data.coverage_median * 100, 1) + "%" : "NA"}</div>
+                        <div class="redundancy-stat-note">Median Nonpareil marker coverage (C_total)</div>
+                    </div>
+                    <div class="redundancy-stat-item">
+                        <div class="redundancy-stat-label">Coverage CV</div>
+                        <div class="redundancy-stat-value">${fmtFloat(data.coverage_cv, 3)}</div>
+                        <div class="redundancy-stat-note">Variation in coverage across samples</div>
+                    </div>
+                    <div class="redundancy-stat-item">
+                        <div class="redundancy-stat-label">kappa median</div>
+                        <div class="redundancy-stat-value">${fmtFloat(data.median_kappa_total, 3)}</div>
+                        <div class="redundancy-stat-note">Median Nonpareil marker kappa_total</div>
+                    </div>
+                    <div class="redundancy-stat-item">
+                        <div class="redundancy-stat-label">kappa CV</div>
+                        <div class="redundancy-stat-value">${fmtFloat(data.cv_kappa_total, 3)}</div>
+                        <div class="redundancy-stat-note">Variation in marker kappa_total</div>
+                    </div>
+                    <div class="redundancy-stat-item">
+                        <div class="redundancy-stat-label">Samples with LR target</div>
+                        <div class="redundancy-stat-value">${fmtInt(data.samples_with_lr)}</div>
+                        <div class="redundancy-stat-note">Marker samples with Nonpareil LR targets</div>
+                    </div>
+                    <div class="redundancy-stat-item">
+                        <div class="redundancy-stat-label">Samples below LR target</div>
+                        <div class="redundancy-stat-value">${fmtInt(data.samples_lr_exceeds)}</div>
+                        <div class="redundancy-stat-note">Marker samples where target exceeds depth</div>
+                    </div>
+                </div>
+            </div>
+        </details>
+    `;
+
+    parent.appendChild(div);
+}
+
 /* Main JS entry */
 function main() {
     const distill = DISTILL_DATA;
@@ -2318,6 +2378,7 @@ function main() {
     addRedundancyReadsSection(summaryDiv, S.redundancy_reads, depthPerSample);
     addRedundancyMarkersSection(summaryDiv, S.redundancy_markers, redBiplotPerSample);
     addClustersSection(summaryDiv, S.clusters);
+    addOverallProkCoverageSection(summaryDiv, S.overall_prokaryotic_coverage);
     addRecommendationsSection(summaryDiv, S.recommendations);
     setSummaryHintBehaviour(document.body);
 }
