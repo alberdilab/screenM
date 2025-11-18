@@ -254,7 +254,7 @@ rule merge_markers_all:
     input: 
         expand(f"{OUTDIR}/nonpareil_markers/{{sample}}.fna", sample=SAMPLES)
     output:
-        f"{OUTDIR}/nonpareil_markers/all_samples.fna"
+        f"{OUTDIR}/nonpareil_markers_all/all_samples.fna"
     shell:
         """
         cat {input} > {output}
@@ -262,15 +262,15 @@ rule merge_markers_all:
 
 rule nonpareil_markers_all:
     input: 
-        f"{OUTDIR}/nonpareil_markers/all_samples.fna"
+        f"{OUTDIR}/nonpareil_markers_all/all_samples.fna"
     output:
-        npa=f"{OUTDIR}/nonpareil_markers/all_samples.npa",
-        npc=f"{OUTDIR}/nonpareil_markers/all_samples.npc",
-        npl=f"{OUTDIR}/nonpareil_markers/all_samples.npl",
-        npo=f"{OUTDIR}/nonpareil_markers/all_samples.npo"
+        npa=f"{OUTDIR}/nonpareil_markers_all/all_samples.npa",
+        npc=f"{OUTDIR}/nonpareil_markers_all/all_samples.npc",
+        npl=f"{OUTDIR}/nonpareil_markers_all/all_samples.npl",
+        npo=f"{OUTDIR}/nonpareil_markers_all/all_samples.npo"
     threads: 1
     params:
-        workdir = lambda wc: f"{OUTDIR}/nonpareil_markers/all_samples",
+        workdir = lambda wc: f"{OUTDIR}/nonpareil_markers_all/all_samples",
         kmer = KMER
     shell:
         """
@@ -281,10 +281,10 @@ rule nonpareil_markers_all:
 
 rule nonpareil_markers_all_out:
     input: 
-        f"{OUTDIR}/nonpareil_markers/all_samples.npo"
+        f"{OUTDIR}/nonpareil_markers_all/all_samples.npo"
     output:
-        tsv=f"{OUTDIR}/nonpareil_markers/all_samples.tsv",
-        json=f"{OUTDIR}/nonpareil_markers/all_samples.json"
+        tsv=f"{OUTDIR}/nonpareil_markers_all/all_samples.tsv",
+        json=f"{OUTDIR}/nonpareil_markers_all/all_samples.json"
     threads: 1
     params:
         subset=READS * 2,
@@ -360,7 +360,7 @@ rule merge_reads_all:
     input: 
         expand(f"{OUTDIR}/nonpareil_reads/{{sample}}.fna", sample=SAMPLES)
     output:
-        f"{OUTDIR}/nonpareil_reads/all_samples.fna"
+        f"{OUTDIR}/nonpareil_reads_all/all_samples.fna"
     shell:
         """
         cat {input} > {output}
@@ -368,15 +368,15 @@ rule merge_reads_all:
 
 rule nonpareil_reads_all:
     input: 
-        f"{OUTDIR}/nonpareil_reads/all_samples.fna"
+        f"{OUTDIR}/nonpareil_reads_all/all_samples.fna"
     output:
-        npa=f"{OUTDIR}/nonpareil_reads/all_samples.npa",
-        npc=f"{OUTDIR}/nonpareil_reads/all_samples.npc",
-        npl=f"{OUTDIR}/nonpareil_reads/all_samples.npl",
-        npo=f"{OUTDIR}/nonpareil_reads/all_samples.npo"
+        npa=f"{OUTDIR}/nonpareil_reads_all/all_samples.npa",
+        npc=f"{OUTDIR}/nonpareil_reads_all/all_samples.npc",
+        npl=f"{OUTDIR}/nonpareil_reads_all/all_samples.npl",
+        npo=f"{OUTDIR}/nonpareil_reads_all/all_samples.npo"
     threads: 1
     params:
-        workdir = lambda wc: f"{OUTDIR}/nonpareil_reads/all_samples",
+        workdir = lambda wc: f"{OUTDIR}/nonpareil_reads_all/all_samples",
         kmer = KMER
     shell:
         """
@@ -387,10 +387,10 @@ rule nonpareil_reads_all:
 
 rule nonpareil_reads_all_out:
     input: 
-        f"{OUTDIR}/nonpareil_reads/all_samples.npo"
+        f"{OUTDIR}/nonpareil_reads_all/all_samples.npo"
     output:
-        tsv=f"{OUTDIR}/nonpareil_reads/all_samples.tsv",
-        json=f"{OUTDIR}/nonpareil_reads/all_samples.json"
+        tsv=f"{OUTDIR}/nonpareil_reads_all/all_samples.tsv",
+        json=f"{OUTDIR}/nonpareil_reads_all/all_samples.json"
     threads: 1
     params:
         subset=READS * 2,
@@ -595,8 +595,8 @@ rule merge_json:
        samples=expand(f"{OUTDIR}/json/{{sample}}.json", sample=SAMPLES),
        markers=f"{OUTDIR}/mash/mash_markers.json",
        reads=f"{OUTDIR}/mash/mash_reads.json",
-       markers_all=f"{OUTDIR}/nonpareil_markers/all_samples.json",
-       reads_all=f"{OUTDIR}/nonpareil_reads/all_samples.json"
+       markers_all=f"{OUTDIR}/nonpareil_markers_all/all_samples.json",
+       reads_all=f"{OUTDIR}/nonpareil_reads_all/all_samples.json"
     output:
         f"{OUTDIR}/results.json"
     threads: 1
