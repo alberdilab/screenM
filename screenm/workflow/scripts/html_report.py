@@ -121,6 +121,15 @@ HTML_TEMPLATE = r"""<!DOCTYPE html>
     details[open] > summary {
         margin-bottom: 8px;
     }
+    .summary-hint {
+        margin-left: 8px;
+        font-size: 0.85em;
+        color: #666;
+        font-weight: 500;
+    }
+    details[open] .summary-hint {
+        color: #444;
+    }
 
     .flag-1 {
         background-color: #d7f5dd;
@@ -460,10 +469,11 @@ function addScreeningOverviewSection(parent, data, depthPerSample) {
         <p class="section-intro">
             This section summarises how many samples pass the read threshold and how evenly sequencing depth is distributed.
         </p>
-        <details open>
+        <details>
             <summary>
                 <span class="status-emoji">${status.emoji}</span>
                 <span class="status-text">${status.text}</span>
+                <span class="summary-hint">(click to expand)</span>
             </summary>
             <div class="content">
                 <p class="summary-message">${msg}</p>
@@ -522,10 +532,12 @@ function addScreeningOverviewSection(parent, data, depthPerSample) {
         const v = Number(d.total_reads) || 0;
         if (v > maxDepth) maxDepth = v;
     });
-    if (thresholdReads && thresholdReads > maxDepth) {
-        maxDepth = thresholdReads * 1.05;
+    const maxObservedDepth = maxDepth;
+    if (maxObservedDepth <= 0) {
+        maxDepth = 1;
+    } else {
+        maxDepth = maxObservedDepth * 1.05;
     }
-    if (maxDepth <= 0) maxDepth = 1;
 
     const x0 = margin.left;
     const y0 = height - margin.bottom;
@@ -687,7 +699,7 @@ function addScreeningOverviewSection(parent, data, depthPerSample) {
         svg.appendChild(lab);
     }
 
-    if (thresholdReads && thresholdReads > 0) {
+    if (thresholdReads && thresholdReads > 0 && thresholdReads <= maxObservedDepth * 1.0001) {
         const y = yForValue(thresholdReads);
         const line = document.createElementNS(svgns, "line");
         line.setAttribute("x1", x0);
@@ -733,6 +745,7 @@ function addLowQualitySection(parent, data, depthPerSample) {
             <summary>
                 <span class="status-emoji">${status.emoji}</span>
                 <span class="status-text">${status.text}</span>
+                <span class="summary-hint">(click to expand)</span>
             </summary>
             <div class="content">
                 <p class="summary-message">${msg}</p>
@@ -790,12 +803,12 @@ function addLowQualitySection(parent, data, depthPerSample) {
     const THRESH_GOOD = 0.05;
     const THRESH_MOD  = 0.20;
 
-    let maxFrac = 0;
+    let maxFracObserved = 0;
     perSample.forEach(d => {
         const f = Number(d.fraction_low_quality_of_total) || 0;
-        if (f > maxFrac) maxFrac = f;
+        if (f > maxFracObserved) maxFracObserved = f;
     });
-    maxFrac = Math.max(maxFrac * 1.1, 0.25, 0.22);
+    let maxFrac = maxFracObserved > 0 ? maxFracObserved * 1.1 : 0.05;
 
     function yForFrac(f) {
         const frac = Math.max(0, Math.min(maxFrac, f));
@@ -929,7 +942,7 @@ function addLowQualitySection(parent, data, depthPerSample) {
         {frac: THRESH_MOD,  color: "#c62828", label: "20%"}
     ];
     thresholds.forEach(t => {
-        if (t.frac > maxFrac + 1e-9) return;
+        if (t.frac > maxFracObserved + 1e-9) return;
         const y = yForFrac(t.frac);
         const line = document.createElementNS(svgns, "line");
         line.setAttribute("x1", x0);
@@ -994,6 +1007,7 @@ function addProkFractionSection(parent, data, depthPerSample) {
             <summary>
                 <span class="status-emoji">${status.emoji}</span>
                 <span class="status-text">${status.text}</span>
+                <span class="summary-hint">(click to expand)</span>
             </summary>
             <div class="content">
                 <p class="summary-message">${msg}</p>
@@ -1056,9 +1070,19 @@ function addProkFractionSection(parent, data, depthPerSample) {
     const THRESH_PROK_MOD = 0.50;
     const THRESH_PROK_HIGH = 0.90;
 
+    let maxFracObserved = 0;
+    dataPerSample.forEach(d => {
+        const fracLow = d.fraction_low_quality_of_total || 0;
+        const fracProk = d.fraction_prokaryotic_of_total || 0;
+        const fracOther = d.fraction_non_prokaryotic_of_total || 0;
+        const stack = fracLow + fracProk + fracOther;
+        maxFracObserved = Math.max(maxFracObserved, fracProk, stack);
+    });
+    let maxFrac = maxFracObserved > 0 ? Math.min(1, maxFracObserved * 1.1) : 1;
+
     function yForFrac(frac) {
-        const f = Math.max(0, Math.min(1, frac));
-        return y0 - f * plotH;
+        const f = Math.max(0, Math.min(maxFrac, frac));
+        return y0 - (f / maxFrac) * plotH;
     }
 
     const xAxis = document.createElementNS(svgns, "line");
@@ -1077,7 +1101,7 @@ function addProkFractionSection(parent, data, depthPerSample) {
     yAxis.setAttribute("stroke", "#555");
     svg.appendChild(yAxis);
 
-    [0, 0.25, 0.5, 0.75, 1].forEach(frac => {
+    [0, 0.25, 0.5, 0.75, 1].filter(frac => frac <= maxFrac + 1e-9).forEach(frac => {
         const y = yForFrac(frac);
         const tick = document.createElementNS(svgns, "line");
         tick.setAttribute("x1", x0 - 4);
@@ -1216,6 +1240,7 @@ function addProkFractionSection(parent, data, depthPerSample) {
         {frac: THRESH_PROK_HIGH, color: "#2e7d32", label: "90%"}
     ];
     thresholds.forEach(t => {
+        if (t.frac > maxFracObserved + 1e-9) return;
         const y = yForFrac(t.frac);
         const line = document.createElementNS(svgns, "line");
         line.setAttribute("x1", x0);
@@ -1285,6 +1310,7 @@ function addRedundancyReadsSection(parent, data, depthPerSample) {
             <summary>
                 <span class="status-emoji">${status.emoji}</span>
                 <span class="status-text">${status.text}</span>
+                <span class="summary-hint">(click to expand)</span>
             </summary>
             <div class="content">
                 <p class="summary-message">${msg}</p>
@@ -1594,6 +1620,7 @@ function addRedundancyMarkersSection(parent, data, redBiplotPerSample) {
             <summary>
                 <span class="status-emoji">${status.emoji}</span>
                 <span class="status-text">${status.text}</span>
+                <span class="summary-hint">(click to expand)</span>
             </summary>
             <div class="content">
                 <p class="summary-message">${msg}</p>
@@ -1899,6 +1926,7 @@ function addClustersSection(parent, clusters) {
             <summary>
                 <span class="status-emoji">${status.emoji}</span>
                 <span class="status-text">${status.text}</span>
+                <span class="summary-hint">(click to expand)</span>
             </summary>
             <div class="content">
                 <p class="summary-message">${msg}</p>
