@@ -356,6 +356,58 @@ rule nonpareil_reads_out:
             --targets {params.completeness}
         """
 
+rule merge_reads_all:
+    input: 
+        expand(f"{OUTDIR}/nonpareil_reads/{{sample}}.fna", sample=SAMPLES)
+    output:
+        f"{OUTDIR}/nonpareil_reads/all_samples.fna"
+    shell:
+        """
+        cat {input} > {output}
+        """
+
+rule nonpareil_reads_all:
+    input: 
+        f"{OUTDIR}/nonpareil_reads/all_samples.fna"
+    output:
+        npa=f"{OUTDIR}/nonpareil_reads/all_samples.npa",
+        npc=f"{OUTDIR}/nonpareil_reads/all_samples.npc",
+        npl=f"{OUTDIR}/nonpareil_reads/all_samples.npl",
+        npo=f"{OUTDIR}/nonpareil_reads/all_samples.npo"
+    threads: 1
+    params:
+        workdir = lambda wc: f"{OUTDIR}/nonpareil_reads/all_samples",
+        kmer = KMER
+    shell:
+        """
+        echo "[`date '+%Y-%m-%d %H:%M:%S'`] Estimating marker redundancy of all samples"
+        module load singlem/0.19.0
+        nonpareil -s {input} -T kmer -f fasta -b {params.workdir} -k {params.kmer} -t {threads} > /dev/null 2>&1
+        """
+
+rule nonpareil_reads_all_out:
+    input: 
+        f"{OUTDIR}/nonpareil_reads/all_samples.npo"
+    output:
+        tsv=f"{OUTDIR}/nonpareil_reads/all_samples.tsv",
+        json=f"{OUTDIR}/nonpareil_reads/all_samples.json"
+    threads: 1
+    params:
+        subset=READS * 2,
+        completeness = COMPLETENESS,
+        package_dir=PACKAGE_DIR,
+        reads_all=READS_ALL
+    shell:
+        """
+        module load singlem/0.19.0
+        python {params.package_dir}/workflow/scripts/nonpareil_project.py {input} \
+            --subset-reads {params.subset} \
+            --total-reads {params.reads_all} \
+            --tsv-out {output.tsv} \
+            --json-out {output.json} \
+            --targets {params.completeness}
+        """
+
 rule mash_sketch_markers:
     input:
         expand(f"{OUTDIR}/nonpareil_markers/{{sample}}.fna", sample=SAMPLES)
@@ -543,7 +595,8 @@ rule merge_json:
        samples=expand(f"{OUTDIR}/json/{{sample}}.json", sample=SAMPLES),
        markers=f"{OUTDIR}/mash/mash_markers.json",
        reads=f"{OUTDIR}/mash/mash_reads.json",
-       all_samples=f"{OUTDIR}/nonpareil_markers/all_samples.json"
+       markers_all=f"{OUTDIR}/nonpareil_markers/all_samples.json",
+       reads_all=f"{OUTDIR}/nonpareil_reads/all_samples.json"
     output:
         f"{OUTDIR}/results.json"
     threads: 1
@@ -568,7 +621,8 @@ rule merge_json:
             --kmer-length {params.kmer} \
             --seed {params.seed} \
             --completeness {params.completeness} \
-            --all-samples {input.all_samples} \
+            --all-samples {input.markers_all} \
+            --all-samples-reads {input.reads_all} \
             -o {output} 
         """
 

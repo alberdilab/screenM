@@ -1368,16 +1368,17 @@ def main():
         "all_samples": results_json.get("all_samples"),
     }
 
-    all_samples_block = results_json.get("all_samples")
+    all_samples_markers = results_json.get("all_samples_markers")
+    all_samples_reads = results_json.get("all_samples_reads")
     overall_prok_coverage = None
-    if isinstance(all_samples_block, dict):
+    if isinstance(all_samples_markers, dict):
         comp_target = merged_metadata.get("parameters", {}).get("completeness")
         try:
             comp_target = float(comp_target)
         except Exception:
             comp_target = 95.0
 
-        coverage_total = all_samples_block.get("C_total")
+        coverage_total = all_samples_markers.get("C_total")
         if isinstance(coverage_total, str):
             try:
                 coverage_total = float(coverage_total)
@@ -1410,19 +1411,75 @@ def main():
                 )
 
         overall_prok_coverage = {
-            "sample": all_samples_block.get("sample"),
-            "kappa_total": all_samples_block.get("kappa_total"),
-            "coverage_total": all_samples_block.get("C_total"),
+            "sample": all_samples_markers.get("sample"),
+            "kappa_total": all_samples_markers.get("kappa_total"),
+            "coverage_total": all_samples_markers.get("C_total"),
             "coverage_percent": coverage_pct,
-            "subset_reads": all_samples_block.get("subset_reads"),
-            "total_reads": all_samples_block.get("total_reads"),
+            "subset_reads": all_samples_markers.get("subset_reads"),
+            "total_reads": all_samples_markers.get("total_reads"),
             "lr_95_reads": (
-                all_samples_block.get("targets", {}).get("95", {}).get("LR_reads")
-                if isinstance(all_samples_block.get("targets"), dict)
+                all_samples_markers.get("targets", {}).get("95", {}).get("LR_reads")
+                if isinstance(all_samples_markers.get("targets"), dict)
                 else None
             ),
             "flag_overall_prok_coverage": flag_overall,
             "message_overall_prok_coverage": msg_overall,
+        }
+
+    overall_read_coverage = None
+    if isinstance(all_samples_reads, dict):
+        comp_target = merged_metadata.get("parameters", {}).get("completeness")
+        try:
+            comp_target = float(comp_target)
+        except Exception:
+            comp_target = 95.0
+
+        coverage_total = all_samples_reads.get("C_total")
+        if isinstance(coverage_total, str):
+            try:
+                coverage_total = float(coverage_total)
+            except ValueError:
+                coverage_total = None
+
+        coverage_pct = coverage_total * 100 if coverage_total is not None else None
+
+        if coverage_pct is None:
+            flag_overall_reads = 3
+            msg_reads = "Overall metagenomic coverage could not be assessed from pooled read Nonpareil output."
+        else:
+            if coverage_pct >= comp_target:
+                flag_overall_reads = 1
+                msg_reads = (
+                    f"Pooled metagenomic coverage meets the {comp_target:.0f}% completeness target "
+                    f"({coverage_pct:.1f}%)."
+                )
+            elif coverage_pct >= 0.8 * comp_target:
+                flag_overall_reads = 2
+                msg_reads = (
+                    f"Pooled metagenomic coverage is within 20% of the {comp_target:.0f}% completeness target "
+                    f"({coverage_pct:.1f}%)."
+                )
+            else:
+                flag_overall_reads = 3
+                msg_reads = (
+                    f"Pooled metagenomic coverage is below 80% of the {comp_target:.0f}% completeness target "
+                    f"({coverage_pct:.1f}%)."
+                )
+
+        overall_read_coverage = {
+            "sample": all_samples_reads.get("sample"),
+            "kappa_total": all_samples_reads.get("kappa_total"),
+            "coverage_total": all_samples_reads.get("C_total"),
+            "coverage_percent": coverage_pct,
+            "subset_reads": all_samples_reads.get("subset_reads"),
+            "total_reads": all_samples_reads.get("total_reads"),
+            "lr_95_reads": (
+                all_samples_reads.get("targets", {}).get("95", {}).get("LR_reads")
+                if isinstance(all_samples_reads.get("targets"), dict)
+                else None
+            ),
+            "flag_overall_read_coverage": flag_overall_reads,
+            "message_overall_read_coverage": msg_reads,
         }
 
     distilled: Dict[str, Any] = {
@@ -1438,6 +1495,7 @@ def main():
             "total_reads_all_samples": total_reads_all,
             "recommendations": recommendations,
             "overall_prokaryotic_coverage": overall_prok_coverage,
+            "overall_metagenomic_coverage": overall_read_coverage,
         },
     }
 

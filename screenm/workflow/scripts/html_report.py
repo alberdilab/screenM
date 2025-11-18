@@ -2291,6 +2291,56 @@ function addClustersSection(parent, clusters) {
     drawRow(1, "Reads", readsMap, readColors, "#fcae91");
 }
 
+/* Overall metagenomic coverage summary */
+function addOverallReadCoverageSection(parent, data) {
+    if (!data) return;
+    const div = document.createElement("div");
+    div.className = "section " + flagClass(data.flag_overall_read_coverage);
+
+    const status = sectionStatus("Overall metagenomic coverage", data.flag_overall_read_coverage);
+
+    div.innerHTML = `
+        <h2 class="section-title">Overall metagenomic coverage</h2>
+        <p class="section-intro">
+            Aggregated Nonpareil metagenomic coverage across all samples.
+        </p>
+        <details>
+            <summary>
+                <span class="status-emoji">${status.emoji}</span>
+                <span class="status-text">${status.text}</span>
+                <span class="summary-hint">(click to expand)</span>
+            </summary>
+            <div class="content">
+                <p class="summary-message">${data.message_overall_read_coverage || ""}</p>
+                <div class="redundancy-stats">
+                    <div class="redundancy-stat-item">
+                        <div class="redundancy-stat-label">Coverage (C_total)</div>
+                        <div class="redundancy-stat-value">${data.coverage_percent != null ? fmtFloat(data.coverage_percent, 1) + "%" : "NA"}</div>
+                        <div class="redundancy-stat-note">Pooled metagenomic coverage across all samples</div>
+                    </div>
+                    <div class="redundancy-stat-item">
+                        <div class="redundancy-stat-label">kappa_total</div>
+                        <div class="redundancy-stat-value">${fmtFloat(data.kappa_total, 3)}</div>
+                        <div class="redundancy-stat-note">Nonpareil pooled metagenomic redundancy</div>
+                    </div>
+                    <div class="redundancy-stat-item">
+                        <div class="redundancy-stat-label">Total reads</div>
+                        <div class="redundancy-stat-value">${fmtMillions(data.total_reads)}</div>
+                        <div class="redundancy-stat-note">Sum of reads included in pooled metagenomic Nonpareil</div>
+                    </div>
+                    <div class="redundancy-stat-item">
+                        <div class="redundancy-stat-label">LR target (95%)</div>
+                        <div class="redundancy-stat-value">${fmtMillions(data.lr_95_reads)}</div>
+                        <div class="redundancy-stat-note">Reads estimated for 95% coverage</div>
+                    </div>
+                </div>
+            </div>
+        </details>
+    `;
+
+    parent.appendChild(div);
+}
+
 /* Overall marker coverage summary */
 function addOverallProkCoverageSection(parent, data) {
     if (!data) return;
@@ -2367,6 +2417,7 @@ function main() {
     addProkFractionSection(summaryDiv, S.prokaryotic_fraction, depthPerSample);
     addRedundancyReadsSection(summaryDiv, S.redundancy_reads, depthPerSample);
     addRedundancyMarkersSection(summaryDiv, S.redundancy_markers, redBiplotPerSample);
+    addOverallReadCoverageSection(summaryDiv, S.overall_metagenomic_coverage);
     addOverallProkCoverageSection(summaryDiv, S.overall_prokaryotic_coverage);
     addClustersSection(summaryDiv, S.clusters);
     addRecommendationsSection(summaryDiv, S.recommendations);

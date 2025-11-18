@@ -93,13 +93,19 @@ def main():
     ap.add_argument(
         "--all-samples",
         required=True,
-        help="Path to all_samples.json containing per-sample metadata/paths.",
+        help="Path to marker all_samples.json containing per-sample metadata/paths.",
+    )
+    ap.add_argument(
+        "--all-samples-reads",
+        required=True,
+        help="Path to reads all_samples.json containing per-sample metadata/paths.",
     )
     args = ap.parse_args()
 
     samples: Dict[str, Dict[str, Any]] = {}
 
     all_samples_json = load_json(Path(args.all_samples))
+    all_samples_reads_json = load_json(Path(args.all_samples_reads))
 
     # --- Merge per-sample JSONs ---
     for p_str in args.input:
@@ -138,7 +144,8 @@ def main():
         "metadata": metadata,
         "n_samples": len(samples),
         "samples": samples,
-        "all_samples": all_samples_json,
+        "all_samples_markers": all_samples_json,
+        "all_samples_reads": all_samples_reads_json,
     }
 
     # --- Optionally attach Mash markers summary ---
