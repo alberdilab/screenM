@@ -263,6 +263,21 @@ HTML_TEMPLATE = r"""<!DOCTYPE html>
         transform: translate(8px, -20px);
     }
 
+    .tab-btn {
+        border: 1px solid #cbd5e1;
+        background: #f1f5f9;
+        color: #0f172a;
+        padding: 6px 10px;
+        border-radius: 6px;
+        cursor: pointer;
+        font-size: 0.9em;
+    }
+    .tab-btn.active {
+        background: #1d4ed8;
+        color: #fff;
+        border-color: #1d4ed8;
+    }
+
     .recommendations {
         display: flex;
         flex-direction: column;
@@ -2495,8 +2510,8 @@ function addMashDistanceSection(parent, clusters) {
         });
         if (maxD <= 0) maxD = 1;
 
-        const margin = {left: 140, right: 40, top: 140, bottom: 40};
-        const cellSize = Math.max(18, Math.min(32, (1100 - margin.left - margin.right) / n));
+        const margin = {left: 120, right: 20, top: 100, bottom: 25};
+        const cellSize = Math.max(22, Math.min(36, (1100 - margin.left - margin.right) / n));
         const width = margin.left + margin.right + n * cellSize;
         const height = margin.top + margin.bottom + n * cellSize;
         svg.setAttribute("viewBox", `0 0 ${width} ${height}`);
@@ -2548,7 +2563,7 @@ function addMashDistanceSection(parent, clusters) {
 
         samples.forEach((s, idx) => {
             const x = margin.left + idx * cellSize + cellSize / 2;
-            const yTop = margin.top - 12;
+            const yTop = margin.top - 14;
             const labTop = document.createElementNS(svgns, "text");
             labTop.setAttribute("x", x);
             labTop.setAttribute("y", yTop);
