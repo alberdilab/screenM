@@ -2455,15 +2455,13 @@ function addMashDistanceSection(parent, clusters) {
                         <div class="redundancy-stat-note">Coefficient of variation</div>
                     </div>
                 </div>
-                <div style="display:flex; gap:12px; flex-wrap:wrap; margin-top:12px;">
-                    <div class="clusters-heatmap-scroll" style="flex:1; min-width:460px;">
-                        <div style="margin-bottom:6px; font-weight:600;">Markers</div>
-                        <svg id="mash-heatmap-markers" class="clusters-heatmap-svg" viewBox="0 0 1000 420" preserveAspectRatio="none"></svg>
+                <div class="clusters-heatmap-scroll" style="margin-top:12px;">
+                    <div style="display:flex; gap:8px; margin-bottom:8px;">
+                        <button id="mash-tab-markers" class="tab-btn active">Markers</button>
+                        <button id="mash-tab-reads" class="tab-btn">Reads</button>
                     </div>
-                    <div class="clusters-heatmap-scroll" style="flex:1; min-width:460px;">
-                        <div style="margin-bottom:6px; font-weight:600;">Reads</div>
-                        <svg id="mash-heatmap-reads" class="clusters-heatmap-svg" viewBox="0 0 1000 420" preserveAspectRatio="none"></svg>
-                    </div>
+                    <svg id="mash-heatmap-markers" class="clusters-heatmap-svg" viewBox="0 0 1100 520" preserveAspectRatio="none"></svg>
+                    <svg id="mash-heatmap-reads" class="clusters-heatmap-svg" viewBox="0 0 1100 520" preserveAspectRatio="none" style="display:none;"></svg>
                 </div>
             </div>
         </details>
@@ -2472,6 +2470,8 @@ function addMashDistanceSection(parent, clusters) {
 
     const heatMarkers = div.querySelector("#mash-heatmap-markers");
     const heatReads = div.querySelector("#mash-heatmap-reads");
+    const tabMarkers = div.querySelector("#mash-tab-markers");
+    const tabReads = div.querySelector("#mash-tab-reads");
     const svgns = "http://www.w3.org/2000/svg";
 
     function drawHeatmap(svg, pairs) {
@@ -2495,8 +2495,8 @@ function addMashDistanceSection(parent, clusters) {
         });
         if (maxD <= 0) maxD = 1;
 
-        const margin = {left: 120, right: 20, top: 120, bottom: 120};
-        const cellSize = Math.max(18, Math.min(40, (1000 - margin.left - margin.right) / n));
+        const margin = {left: 140, right: 40, top: 140, bottom: 40};
+        const cellSize = Math.max(18, Math.min(32, (1100 - margin.left - margin.right) / n));
         const width = margin.left + margin.right + n * cellSize;
         const height = margin.top + margin.bottom + n * cellSize;
         svg.setAttribute("viewBox", `0 0 ${width} ${height}`);
@@ -2548,7 +2548,7 @@ function addMashDistanceSection(parent, clusters) {
 
         samples.forEach((s, idx) => {
             const x = margin.left + idx * cellSize + cellSize / 2;
-            const yTop = margin.top - 8;
+            const yTop = margin.top - 12;
             const labTop = document.createElementNS(svgns, "text");
             labTop.setAttribute("x", x);
             labTop.setAttribute("y", yTop);
@@ -2559,7 +2559,7 @@ function addMashDistanceSection(parent, clusters) {
             svg.appendChild(labTop);
 
             const labLeft = document.createElementNS(svgns, "text");
-            labLeft.setAttribute("x", margin.left - 6);
+            labLeft.setAttribute("x", margin.left - 8);
             labLeft.setAttribute("y", margin.top + idx * cellSize + cellSize / 2 + 3);
             labLeft.setAttribute("font-size", "9");
             labLeft.setAttribute("text-anchor", "end");
@@ -2570,6 +2570,21 @@ function addMashDistanceSection(parent, clusters) {
 
     drawHeatmap(heatMarkers, markersPairs);
     drawHeatmap(heatReads, readsPairs);
+
+    if (tabMarkers && tabReads) {
+        tabMarkers.addEventListener("click", () => {
+            tabMarkers.classList.add("active");
+            tabReads.classList.remove("active");
+            heatMarkers.style.display = "block";
+            heatReads.style.display = "none";
+        });
+        tabReads.addEventListener("click", () => {
+            tabReads.classList.add("active");
+            tabMarkers.classList.remove("active");
+            heatMarkers.style.display = "none";
+            heatReads.style.display = "block";
+        });
+    }
 }
 
 /* Sample clusters */
