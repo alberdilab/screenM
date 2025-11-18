@@ -302,6 +302,24 @@ function fmtMillions(x) {
     return v.toString();
 }
 
+function median(arr) {
+    if (!arr || !arr.length) return null;
+    const sorted = [...arr].sort((a, b) => a - b);
+    const mid = Math.floor(sorted.length / 2);
+    if (sorted.length % 2 === 0) {
+        return (sorted[mid - 1] + sorted[mid]) / 2;
+    }
+    return sorted[mid];
+}
+
+function coeffVar(arr) {
+    if (!arr || !arr.length) return null;
+    const mean = arr.reduce((a, b) => a + b, 0) / arr.length;
+    if (mean === 0) return null;
+    const variance = arr.reduce((a, b) => a + Math.pow(b - mean, 2), 0) / arr.length;
+    return Math.sqrt(variance) / mean;
+}
+
 function getOrCreateTooltip() {
     let tooltip = document.querySelector(".chart-tooltip");
     if (!tooltip) {
@@ -467,7 +485,10 @@ function addScreeningOverviewSection(parent, data, depthPerSample) {
     div.innerHTML = `
         <h2 class="section-title">Screening overview</h2>
         <p class="section-intro">
-            This section summarises how many samples pass the read threshold and how evenly sequencing depth is distributed.
+            This section provides an overview of the quality of the screenM analysis. It reports the number of samples that passed 
+            the read threshold and were included in the analysis, and it also describes how evenly sequencing depth is distributed 
+            across the dataset. The proportion of analysed samples and the distribution of sequencing depth are important because 
+            they determine how representative the summary statistics are for the entire dataset and individual samples.
         </p>
         <details>
             <summary>
@@ -1298,6 +1319,11 @@ function addRedundancyReadsSection(parent, data, depthPerSample) {
     const nBelow = data.n_samples_lr_exceeds_depth || 0;
     const nAtOrAbove = nLR ? (nLR - nBelow) : 0;
     const fracAtOrAbove = nLR ? (100 * nAtOrAbove / nLR) : null;
+    const coverageRatios = Array.isArray(data.coverage_ratios)
+        ? data.coverage_ratios.filter(v => typeof v === "number" && isFinite(v))
+        : [];
+    const covMedian = median(coverageRatios);
+    const covCV = coeffVar(coverageRatios);
 
     const status = sectionStatus("Overall metagenomic coverage", data.flag_redundancy);
 
@@ -1316,17 +1342,27 @@ function addRedundancyReadsSection(parent, data, depthPerSample) {
                 <p class="summary-message">${msg}</p>
                 <div class="redundancy-stats">
                     <div class="redundancy-stat-item">
-                        <div class="redundancy-stat-label">Mean kappa_total</div>
-                        <div class="redundancy-stat-value">${fmtFloat(data.mean_kappa_total, 3)}</div>
-                        <div class="redundancy-stat-note">Average Nonpareil redundancy estimate (reads)</div>
+                        <div class="redundancy-stat-label">Coverage median</div>
+                        <div class="redundancy-stat-value">${covMedian === null ? "NA" : fmtFloat(covMedian, 2)}×</div>
+                        <div class="redundancy-stat-note">Median observed / target LR_reads</div>
                     </div>
                     <div class="redundancy-stat-item">
-                        <div class="redundancy-stat-label">Variation in kappa_total</div>
+                        <div class="redundancy-stat-label">Coverage CV</div>
+                        <div class="redundancy-stat-value">${covCV === null ? "NA" : fmtFloat(covCV, 3)}</div>
+                        <div class="redundancy-stat-note">Coefficient of variation of coverage ratios</div>
+                    </div>
+                    <div class="redundancy-stat-item">
+                        <div class="redundancy-stat-label">kappa median</div>
+                        <div class="redundancy-stat-value">${fmtFloat(data.median_kappa_total, 3)}</div>
+                        <div class="redundancy-stat-note">Median Nonpareil kappa_total (reads)</div>
+                    </div>
+                    <div class="redundancy-stat-item">
+                        <div class="redundancy-stat-label">kappa CV</div>
                         <div class="redundancy-stat-value">${fmtFloat(data.cv_kappa_total, 3)}</div>
-                        <div class="redundancy-stat-note">Coefficient of variation (CV)</div>
+                        <div class="redundancy-stat-note">Variation in kappa_total across samples</div>
                     </div>
                     <div class="redundancy-stat-item">
-                        <div class="redundancy-stat-label">Samples at / above LR target</div>
+                        <div class="redundancy-stat-label">Samples above LR target</div>
                         <div class="redundancy-stat-value">
                             ${fmtInt(nAtOrAbove)} / ${fmtInt(nLR)}
                         </div>
@@ -1608,6 +1644,11 @@ function addRedundancyMarkersSection(parent, data, redBiplotPerSample) {
     const nBelow = data.n_samples_lr_exceeds_depth || 0;
     const nAtOrAbove = nLR ? (nLR - nBelow) : 0;
     const fracAtOrAbove = nLR ? (100 * nAtOrAbove / nLR) : null;
+    const coverageRatios = Array.isArray(data.coverage_ratios)
+        ? data.coverage_ratios.filter(v => typeof v === "number" && isFinite(v))
+        : [];
+    const covMedian = median(coverageRatios);
+    const covCV = coeffVar(coverageRatios);
 
     const status = sectionStatus("Prokaryotic coverage", data.flag_redundancy_markers);
 
@@ -1626,17 +1667,27 @@ function addRedundancyMarkersSection(parent, data, redBiplotPerSample) {
                 <p class="summary-message">${msg}</p>
                 <div class="redundancy-stats">
                     <div class="redundancy-stat-item">
-                        <div class="redundancy-stat-label">Mean kappa_total</div>
-                        <div class="redundancy-stat-value">${fmtFloat(data.mean_kappa_total, 3)}</div>
-                        <div class="redundancy-stat-note">Average Nonpareil redundancy estimate (markers)</div>
+                        <div class="redundancy-stat-label">Coverage median</div>
+                        <div class="redundancy-stat-value">${covMedian === null ? "NA" : fmtFloat(covMedian, 2)}×</div>
+                        <div class="redundancy-stat-note">Median observed / target LR_reads</div>
                     </div>
                     <div class="redundancy-stat-item">
-                        <div class="redundancy-stat-label">Variation in kappa_total</div>
+                        <div class="redundancy-stat-label">Coverage CV</div>
+                        <div class="redundancy-stat-value">${covCV === null ? "NA" : fmtFloat(covCV, 3)}</div>
+                        <div class="redundancy-stat-note">Coefficient of variation of coverage ratios</div>
+                    </div>
+                    <div class="redundancy-stat-item">
+                        <div class="redundancy-stat-label">kappa median</div>
+                        <div class="redundancy-stat-value">${fmtFloat(data.median_kappa_total, 3)}</div>
+                        <div class="redundancy-stat-note">Median Nonpareil kappa_total (markers)</div>
+                    </div>
+                    <div class="redundancy-stat-item">
+                        <div class="redundancy-stat-label">kappa CV</div>
                         <div class="redundancy-stat-value">${fmtFloat(data.cv_kappa_total, 3)}</div>
-                        <div class="redundancy-stat-note">Coefficient of variation (CV)</div>
+                        <div class="redundancy-stat-note">Variation in kappa_total across samples</div>
                     </div>
                     <div class="redundancy-stat-item">
-                        <div class="redundancy-stat-label">Samples at / above LR target</div>
+                        <div class="redundancy-stat-label">Samples above LR target</div>
                         <div class="redundancy-stat-value">
                             ${fmtInt(nAtOrAbove)} / ${fmtInt(nLR)}
                         </div>
