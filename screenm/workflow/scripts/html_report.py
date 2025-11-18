@@ -429,7 +429,7 @@ function addRecommendationsSection(parent, data) {
         <p class="section-intro">Suggested downstream strategies based on coverage, quality, and clustering results.</p>
         <div class="recommendations">
             <div class="recommendation-overall">${overall}</div>
-            ${recList || "<div class=\\"small-note\\">No specific recommendations available.</div>"}
+            ${recList || '<div class="small-note">No specific recommendations available.</div>'}
         </div>
     `;
 
