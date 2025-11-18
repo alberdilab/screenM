@@ -331,6 +331,19 @@ function getOrCreateTooltip() {
     return tooltip;
 }
 
+function setSummaryHintBehaviour(root) {
+    const detailsList = root.querySelectorAll("details");
+    detailsList.forEach(det => {
+        const hint = det.querySelector(".summary-hint");
+        if (!hint) return;
+        const update = () => {
+            hint.textContent = det.open ? "(click to collapse)" : "(click to expand)";
+        };
+        det.addEventListener("toggle", update);
+        update();
+    });
+}
+
 /* ---------- Section-level status (emoji + short text) ---------- */
 function sectionStatus(sectionLabel, flag) {
     let emoji, descriptor;
@@ -761,6 +774,8 @@ function addLowQualitySection(parent, data, depthPerSample) {
         <h2 class="section-title">Sequencing quality</h2>
         <p class="section-intro">
             This section reports how many reads are discarded by quality trimming and filtering across samples.
+            High proportions of low-quality reads may indicate suboptimal sequencing performance, so it is important 
+            to quantify the extent of this potential issue.
         </p>
         <details>
             <summary>
@@ -2197,6 +2212,7 @@ function main() {
     addRedundancyReadsSection(summaryDiv, S.redundancy_reads, depthPerSample);
     addRedundancyMarkersSection(summaryDiv, S.redundancy_markers, redBiplotPerSample);
     addClustersSection(summaryDiv, S.clusters);
+    setSummaryHintBehaviour(document.body);
 }
 
 main();
