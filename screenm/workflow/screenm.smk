@@ -29,7 +29,6 @@ READS_ALL = sum(int(v.get("reads", 0)) for v in SAMPLES_MAP.values())
 # Fan-out over all samples
 rule all:
     input:
-        f"{OUTDIR}/nonpareil_markers/all_samples.json",
         f"{OUTDIR}/screenm_report.html"
 
 rule counts:
