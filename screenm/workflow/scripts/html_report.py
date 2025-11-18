@@ -22,6 +22,30 @@ HTML_TEMPLATE = r"""<!DOCTYPE html>
         margin-bottom: 30px;
     }
 
+    .run-meta {
+        margin-bottom: 16px;
+        padding: 12px 14px;
+        border-radius: 10px;
+        border: 1px dashed #c2cfe0;
+        background: #eef3fb;
+        display: flex;
+        gap: 14px;
+        flex-wrap: wrap;
+    }
+    .run-meta-item {
+        min-width: 220px;
+    }
+    .run-meta-label {
+        font-size: 0.88em;
+        color: #4a5568;
+        margin-bottom: 2px;
+    }
+    .run-meta-value {
+        font-weight: 650;
+        font-size: 1.05em;
+        color: #0f172a;
+    }
+
     .project-highlights {
         margin-bottom: 22px;
         padding: 14px 16px 16px 16px;
@@ -61,34 +85,6 @@ HTML_TEMPLATE = r"""<!DOCTYPE html>
         font-size: 0.85em;
         color: #555;
         margin-top: 2px;
-    }
-    .highlight-statuses {
-        margin-top: 12px;
-        display: flex;
-        flex-wrap: wrap;
-        gap: 8px;
-    }
-    .status-pill {
-        display: flex;
-        align-items: center;
-        gap: 6px;
-        padding: 8px 10px;
-        border-radius: 999px;
-        border: 1px solid #dcdcdc;
-        background: #ffffff;
-        font-size: 0.95em;
-    }
-    .status-pill.flag-1 {
-        background: #dff7e5;
-        border-color: #b4e5bf;
-    }
-    .status-pill.flag-2 {
-        background: #fff9d7;
-        border-color: #f0e6a6;
-    }
-    .status-pill.flag-3 {
-        background: #ffe3e3;
-        border-color: #efb6b6;
     }
 
     .section {
@@ -327,6 +323,13 @@ function sectionStatus(sectionLabel, flag) {
     };
 }
 
+function fmtDateTime(isoStr) {
+    if (!isoStr) return "NA";
+    const d = new Date(isoStr);
+    if (isNaN(d.getTime())) return isoStr;
+    return d.toLocaleString();
+}
+
 /* ---------- Project highlights (compact overview) ---------- */
 function addProjectHighlights(container, distill, summary) {
     if (!container) return;
@@ -334,7 +337,6 @@ function addProjectHighlights(container, distill, summary) {
     const meta = distill.meta || {};
     const metadata = meta.metadata || {};
     const screening = summary.screening_overview || {};
-    const prok = summary.prokaryotic_fraction || {};
 
     const projectName =
         metadata.project ||
@@ -355,28 +357,68 @@ function addProjectHighlights(container, distill, summary) {
             note: "Libraries included in this run"
         },
         {
+            label: "Total reads",
+            value: fmtMillions(
+                (summary.low_quality_reads || {}).total_reads
+            ),
+            note: "Sum of input reads across samples"
+        },
+        {
             label: "Read threshold",
             value: fmtMillions(screening.reads_threshold),
             note: "Minimum reads used for screening"
         },
         {
-            label: "Median reads / sample",
-            value: fmtMillions(screening.median_reads),
-            note: "Central sequencing depth"
-        },
-        {
-            label: "Median prokaryotic fraction",
-            value: prok.median_prokaryotic_fraction !== null && prok.median_prokaryotic_fraction !== undefined
-                ? fmtFloat(prok.median_prokaryotic_fraction, 1) + "%"
-                : "NA",
-            note: "Expected prokaryotic signal"
+            label: "Completeness target",
+            value: (() => {
+                const comp =
+                    metadata.completeness ??
+                    metadata.completeness_target ??
+                    metadata.targets ??
+                    metadata.completeness_threshold;
+                if (comp === null || comp === undefined) return "NA";
+                const num = Number(comp);
+                if (!isNaN(num)) {
+                    const pct = num > 1 ? num : num * 100;
+                    return `${fmtFloat(pct, pct >= 10 ? 0 : 1)}%`;
+                }
+                return String(comp);
+            })(),
+            note: "Target completeness used in Nonpareil"
         },
     ];
 
     const wrapper = document.createElement("div");
     wrapper.className = "project-highlights";
 
-    const title = document.createElement("h2");
+    const runMeta = document.createElement("div");
+    runMeta.className = "run-meta";
+    const runItems = [
+        {
+            label: "Run name",
+            value: metadata.run_name || metadata.run || projectName
+        },
+        {
+            label: "Run date",
+            value: fmtDateTime(metadata.created_at || metadata.run_date || metadata.date)
+        },
+        {
+            label: "ScreenM version",
+            value: metadata.software_version || metadata.screenm_version || metadata.version || "unknown"
+        },
+    ];
+    runItems.forEach(item => {
+        const div = document.createElement("div");
+        div.className = "run-meta-item";
+        div.innerHTML = `
+            <div class="run-meta-label">${item.label}</div>
+            <div class="run-meta-value">${item.value}</div>
+        `;
+        runMeta.appendChild(div);
+    });
+    wrapper.appendChild(runMeta);
+
+    const title = document.createElement("div");
     title.className = "project-highlights-title";
     title.textContent = projectName;
     wrapper.appendChild(title);
@@ -394,33 +436,6 @@ function addProjectHighlights(container, distill, summary) {
         grid.appendChild(card);
     });
     wrapper.appendChild(grid);
-
-    const statusList = [
-        { label: "Screening overview", flag: screening.flag_screening_overview },
-        { label: "Sequencing quality", flag: (summary.low_quality_reads || {}).flag_low_quality },
-        { label: "Prokaryotic fraction", flag: prok.flag_prokaryotic_fraction },
-        { label: "Redundancy (reads)", flag: (summary.redundancy_reads || {}).flag_redundancy },
-        { label: "Redundancy (markers)", flag: (summary.redundancy_markers || {}).flag_redundancy_markers },
-        { label: "Clusters", flag: (summary.clusters || {}).flag_clusters },
-    ];
-
-    const statusesDiv = document.createElement("div");
-    statusesDiv.className = "highlight-statuses";
-
-    statusList.forEach(item => {
-        if (!item || !item.label) return;
-        const flag = item.flag !== null && item.flag !== undefined ? item.flag : 3;
-        const status = sectionStatus(item.label, flag);
-        const pill = document.createElement("div");
-        pill.className = "status-pill " + flagClass(flag);
-        pill.innerHTML = `
-            <span class="status-emoji">${status.emoji}</span>
-            <span class="status-text">${status.text}</span>
-        `;
-        statusesDiv.appendChild(pill);
-    });
-
-    wrapper.appendChild(statusesDiv);
     container.appendChild(wrapper);
 }
 
