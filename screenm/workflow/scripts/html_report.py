@@ -262,38 +262,6 @@ HTML_TEMPLATE = r"""<!DOCTYPE html>
         white-space: pre-line;
         transform: translate(8px, -20px);
     }
-
-    .recommendations {
-        display: flex;
-        flex-direction: column;
-        gap: 10px;
-        margin-top: 10px;
-    }
-    .recommendation-overall {
-        font-weight: 600;
-        color: #0f172a;
-    }
-    .recommendation-item {
-        display: flex;
-        align-items: flex-start;
-        gap: 8px;
-        padding: 8px 10px;
-        border-radius: 8px;
-        border: 1px solid #dce3f0;
-        background: #f8fafc;
-    }
-    .rec-badge {
-        padding: 3px 6px;
-        border-radius: 6px;
-        font-size: 0.8em;
-        font-weight: 700;
-        color: #fff;
-        min-width: 54px;
-        text-align: center;
-    }
-    .rec-badge.high { background: #2e7d32; }
-    .rec-badge.info { background: #1976d2; }
-    .rec-badge.warn { background: #c62828; }
 </style>
 
 </head>
@@ -2028,39 +1996,6 @@ function addRedundancyMarkersSection(parent, data, redBiplotPerSample) {
     });
 }
 
-/* Recommendations */
-function addRecommendationsSection(parent, data) {
-    if (!data) return;
-    const wrapper = document.createElement("div");
-    wrapper.className = "section";
-
-    const items = Array.isArray(data.items) ? data.items : [];
-    const overall = data.overall || "Recommendations based on current screening results.";
-
-    const recList = items.map(it => {
-        const badgeClass = it.priority === "warn" ? "warn" :
-                           it.priority === "info" ? "info" : "high";
-        const text = it.text || "";
-        return `
-            <div class="recommendation-item">
-                <span class="rec-badge ${badgeClass}">${badgeClass}</span>
-                <div class="rec-text">${text}</div>
-            </div>
-        `;
-    }).join("");
-
-    wrapper.innerHTML = `
-        <h2 class="section-title">Recommendations</h2>
-        <p class="section-intro">Suggested downstream strategies based on coverage, quality, and clustering results.</p>
-        <div class="recommendations">
-            <div class="recommendation-overall">${overall}</div>
-            ${recList || "<div class=\\"small-note\\">No specific recommendations available.</div>"}
-        </div>
-    `;
-
-    parent.appendChild(wrapper);
-}
-
 /* Sample clusters */
 function addClustersSection(parent, clusters) {
     if (!clusters) return;
@@ -2319,7 +2254,6 @@ function main() {
     addRedundancyReadsSection(summaryDiv, S.redundancy_reads, depthPerSample);
     addRedundancyMarkersSection(summaryDiv, S.redundancy_markers, redBiplotPerSample);
     addClustersSection(summaryDiv, S.clusters);
-    addRecommendationsSection(summaryDiv, S.recommendations);
     setSummaryHintBehaviour(document.body);
 }
 
