@@ -2470,13 +2470,13 @@ function addMashDistanceSection(parent, clusters) {
                         <div class="redundancy-stat-note">Coefficient of variation</div>
                     </div>
                 </div>
-                <div class="clusters-heatmap-scroll" style="margin-top:12px;">
+                <div class="clusters-heatmap-scroll" style="margin-top:12px; max-height:720px; width:100%; overflow:auto;">
                     <div style="display:flex; gap:8px; margin-bottom:8px;">
                         <button id="mash-tab-markers" class="tab-btn active">Markers</button>
                         <button id="mash-tab-reads" class="tab-btn">Reads</button>
                     </div>
-                    <svg id="mash-heatmap-markers" class="clusters-heatmap-svg" viewBox="0 0 1100 520" preserveAspectRatio="none"></svg>
-                    <svg id="mash-heatmap-reads" class="clusters-heatmap-svg" viewBox="0 0 1100 520" preserveAspectRatio="none" style="display:none;"></svg>
+                    <svg id="mash-heatmap-markers" class="clusters-heatmap-svg"></svg>
+                    <svg id="mash-heatmap-reads" class="clusters-heatmap-svg" style="display:none;"></svg>
                 </div>
             </div>
         </details>
@@ -2510,11 +2510,13 @@ function addMashDistanceSection(parent, clusters) {
         });
         if (maxD <= 0) maxD = 1;
 
-        const margin = {left: 120, right: 20, top: 100, bottom: 25};
-        const cellSize = Math.max(22, Math.min(36, (1100 - margin.left - margin.right) / n));
+        const margin = {left: 160, right: 30, top: 160, bottom: 60};
+        const cellSize = Math.max(26, Math.min(40, (1200 - margin.left - margin.right) / Math.max(n, 20)));
         const width = margin.left + margin.right + n * cellSize;
         const height = margin.top + margin.bottom + n * cellSize;
         svg.setAttribute("viewBox", `0 0 ${width} ${height}`);
+        svg.style.width = `${width}px`;
+        svg.style.height = `${height}px`;
 
         function colorFor(val) {
             const f = Math.max(0, Math.min(1, val / maxD));
