@@ -281,8 +281,7 @@ rule nonpareil_markers_all:
 
 rule nonpareil_markers_all_out:
     input: 
-        npo=f"{OUTDIR}/nonpareil_markers/all_samples.npo",
-        counts = f"{OUTDIR}/counts/{{sample}}.json"
+        f"{OUTDIR}/nonpareil_markers/all_samples.npo"
     output:
         tsv=f"{OUTDIR}/nonpareil_markers/all_samples.tsv",
         json=f"{OUTDIR}/nonpareil_markers/all_samples.json"
@@ -295,7 +294,7 @@ rule nonpareil_markers_all_out:
     shell:
         """
         module load singlem/0.19.0
-        python {params.package_dir}/workflow/scripts/nonpareil_project.py {input.npo} \
+        python {params.package_dir}/workflow/scripts/nonpareil_project.py {input} \
             --subset-reads {params.subset} \
             --total-reads {params.reads_all} \
             --tsv-out {output.tsv} \
