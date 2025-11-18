@@ -23,20 +23,13 @@ SAMPLES_MAP = data.get("above", {})
 
 SAMPLES = sorted(SAMPLES_MAP.keys())
 
+# Calculate total number of reads across all samples
+READS_ALL = sum(int(v.get("reads", 0)) for v in SAMPLES_MAP.values())
+
 # Fan-out over all samples
 rule all:
     input:
-        #[f"{OUTDIR}/counts/{sample}.json" for sample in SAMPLES],
-        #[f"{OUTDIR}/fastp/{sample}.html" for sample in SAMPLES],
-        #[f"{OUTDIR}/singlem/{sample}.json" for sample in SAMPLES],
-        #[f"{OUTDIR}/nonpareil_markers/{sample}.json" for sample in SAMPLES],
-        #[f"{OUTDIR}/nonpareil_reads/{sample}.json" for sample in SAMPLES],
-        #[f"{OUTDIR}/json/{sample}.json" for sample in SAMPLES],
-        #f"{OUTDIR}/mash/mash_reads.json",
-        #f"{OUTDIR}/mash/mash_markers.json",
-        #f"{OUTDIR}/results.json",
-        #f"{OUTDIR}/distill.json",
-        #f"{OUTDIR}/figures.json",
+        f"{OUTDIR}/nonpareil_markers/all_samples.json",
         f"{OUTDIR}/screenm_report.html"
 
 rule counts:
@@ -252,6 +245,59 @@ rule nonpareil_markers_out:
         python {params.package_dir}/workflow/scripts/nonpareil_project.py {input.npo} \
             --subset-reads {params.subset} \
             --total-reads $(python -c "import json; print(json.load(open('{input.counts}'))['reads'])") \
+            --tsv-out {output.tsv} \
+            --json-out {output.json} \
+            --targets {params.completeness}
+        """
+
+rule merge_markers_all:
+    input: 
+        expand(f"{OUTDIR}/nonpareil_markers/{{sample}}.fna", sample=SAMPLES)
+    output:
+        f"{OUTDIR}/nonpareil_markers/all_samples.fna"
+    shell:
+        """
+        cat {input} > {output}
+        """
+
+rule nonpareil_markers_all:
+    input: 
+        f"{OUTDIR}/nonpareil_markers/all_samples.fna"
+    output:
+        npa=f"{OUTDIR}/nonpareil_markers/all_samples.npa",
+        npc=f"{OUTDIR}/nonpareil_markers/all_samples.npc",
+        npl=f"{OUTDIR}/nonpareil_markers/all_samples.npl",
+        npo=f"{OUTDIR}/nonpareil_markers/all_samples.npo"
+    threads: 1
+    params:
+        workdir = lambda wc: f"{OUTDIR}/nonpareil_markers/all_samples",
+        kmer = KMER
+    shell:
+        """
+        echo "[`date '+%Y-%m-%d %H:%M:%S'`] Estimating marker redundancy of all samples"
+        module load singlem/0.19.0
+        nonpareil -s {input} -T kmer -f fasta -b {params.workdir} -k {params.kmer} -t {threads} > /dev/null 2>&1
+        """
+
+rule nonpareil_markers_all_out:
+    input: 
+        npo=f"{OUTDIR}/nonpareil_markers/all_samples.npo",
+        counts = f"{OUTDIR}/counts/{{sample}}.json"
+    output:
+        tsv=f"{OUTDIR}/nonpareil_markers/all_samples.tsv",
+        json=f"{OUTDIR}/nonpareil_markers/all_samples.json"
+    threads: 1
+    params:
+        subset=READS * 2,
+        completeness = COMPLETENESS,
+        package_dir=PACKAGE_DIR,
+        reads_all=READS_ALL
+    shell:
+        """
+        module load singlem/0.19.0
+        python {params.package_dir}/workflow/scripts/nonpareil_project.py {input.npo} \
+            --subset-reads {params.subset} \
+            --total-reads {params.reads_all} \
             --tsv-out {output.tsv} \
             --json-out {output.json} \
             --targets {params.completeness}
