@@ -2470,23 +2470,15 @@ function addMashDistanceSection(parent, clusters) {
                         <div class="redundancy-stat-note">Coefficient of variation</div>
                     </div>
                 </div>
-                <div class="clusters-heatmap-scroll" style="margin-top:12px; max-height:720px; width:100%; overflow:auto;">
-                    <div style="display:flex; gap:8px; margin-bottom:8px;">
-                        <button id="mash-tab-markers" class="tab-btn active">Markers</button>
-                        <button id="mash-tab-reads" class="tab-btn">Reads</button>
-                    </div>
-                    <svg id="mash-heatmap-markers" class="clusters-heatmap-svg"></svg>
-                    <svg id="mash-heatmap-reads" class="clusters-heatmap-svg" style="display:none;"></svg>
+                <div class="clusters-heatmap-scroll" style="margin-top:12px; width:100%; overflow:hidden;">
+                    <svg id="mash-heatmap-combined" class="clusters-heatmap-svg"></svg>
                 </div>
             </div>
         </details>
     `;
     parent.appendChild(div);
 
-    const heatMarkers = div.querySelector("#mash-heatmap-markers");
-    const heatReads = div.querySelector("#mash-heatmap-reads");
-    const tabMarkers = div.querySelector("#mash-tab-markers");
-    const tabReads = div.querySelector("#mash-tab-reads");
+    const heatCombined = div.querySelector("#mash-heatmap-combined");
     const svgns = "http://www.w3.org/2000/svg";
 
     const allSamples = Array.from(new Set(
@@ -2529,9 +2521,9 @@ function addMashDistanceSection(parent, clusters) {
 
     const sharedOrder = orderSamples(markersPairs.length ? markersPairs : readsPairs);
 
-    function drawHeatmap(svg, pairs) {
+    function drawHeatmap(svg) {
         const sampleSet = new Set();
-        pairs.forEach(p => { if (p.sample1) sampleSet.add(p.sample1); if (p.sample2) sampleSet.add(p.sample2); });
+        [...markersPairs, ...readsPairs].forEach(p => { if (p.sample1) sampleSet.add(p.sample1); if (p.sample2) sampleSet.add(p.sample2); });
         let samples = Array.from(sampleSet);
         if (sharedOrder && sharedOrder.length === samples.length) {
             samples = sharedOrder;
@@ -2630,23 +2622,7 @@ function addMashDistanceSection(parent, clusters) {
         });
     }
 
-    drawHeatmap(heatMarkers, markersPairs);
-    drawHeatmap(heatReads, readsPairs);
-
-    if (tabMarkers && tabReads) {
-        tabMarkers.addEventListener("click", () => {
-            tabMarkers.classList.add("active");
-            tabReads.classList.remove("active");
-            heatMarkers.style.display = "block";
-            heatReads.style.display = "none";
-        });
-        tabReads.addEventListener("click", () => {
-            tabReads.classList.add("active");
-            tabMarkers.classList.remove("active");
-            heatMarkers.style.display = "none";
-            heatReads.style.display = "block";
-        });
-    }
+    drawHeatmap(heatCombined);
 }
 
 /* Sample clusters */
