@@ -2334,109 +2334,11 @@ function addOverallReadCoverageSection(parent, data) {
                         <div class="redundancy-stat-note">Reads estimated for 95% coverage</div>
                     </div>
                 </div>
-                <div class="lr-target-plot-container">
-                    <svg id="overall-read-coverage-svg" class="lr-target-svg" viewBox="0 0 1000 180" preserveAspectRatio="none"></svg>
-                </div>
             </div>
         </details>
     `;
 
     parent.appendChild(div);
-
-    const svg = div.querySelector("#overall-read-coverage-svg");
-    if (!svg) return;
-
-    const width = 1000;
-    const height = 180;
-    const margin = {left: 80, right: 20, top: 20, bottom: 20};
-    const svgns = "http://www.w3.org/2000/svg";
-
-    const totalReads = Number(data.total_reads) || 0;
-    const lrReads = Number(data.lr_95_reads) || 0;
-    const maxX = Math.max(totalReads, lrReads) * 1.1 || 1;
-
-    const x0 = margin.left;
-    const y0 = height / 2;
-    const plotW = width - margin.left - margin.right;
-
-    function xScale(v) {
-        const val = Math.max(0, v);
-        return x0 + (val / maxX) * plotW;
-    }
-
-    // Baseline
-    const baseline = document.createElementNS(svgns, "line");
-    baseline.setAttribute("x1", x0);
-    baseline.setAttribute("y1", y0);
-    baseline.setAttribute("x2", x0 + plotW);
-    baseline.setAttribute("y2", y0);
-    baseline.setAttribute("stroke", "#555");
-    svg.appendChild(baseline);
-
-    // Ticks
-    makeTicksAroundTen(maxX).forEach(t => {
-        const x = xScale(t);
-        const tick = document.createElementNS(svgns, "line");
-        tick.setAttribute("x1", x);
-        tick.setAttribute("y1", y0 - 6);
-        tick.setAttribute("x2", x);
-        tick.setAttribute("y2", y0 + 6);
-        tick.setAttribute("stroke", "#555");
-        svg.appendChild(tick);
-
-        const lab = document.createElementNS(svgns, "text");
-        lab.setAttribute("x", x);
-        lab.setAttribute("y", height - 4);
-        lab.setAttribute("font-size", "10");
-        lab.setAttribute("text-anchor", "middle");
-        lab.textContent = fmtMillions(t);
-        svg.appendChild(lab);
-    });
-
-    // Total reads bar
-    if (totalReads > 0) {
-        const x = xScale(totalReads);
-        const rect = document.createElementNS(svgns, "rect");
-        rect.setAttribute("x", x0);
-        rect.setAttribute("y", y0 - 12);
-        rect.setAttribute("width", x - x0);
-        rect.setAttribute("height", 24);
-        rect.setAttribute("fill", "#1976d2");
-        rect.setAttribute("fill-opacity", "0.8");
-        svg.appendChild(rect);
-
-        const lab = document.createElementNS(svgns, "text");
-        lab.setAttribute("x", x);
-        lab.setAttribute("y", y0 - 16);
-        lab.setAttribute("font-size", "10");
-        lab.setAttribute("text-anchor", "end");
-        lab.setAttribute("fill", "#1976d2");
-        lab.textContent = `Total reads: ${fmtMillions(totalReads)}`;
-        svg.appendChild(lab);
-    }
-
-    // LR target line
-    if (lrReads > 0) {
-        const x = xScale(lrReads);
-        const line = document.createElementNS(svgns, "line");
-        line.setAttribute("x1", x);
-        line.setAttribute("y1", margin.top);
-        line.setAttribute("x2", x);
-        line.setAttribute("y2", height - margin.bottom);
-        line.setAttribute("stroke", "#c62828");
-        line.setAttribute("stroke-dasharray", "4,2");
-        line.setAttribute("stroke-width", "1.4");
-        svg.appendChild(line);
-
-        const lab = document.createElementNS(svgns, "text");
-        lab.setAttribute("x", x);
-        lab.setAttribute("y", margin.top + 10);
-        lab.setAttribute("font-size", "10");
-        lab.setAttribute("text-anchor", "middle");
-        lab.setAttribute("fill", "#c62828");
-        lab.textContent = `95% LR target (${fmtMillions(lrReads)})`;
-        svg.appendChild(lab);
-    }
 }
 
 /* Overall marker coverage summary */
