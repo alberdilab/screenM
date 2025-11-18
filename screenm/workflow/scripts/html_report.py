@@ -22,6 +22,75 @@ HTML_TEMPLATE = r"""<!DOCTYPE html>
         margin-bottom: 30px;
     }
 
+    .project-highlights {
+        margin-bottom: 22px;
+        padding: 14px 16px 16px 16px;
+        border-radius: 10px;
+        border: 1px solid #cfd7e6;
+        background: #f6f8ff;
+    }
+    .project-highlights-title {
+        margin: 0 0 10px 0;
+        font-size: 1.1em;
+    }
+    .highlights-grid {
+        display: flex;
+        gap: 12px;
+        flex-wrap: wrap;
+    }
+    .highlight-card {
+        flex: 1;
+        min-width: 200px;
+        background: #ffffff;
+        border: 1px solid #dfe6f5;
+        border-radius: 8px;
+        padding: 10px 12px;
+        box-shadow: 0 1px 2px rgba(0,0,0,0.04);
+    }
+    .highlight-label {
+        font-size: 0.92em;
+        color: #444;
+        margin-bottom: 2px;
+    }
+    .highlight-value {
+        font-size: 1.5em;
+        font-weight: 700;
+        color: #1a237e;
+    }
+    .highlight-note {
+        font-size: 0.85em;
+        color: #555;
+        margin-top: 2px;
+    }
+    .highlight-statuses {
+        margin-top: 12px;
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+    }
+    .status-pill {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        padding: 8px 10px;
+        border-radius: 999px;
+        border: 1px solid #dcdcdc;
+        background: #ffffff;
+        font-size: 0.95em;
+    }
+    .status-pill.flag-1 {
+        background: #dff7e5;
+        border-color: #b4e5bf;
+    }
+    .status-pill.flag-2 {
+        background: #fff9d7;
+        border-color: #f0e6a6;
+    }
+    .status-pill.flag-3 {
+        background: #ffe3e3;
+        border-color: #efb6b6;
+    }
+
     .section {
         margin-bottom: 24px;
         border-radius: 8px;
@@ -195,6 +264,7 @@ HTML_TEMPLATE = r"""<!DOCTYPE html>
 
 <h1>ScreenM Summary Report</h1>
 
+<div id="project-highlights"></div>
 <div id="summary-sections"></div>
 
 <script>
@@ -255,6 +325,103 @@ function sectionStatus(sectionLabel, flag) {
         emoji,
         text: `${sectionLabel} ${descriptor}`
     };
+}
+
+/* ---------- Project highlights (compact overview) ---------- */
+function addProjectHighlights(container, distill, summary) {
+    if (!container) return;
+
+    const meta = distill.meta || {};
+    const metadata = meta.metadata || {};
+    const screening = summary.screening_overview || {};
+    const prok = summary.prokaryotic_fraction || {};
+
+    const projectName =
+        metadata.project ||
+        metadata.project_name ||
+        metadata.study ||
+        metadata.run ||
+        metadata.name ||
+        "Project overview";
+
+    const highlights = [
+        {
+            label: "Samples analysed",
+            value: fmtInt(
+                screening.n_samples_total !== undefined && screening.n_samples_total !== null
+                    ? screening.n_samples_total
+                    : meta.n_samples_in_results
+            ),
+            note: "Libraries included in this run"
+        },
+        {
+            label: "Read threshold",
+            value: fmtMillions(screening.reads_threshold),
+            note: "Minimum reads used for screening"
+        },
+        {
+            label: "Median reads / sample",
+            value: fmtMillions(screening.median_reads),
+            note: "Central sequencing depth"
+        },
+        {
+            label: "Median prokaryotic fraction",
+            value: prok.median_prokaryotic_fraction !== null && prok.median_prokaryotic_fraction !== undefined
+                ? fmtFloat(prok.median_prokaryotic_fraction, 1) + "%"
+                : "NA",
+            note: "Expected prokaryotic signal"
+        },
+    ];
+
+    const wrapper = document.createElement("div");
+    wrapper.className = "project-highlights";
+
+    const title = document.createElement("h2");
+    title.className = "project-highlights-title";
+    title.textContent = projectName;
+    wrapper.appendChild(title);
+
+    const grid = document.createElement("div");
+    grid.className = "highlights-grid";
+    highlights.forEach(item => {
+        const card = document.createElement("div");
+        card.className = "highlight-card";
+        card.innerHTML = `
+            <div class="highlight-label">${item.label}</div>
+            <div class="highlight-value">${item.value}</div>
+            <div class="highlight-note">${item.note}</div>
+        `;
+        grid.appendChild(card);
+    });
+    wrapper.appendChild(grid);
+
+    const statusList = [
+        { label: "Screening overview", flag: screening.flag_screening_overview },
+        { label: "Sequencing quality", flag: (summary.low_quality_reads || {}).flag_low_quality },
+        { label: "Prokaryotic fraction", flag: prok.flag_prokaryotic_fraction },
+        { label: "Redundancy (reads)", flag: (summary.redundancy_reads || {}).flag_redundancy },
+        { label: "Redundancy (markers)", flag: (summary.redundancy_markers || {}).flag_redundancy_markers },
+        { label: "Clusters", flag: (summary.clusters || {}).flag_clusters },
+    ];
+
+    const statusesDiv = document.createElement("div");
+    statusesDiv.className = "highlight-statuses";
+
+    statusList.forEach(item => {
+        if (!item || !item.label) return;
+        const flag = item.flag !== null && item.flag !== undefined ? item.flag : 3;
+        const status = sectionStatus(item.label, flag);
+        const pill = document.createElement("div");
+        pill.className = "status-pill " + flagClass(flag);
+        pill.innerHTML = `
+            <span class="status-emoji">${status.emoji}</span>
+            <span class="status-text">${status.text}</span>
+        `;
+        statusesDiv.appendChild(pill);
+    });
+
+    wrapper.appendChild(statusesDiv);
+    container.appendChild(wrapper);
 }
 
 /* ---------- Screening overview (merged) ---------- */
@@ -1924,6 +2091,7 @@ function main() {
     const figures = FIGURES_DATA;
 
     const summaryDiv = document.getElementById("summary-sections");
+    const highlightsDiv = document.getElementById("project-highlights");
 
     const S = distill.summary || {};
 
@@ -1937,6 +2105,7 @@ function main() {
         : null;
     const redBiplotPerSample = redBiplot ? (redBiplot.per_sample || []) : [];
 
+    addProjectHighlights(highlightsDiv, distill, S);
     addScreeningOverviewSection(summaryDiv, S.screening_overview, depthPerSample);
     addLowQualitySection(summaryDiv, S.low_quality_reads, depthPerSample);
     addProkFractionSection(summaryDiv, S.prokaryotic_fraction, depthPerSample);
