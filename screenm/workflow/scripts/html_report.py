@@ -369,7 +369,7 @@ function addProjectHighlights(container, distill, summary) {
         {
             label: "Read threshold",
             value: fmtMillions(screening.reads_threshold),
-            note: "Minimum reads used for screening"
+            note: "Reads used for screening each sample"
         },
         {
             label: "Completeness target",
@@ -388,7 +388,7 @@ function addProjectHighlights(container, distill, summary) {
                 }
                 return String(comp);
             })(),
-            note: "Target completeness used in Nonpareil"
+            note: "Percentage of completeness aimed"
         },
     ];
 
@@ -422,11 +422,6 @@ function addProjectHighlights(container, distill, summary) {
     });
     wrapper.appendChild(runMeta);
 
-    const title = document.createElement("div");
-    title.className = "project-highlights-title";
-    title.textContent = projectName;
-    wrapper.appendChild(title);
-
     const grid = document.createElement("div");
     grid.className = "highlights-grid";
     highlights.forEach(item => {
@@ -454,7 +449,6 @@ function addScreeningOverviewSection(parent, data, depthPerSample) {
     const total = data.n_samples_total;
     const above = data.n_samples_above_threshold;
     const perc = data.percent_above_threshold;
-    const thr  = data.reads_threshold;
 
     const medianReads = data.median_reads;
     const cvReads = data.cv_reads;
@@ -475,11 +469,6 @@ function addScreeningOverviewSection(parent, data, depthPerSample) {
                 <p class="summary-message">${msg}</p>
                 <div class="screen-overview-stats">
                     <div class="screen-overview-stat-item">
-                        <div class="screen-overview-stat-label">Total samples</div>
-                        <div class="screen-overview-stat-value">${fmtInt(total)}</div>
-                        <div class="screen-overview-stat-note">Samples in data.json</div>
-                    </div>
-                    <div class="screen-overview-stat-item">
                         <div class="screen-overview-stat-label">Above read threshold</div>
                         <div class="screen-overview-stat-value">
                             ${fmtInt(above)} (${fmtFloat(perc, 1)}%)
@@ -487,16 +476,14 @@ function addScreeningOverviewSection(parent, data, depthPerSample) {
                         <div class="screen-overview-stat-note">Samples passing the screening threshold</div>
                     </div>
                     <div class="screen-overview-stat-item">
-                        <div class="screen-overview-stat-label">Read threshold</div>
-                        <div class="screen-overview-stat-value">${fmtMillions(thr)}</div>
-                        <div class="screen-overview-stat-note">Minimum reads used for screening</div>
+                        <div class="screen-overview-stat-label">Median depth</div>
+                        <div class="screen-overview-stat-value">${fmtMillions(medianReads)}</div>
+                        <div class="screen-overview-stat-note">Median reads per sample</div>
                     </div>
                     <div class="screen-overview-stat-item">
-                        <div class="screen-overview-stat-label">Median depth / variation</div>
-                        <div class="screen-overview-stat-value">
-                            ${fmtMillions(medianReads)} / ${fmtFloat(cvReads, 3)}
-                        </div>
-                        <div class="screen-overview-stat-note">Median reads per sample / CV</div>
+                        <div class="screen-overview-stat-label">Depth variation (CV)</div>
+                        <div class="screen-overview-stat-value">${fmtFloat(cvReads, 3)}</div>
+                        <div class="screen-overview-stat-note">Coefficient of variation across samples</div>
                     </div>
                 </div>
                 <div class="seq-depth-plot-container">
