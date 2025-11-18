@@ -357,9 +357,9 @@ rule nonpareil_reads_out:
 
 rule merge_reads_all:
     input: 
-        expand(f"{OUTDIR}/nonpareil_reads/{{sample}}.fna", sample=SAMPLES)
+        expand(f"{OUTDIR}/nonpareil_reads/{{sample}}.fq", sample=SAMPLES)
     output:
-        f"{OUTDIR}/nonpareil_reads_all/all_samples.fna"
+        f"{OUTDIR}/nonpareil_reads_all/all_samples.fq"
     shell:
         """
         cat {input} > {output}
@@ -367,7 +367,7 @@ rule merge_reads_all:
 
 rule nonpareil_reads_all:
     input: 
-        f"{OUTDIR}/nonpareil_reads_all/all_samples.fna"
+        f"{OUTDIR}/nonpareil_reads_all/all_samples.fq"
     output:
         npa=f"{OUTDIR}/nonpareil_reads_all/all_samples.npa",
         npc=f"{OUTDIR}/nonpareil_reads_all/all_samples.npc",
@@ -381,7 +381,7 @@ rule nonpareil_reads_all:
         """
         echo "[`date '+%Y-%m-%d %H:%M:%S'`] Estimating marker redundancy of all samples"
         module load singlem/0.19.0
-        nonpareil -s {input} -T kmer -f fasta -b {params.workdir} -k {params.kmer} -t {threads} > /dev/null 2>&1
+        nonpareil -s {input} -T kmer -f fasfastqfastqta -b {params.workdir} -k {params.kmer} -t {threads} > /dev/null 2>&1
         """
 
 rule nonpareil_reads_all_out:
