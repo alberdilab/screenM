@@ -2377,8 +2377,8 @@ function main() {
     addProkFractionSection(summaryDiv, S.prokaryotic_fraction, depthPerSample);
     addRedundancyReadsSection(summaryDiv, S.redundancy_reads, depthPerSample);
     addRedundancyMarkersSection(summaryDiv, S.redundancy_markers, redBiplotPerSample);
-    addClustersSection(summaryDiv, S.clusters);
     addOverallProkCoverageSection(summaryDiv, S.overall_prokaryotic_coverage);
+    addClustersSection(summaryDiv, S.clusters);
     addRecommendationsSection(summaryDiv, S.recommendations);
     setSummaryHintBehaviour(document.body);
 }
