@@ -2334,111 +2334,11 @@ function addOverallReadCoverageSection(parent, data) {
                         <div class="redundancy-stat-note">Reads estimated for 95% coverage</div>
                     </div>
                 </div>
-                <div class="lr-target-plot-container">
-                    <svg id="overall-read-coverage-svg" class="lr-target-svg" viewBox="0 0 1000 220" preserveAspectRatio="none"></svg>
-                </div>
             </div>
         </details>
     `;
 
     parent.appendChild(div);
-
-    const svg = div.querySelector("#overall-read-coverage-svg");
-    if (!svg) return;
-
-    const width = 1000;
-    const height = 220;
-    const margin = {left: 70, right: 20, top: 20, bottom: 40};
-    const svgns = "http://www.w3.org/2000/svg";
-
-    const minX = 0;
-    const maxX = Math.max(Number(data.total_reads) || 0, Number(data.lr_95_reads) || 0) * 1.05 || 1;
-
-    const x0 = margin.left;
-    const yMid = height / 2;
-    const plotW = width - margin.left - margin.right;
-
-    function xScale(val) {
-        const v = Math.max(minX, Number(val) || 0);
-        const r = Math.min(1, v / maxX);
-        return x0 + r * plotW;
-    }
-
-    const axis = document.createElementNS(svgns, "line");
-    axis.setAttribute("x1", x0);
-    axis.setAttribute("y1", yMid);
-    axis.setAttribute("x2", x0 + plotW);
-    axis.setAttribute("y2", yMid);
-    axis.setAttribute("stroke", "#555");
-    svg.appendChild(axis);
-
-    // ticks ~10 slots
-    const ticks = makeTicksAroundTen(maxX);
-    ticks.forEach(t => {
-        const x = xScale(t);
-        const line = document.createElementNS(svgns, "line");
-        line.setAttribute("x1", x);
-        line.setAttribute("y1", yMid - 6);
-        line.setAttribute("x2", x);
-        line.setAttribute("y2", yMid + 6);
-        line.setAttribute("stroke", "#555");
-        svg.appendChild(line);
-
-        const lab = document.createElementNS(svgns, "text");
-        lab.setAttribute("x", x);
-        lab.setAttribute("y", height - 6);
-        lab.setAttribute("font-size", "10");
-        lab.setAttribute("text-anchor", "middle");
-        lab.textContent = fmtMillions(t);
-        svg.appendChild(lab);
-    });
-
-    const totalReads = Number(data.total_reads) || 0;
-    const lrReads = Number(data.lr_95_reads) || 0;
-
-    if (totalReads > 0) {
-        const x = xScale(totalReads);
-        const line = document.createElementNS(svgns, "line");
-        line.setAttribute("x1", x);
-        line.setAttribute("y1", margin.top);
-        line.setAttribute("x2", x);
-        line.setAttribute("y2", height - margin.bottom);
-        line.setAttribute("stroke", "#1976d2");
-        line.setAttribute("stroke-dasharray", "4,2");
-        line.setAttribute("stroke-width", "1.4");
-        svg.appendChild(line);
-
-        const lab = document.createElementNS(svgns, "text");
-        lab.setAttribute("x", x);
-        lab.setAttribute("y", margin.top + 12);
-        lab.setAttribute("font-size", "10");
-        lab.setAttribute("text-anchor", "middle");
-        lab.setAttribute("fill", "#1976d2");
-        lab.textContent = `Total reads (${fmtMillions(totalReads)})`;
-        svg.appendChild(lab);
-    }
-
-    if (lrReads > 0) {
-        const x = xScale(lrReads);
-        const line = document.createElementNS(svgns, "line");
-        line.setAttribute("x1", x);
-        line.setAttribute("y1", margin.top);
-        line.setAttribute("x2", x);
-        line.setAttribute("y2", height - margin.bottom);
-        line.setAttribute("stroke", "#c62828");
-        line.setAttribute("stroke-dasharray", "4,2");
-        line.setAttribute("stroke-width", "1.4");
-        svg.appendChild(line);
-
-        const lab = document.createElementNS(svgns, "text");
-        lab.setAttribute("x", x);
-        lab.setAttribute("y", margin.top + 26);
-        lab.setAttribute("font-size", "10");
-        lab.setAttribute("text-anchor", "middle");
-        lab.setAttribute("fill", "#c62828");
-        lab.textContent = `95% LR target (${fmtMillions(lrReads)})`;
-        svg.appendChild(lab);
-    }
 }
 
 /* Overall marker coverage summary */
@@ -2484,110 +2384,11 @@ function addOverallProkCoverageSection(parent, data) {
                         <div class="redundancy-stat-note">Reads estimated for 95% coverage</div>
                     </div>
                 </div>
-                <div class="lr-target-plot-container">
-                    <svg id="overall-prok-coverage-svg" class="lr-target-svg" viewBox="0 0 1000 220" preserveAspectRatio="none"></svg>
-                </div>
             </div>
         </details>
     `;
 
     parent.appendChild(div);
-
-    const svg = div.querySelector("#overall-prok-coverage-svg");
-    if (!svg) return;
-
-    const width = 1000;
-    const height = 220;
-    const margin = {left: 70, right: 20, top: 20, bottom: 40};
-    const svgns = "http://www.w3.org/2000/svg";
-
-    const minX = 0;
-    const maxX = Math.max(Number(data.total_reads) || 0, Number(data.lr_95_reads) || 0) * 1.05 || 1;
-
-    const x0 = margin.left;
-    const yMid = height / 2;
-    const plotW = width - margin.left - margin.right;
-
-    function xScale(val) {
-        const v = Math.max(minX, Number(val) || 0);
-        const r = Math.min(1, v / maxX);
-        return x0 + r * plotW;
-    }
-
-    const axis = document.createElementNS(svgns, "line");
-    axis.setAttribute("x1", x0);
-    axis.setAttribute("y1", yMid);
-    axis.setAttribute("x2", x0 + plotW);
-    axis.setAttribute("y2", yMid);
-    axis.setAttribute("stroke", "#555");
-    svg.appendChild(axis);
-
-    const ticks = makeTicksAroundTen(maxX);
-    ticks.forEach(t => {
-        const x = xScale(t);
-        const line = document.createElementNS(svgns, "line");
-        line.setAttribute("x1", x);
-        line.setAttribute("y1", yMid - 6);
-        line.setAttribute("x2", x);
-        line.setAttribute("y2", yMid + 6);
-        line.setAttribute("stroke", "#555");
-        svg.appendChild(line);
-
-        const lab = document.createElementNS(svgns, "text");
-        lab.setAttribute("x", x);
-        lab.setAttribute("y", height - 6);
-        lab.setAttribute("font-size", "10");
-        lab.setAttribute("text-anchor", "middle");
-        lab.textContent = fmtMillions(t);
-        svg.appendChild(lab);
-    });
-
-    const totalReads = Number(data.total_reads) || 0;
-    const lrReads = Number(data.lr_95_reads) || 0;
-
-    if (totalReads > 0) {
-        const x = xScale(totalReads);
-        const line = document.createElementNS(svgns, "line");
-        line.setAttribute("x1", x);
-        line.setAttribute("y1", margin.top);
-        line.setAttribute("x2", x);
-        line.setAttribute("y2", height - margin.bottom);
-        line.setAttribute("stroke", "#1976d2");
-        line.setAttribute("stroke-dasharray", "4,2");
-        line.setAttribute("stroke-width", "1.4");
-        svg.appendChild(line);
-
-        const lab = document.createElementNS(svgns, "text");
-        lab.setAttribute("x", x);
-        lab.setAttribute("y", margin.top + 12);
-        lab.setAttribute("font-size", "10");
-        lab.setAttribute("text-anchor", "middle");
-        lab.setAttribute("fill", "#1976d2");
-        lab.textContent = `Total reads (${fmtMillions(totalReads)})`;
-        svg.appendChild(lab);
-    }
-
-    if (lrReads > 0) {
-        const x = xScale(lrReads);
-        const line = document.createElementNS(svgns, "line");
-        line.setAttribute("x1", x);
-        line.setAttribute("y1", margin.top);
-        line.setAttribute("x2", x);
-        line.setAttribute("y2", height - margin.bottom);
-        line.setAttribute("stroke", "#c62828");
-        line.setAttribute("stroke-dasharray", "4,2");
-        line.setAttribute("stroke-width", "1.4");
-        svg.appendChild(line);
-
-        const lab = document.createElementNS(svgns, "text");
-        lab.setAttribute("x", x);
-        lab.setAttribute("y", margin.top + 26);
-        lab.setAttribute("font-size", "10");
-        lab.setAttribute("text-anchor", "middle");
-        lab.setAttribute("fill", "#c62828");
-        lab.textContent = `95% LR target (${fmtMillions(lrReads)})`;
-        svg.appendChild(lab);
-    }
 }
 
 /* Main JS entry */
@@ -2623,26 +2424,7 @@ function main() {
     setSummaryHintBehaviour(document.body);
 }
 
-    try {
-        main();
-    } catch (e) {
-        const err = document.createElement("pre");
-        err.style.whiteSpace = "pre-wrap";
-        err.style.color = "red";
-        err.textContent = "Error rendering report: " + (e && e.stack ? e.stack : e);
-        document.body.insertBefore(err, document.body.firstChild);
-        console.error(e);
-    }
-</script>
-<script>
-// Simple error catcher to expose runtime issues in the report UI
-window.addEventListener("error", (e) => {
-    const pre = document.createElement("pre");
-    pre.style.whiteSpace = "pre-wrap";
-    pre.style.color = "red";
-    pre.textContent = `Runtime error: ${e.message}`;
-    document.body.insertBefore(pre, document.body.firstChild);
-});
+main();
 </script>
 
 </body>
