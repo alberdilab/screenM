@@ -22,6 +22,12 @@ THRESH_CV_MODERATE = 0.30
 # Low-quality read fraction thresholds (fastp)
 THRESH_LOWQ_GOOD = 0.05   # <= 5% removed → very good
 THRESH_LOWQ_MODERATE = 0.20  # 5–20% → moderate, >20% → problematic
+THRESH_FASTP_LOWQUAL_GOOD = 0.02  # <=2% low-quality reads → clean
+THRESH_FASTP_LOWQUAL_MODERATE = 0.05
+THRESH_FASTP_ADAPTER_GOOD = 0.10  # <=10% adapter trimming → minimal
+THRESH_FASTP_ADAPTER_MODERATE = 0.20
+THRESH_FASTP_DUPLICATION_GOOD = 0.05  # <=5% duplicates → low redundancy
+THRESH_FASTP_DUPLICATION_MODERATE = 0.15
 
 ### Prokaryotic fraction
 
@@ -336,6 +342,9 @@ def compute_low_quality(results_json: Dict[str, Any]) -> Dict[str, Any]:
     samples = results_json.get("samples", {}) or {}
 
     frac_removed_list: List[float] = []
+    low_quality_frac_list: List[float] = []
+    adapter_frac_list: List[float] = []
+    duplication_rates: List[float] = []
     total_reads_all = 0
     total_removed_all = 0
     n_samples_with_fastp = 0
@@ -351,13 +360,26 @@ def compute_low_quality(results_json: Dict[str, Any]) -> Dict[str, Any]:
         low_complex = fastp.get("low_complexity_reads", 0) or 0
         too_short = fastp.get("too_short_reads", 0) or 0
         too_long = fastp.get("too_long_reads", 0) or 0
+        adapter_trimmed = fastp.get("adapter_trimmed_reads", 0) or 0
+        duplication = fastp.get("duplication")
+        if isinstance(duplication, str):
+            try:
+                duplication = float(duplication)
+            except ValueError:
+                duplication = None
 
         removed = low_q + too_n + low_complex + too_short + too_long
         removed = max(0, min(removed, total))
 
         frac_removed = removed / total if total > 0 else 0.0
+        low_quality_frac = low_q / total if total > 0 else 0.0
+        adapter_frac = adapter_trimmed / total if total > 0 else 0.0
 
         frac_removed_list.append(frac_removed)
+        low_quality_frac_list.append(low_quality_frac)
+        adapter_frac_list.append(adapter_frac)
+        if isinstance(duplication, (int, float)) and duplication >= 0:
+            duplication_rates.append(float(duplication))
         total_reads_all += total
         total_removed_all += removed
         n_samples_with_fastp += 1
@@ -369,17 +391,24 @@ def compute_low_quality(results_json: Dict[str, Any]) -> Dict[str, Any]:
             "total_removed_reads": None,
             "percent_removed_reads_overall": None,
             "mean_fraction_removed": None,
-            "median_fraction_removed": None,
             "sd_fraction_removed": None,
+            "mean_fraction_low_quality": None,
+            "mean_fraction_adapter_trimmed": None,
+            "mean_duplication_rate": None,
             "flag_low_quality": 3,
+            "flag_low_quality_reads": 3,
+            "flag_adapter_trimming": 3,
+            "flag_duplication_rate": 3,
             "message_low_quality": (
                 "No fastp-derived quality metrics were found; low-quality reads cannot be assessed."
             ),
         }
 
     mean_frac = stats.mean(frac_removed_list)
-    median_frac = stats.median(frac_removed_list)
     sd_frac = stats.pstdev(frac_removed_list) if n_samples_with_fastp > 1 else 0.0
+    mean_low_q = stats.mean(low_quality_frac_list)
+    mean_adapter = stats.mean(adapter_frac_list)
+    mean_dup = stats.mean(duplication_rates) if duplication_rates else None
     percent_removed_overall = (
         100.0 * total_removed_all / total_reads_all if total_reads_all > 0 else 0.0
     )
@@ -411,16 +440,64 @@ def compute_low_quality(results_json: Dict[str, Any]) -> Dict[str, Any]:
             "by the low-quality data."
         )
 
+    def _flag_from_thresholds(value: Optional[float], good: float, moderate: float) -> int:
+        if value is None:
+            return 3
+        if value <= good:
+            return 1
+        if value <= moderate:
+            return 2
+        return 3
+
+    flag_low_quality_reads = _flag_from_thresholds(
+        mean_low_q, THRESH_FASTP_LOWQUAL_GOOD, THRESH_FASTP_LOWQUAL_MODERATE
+    )
+    flag_adapter = _flag_from_thresholds(
+        mean_adapter, THRESH_FASTP_ADAPTER_GOOD, THRESH_FASTP_ADAPTER_MODERATE
+    )
+    flag_dup = _flag_from_thresholds(
+        mean_dup, THRESH_FASTP_DUPLICATION_GOOD, THRESH_FASTP_DUPLICATION_MODERATE
+    )
+
+    def _describe_metric(value: Optional[float], flag_value: int, label: str) -> str:
+        if value is None:
+            return f"{label} could not be evaluated."
+        pct = value * 100
+        if flag_value == 1:
+            return f"{label} remain low at {pct:.1f}% on average."
+        if flag_value == 2:
+            return (
+                f"{label} average {pct:.1f}% of reads, suggesting some libraries may need closer QC."
+            )
+        return (
+            f"{label} consume roughly {pct:.1f}% of reads, which points to systematic issues that warrant investigation."
+        )
+
+    parts = [message]
+    parts.append(_describe_metric(mean_low_q, flag_low_quality_reads, "Low-quality reads"))
+    parts.append(
+        _describe_metric(mean_adapter, flag_adapter, "Adapter trimming events")
+    )
+    parts.append(
+        _describe_metric(mean_dup, flag_dup, "Duplicate reads")
+    )
+    enriched_message = " ".join(p for p in parts if p)
+
     return {
         "n_samples": n_samples_with_fastp,
         "total_reads": total_reads_all,
         "total_removed_reads": total_removed_all,
         "percent_removed_reads_overall": percent_removed_overall,
         "mean_fraction_removed": mean_frac,
-        "median_fraction_removed": median_frac,
         "sd_fraction_removed": sd_frac,
+        "mean_fraction_low_quality": mean_low_q,
+        "mean_fraction_adapter_trimmed": mean_adapter,
+        "mean_duplication_rate": mean_dup,
         "flag_low_quality": flag,
-        "message_low_quality": message,
+        "flag_low_quality_reads": flag_low_quality_reads,
+        "flag_adapter_trimming": flag_adapter,
+        "flag_duplication_rate": flag_dup,
+        "message_low_quality": enriched_message,
     }
 
 

@@ -818,7 +818,10 @@ function addLowQualitySection(parent, data, depthPerSample) {
 
     const overall = data.percent_removed_reads_overall;
     const meanFrac = data.mean_fraction_removed;
-    const medianFrac = data.median_fraction_removed;
+    const meanLowQ = data.mean_fraction_low_quality;
+    const meanAdapter = data.mean_fraction_adapter_trimmed;
+    const meanDup = data.mean_duplication_rate;
+    const pct = (value) => (value === null || value === undefined ? null : 100 * value);
 
     const status = sectionStatus("Sequencing quality", data.flag_low_quality);
 
@@ -845,13 +848,23 @@ function addLowQualitySection(parent, data, depthPerSample) {
                     </div>
                     <div class="quality-stat-item">
                         <div class="quality-stat-label">Mean removed per sample</div>
-                        <div class="quality-stat-value">${fmtFloat(100 * meanFrac, 2)}%</div>
+                        <div class="quality-stat-value">${fmtFloat(pct(meanFrac), 2)}%</div>
                         <div class="quality-stat-note">Average fraction removed per sample</div>
                     </div>
                     <div class="quality-stat-item">
-                        <div class="quality-stat-label">Median removed per sample</div>
-                        <div class="quality-stat-value">${fmtFloat(100 * medianFrac, 2)}%</div>
-                        <div class="quality-stat-note">Typical per-sample fraction of discarded reads</div>
+                        <div class="quality-stat-label">Low-quality reads</div>
+                        <div class="quality-stat-value">${fmtFloat(pct(meanLowQ), 2)}%</div>
+                        <div class="quality-stat-note">Average proportion flagged as low quality</div>
+                    </div>
+                    <div class="quality-stat-item">
+                        <div class="quality-stat-label">Adapter-trimmed reads</div>
+                        <div class="quality-stat-value">${fmtFloat(pct(meanAdapter), 2)}%</div>
+                        <div class="quality-stat-note">Average fraction affected by adapter trimming</div>
+                    </div>
+                    <div class="quality-stat-item">
+                        <div class="quality-stat-label">Duplication rate</div>
+                        <div class="quality-stat-value">${fmtFloat(pct(meanDup), 2)}%</div>
+                        <div class="quality-stat-note">Average proportion of duplicate reads</div>
                     </div>
                 </div>
                 <div class="quality-plot-container">
