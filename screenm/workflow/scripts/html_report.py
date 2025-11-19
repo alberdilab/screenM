@@ -1501,10 +1501,23 @@ function addRedundancyReadsSection(parent, data, depthPerSample) {
     const stepTick = Math.max(1, Math.round(maxTick / 5));
     const tickvals = [];
     const ticktext = [];
+    const formatTick = (val) => {
+        if (val === 0) return "target";
+        if (val > 0) return `${val + 1}×`;
+        const denom = 1 - val;
+        return `1/${denom}×`;
+    };
+    const formatTick = (val) => {
+        if (val === 0) return "target";
+        if (val > 0) return `${val + 1}×`;
+        const denom = 1 - val;
+        return `1/${denom}×`;
+    };
     for (let v = -maxTick; v <= maxTick; v += stepTick) {
-        if (!tickvals.includes(v)) {
-            tickvals.push(v);
-            ticktext.push(v === 0 ? "target" : `${v > 0 ? v : -v}×${v < 0 ? " short" : ""}`);
+        const rounded = Math.round(v);
+        if (!tickvals.includes(rounded)) {
+            tickvals.push(rounded);
+            ticktext.push(formatTick(rounded));
         }
     }
 
@@ -1582,7 +1595,7 @@ function addRedundancyReadsSection(parent, data, depthPerSample) {
             automargin: true,
         },
         yaxis: {
-            title: "Sequenced depth vs LR target (extra / missing ×)",
+            title: "Sequencing in relation to target completeness",
             range: [-maxAbs, maxAbs],
             tickvals,
             ticktext,
@@ -1740,9 +1753,10 @@ function addRedundancyMarkersSection(parent, data, redBiplotPerSample) {
     const tickvals = [];
     const ticktext = [];
     for (let v = -maxTick; v <= maxTick; v += stepTick) {
-        if (!tickvals.includes(v)) {
-            tickvals.push(v);
-            ticktext.push(v === 0 ? "target" : `${v > 0 ? v : -v}×${v < 0 ? " short" : ""}`);
+        const rounded = Math.round(v);
+        if (!tickvals.includes(rounded)) {
+            tickvals.push(rounded);
+            ticktext.push(formatTick(rounded));
         }
     }
 
@@ -1820,7 +1834,7 @@ function addRedundancyMarkersSection(parent, data, redBiplotPerSample) {
             automargin: true,
         },
         yaxis: {
-            title: "Marker coverage vs 95% target (extra / missing ×)",
+            title: "Marker coverage in relation to target completeness",
             range: [-maxAbs, maxAbs],
             tickvals,
             ticktext,

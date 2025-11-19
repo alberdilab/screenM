@@ -646,19 +646,21 @@ def compute_prokaryotic_fraction(results_json: Dict[str, Any]) -> Dict[str, Any]
         if cv_frac < THRESH_CV_BALANCED:
             var_msg = (
                 f"Prokaryotic fraction is consistent across samples (CV = {cv_frac:.2f}), "
-                "so average estimates should be representative of the dataset. "
+                "so this factor is not expected to affect downstream analyses."
             )
         elif cv_frac < THRESH_CV_MODERATE:
             var_msg = (
                 f"Prokaryotic fraction shows moderate variation across samples (CV = {cv_frac:.2f}), "
-                "so some samples may differ from the average estimate. Consider looking at individual sample values "
-                "to assess whether any samples deviate significantly from the average patterns. "
+                "suggesting that the relative contribution of samples to the metagenomic assemblies and "
+                "the representativeness of reconstructed microbial profiles among samples may vary ."
+                "It is recommended to take prokaryotic fraction into account when comparing microbial profiles between samples."
             )
         else:
             var_msg = (
                 f"Prokaryotic fraction is highly variable across samples (CV = {cv_frac:.2f}), "
-                "so average estimates may not reflect individual sample compositions. Have a look at the per-sample "
-                "prokaryotic fractions to understand the variation in microbial content across your dataset. "
+                "indicating that the relative contribution of samples to the metagenomic assemblies and the "
+                "representativeness of reconstructed microbial profiles among samples will likely vary significantly. "
+                "It is strongly recommended to take prokaryotic fraction into account when comparing microbial profiles between samples. "
             )
 
     warning_ratio = warnings_count / n_samples if n_samples > 0 else 0.0
@@ -866,7 +868,7 @@ def compute_redundancy_reads(results_json: Dict[str, Any]) -> Dict[str, Any]:
         else:
             flag_redundancy = 3
         coverage_msg = (
-            f"{n_meet}/{n_cov} samples meet or exceed the LR target ({lr_target_used}%). "
+            f"{n_meet}/{n_cov} samples meet or exceed the coverage target ({lr_target_used}%). "
             f"Median coverage ratio is {stats.median(coverage_ratios):.2f}× "
             f"(mean {stats.mean(coverage_ratios):.2f}×)."
         )
