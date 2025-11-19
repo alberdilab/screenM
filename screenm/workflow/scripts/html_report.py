@@ -1081,257 +1081,223 @@ function addProkFractionSection(parent, data, depthPerSample) {
                     of the estimated prokaryotic fractions in those libraries.
                 </p>
                 <div class="prok-depth-plot-container">
-                    <svg id="prok-depth-svg" class="prok-depth-svg" viewBox="0 0 1000 320" preserveAspectRatio="none"></svg>
+                    <div id="prok-depth-plot" class="plotly-chart"></div>
                 </div>
                 <p class="small-note">
-                    X axis: samples; Y axis: fraction of total reads. Bars are stacked into low-quality (red),
-                    prokaryotic (green/yellow/red depending on the fraction), and other QC-passing reads (grey).
-                    Horizontal dashed lines mark 50% (yellow) and 90% (green) prokaryotic fraction; the blue dashed line
-                    shows the median prokaryotic fraction. Hover over bars for exact fractions and estimated read counts.
+                    Interactive stacked barplot of per-sample read composition. Bars are low-quality (red), prokaryotic
+                    (green/yellow/red depending on the prokaryotic fraction) and other QC-passing reads (grey).
+                    Horizontal dashed lines (if reached) mark 50% (yellow) and 90% (green) prokaryotic fraction; the
+                    median prokaryotic fraction is shown as a dark grey dashed line. Hover for exact fractions and read
+                    counts. The plot resizes with page width.
                 </p>
             </div>
         </details>
     `;
     parent.appendChild(div);
 
-    const svg = div.querySelector("#prok-depth-svg");
+    const plotDiv = div.querySelector("#prok-depth-plot");
     const dataPerSample = (depthPerSample || []).filter(d =>
         d.total_reads !== null &&
         d.total_reads !== undefined
     );
 
     if (!dataPerSample.length) {
-        svg.outerHTML = `<div class="small-note">Per-sample depth component data not available.</div>`;
+        plotDiv.outerHTML = `<div class="small-note">Per-sample depth component data not available.</div>`;
         return;
     }
 
-    const width = 1000;
-    const height = 320;
-    const margin = {left: 60, right: 20, top: 20, bottom: 80};
-    const plotW = width - margin.left - margin.right;
-    const plotH = height - margin.top - margin.bottom;
-    const svgns = "http://www.w3.org/2000/svg";
-
-    const x0 = margin.left;
-    const y0 = height - margin.bottom;
+    if (typeof Plotly === "undefined") {
+        plotDiv.outerHTML = `<div class="small-note">Plotly failed to load; cannot render prokaryotic fraction plot.</div>`;
+        return;
+    }
 
     const THRESH_PROK_MOD = 0.50;
     const THRESH_PROK_HIGH = 0.90;
 
-    let maxFracObserved = 0;
-    dataPerSample.forEach(d => {
-        const fracLow = d.fraction_low_quality_of_total || 0;
-        const fracProk = d.fraction_prokaryotic_of_total || 0;
-        const fracOther = d.fraction_non_prokaryotic_of_total || 0;
-        const stack = fracLow + fracProk + fracOther;
-        maxFracObserved = Math.max(maxFracObserved, fracProk, stack);
-    });
-    let maxFrac = maxFracObserved > 0 ? Math.min(1, maxFracObserved * 1.1) : 1;
+    const samples = dataPerSample.map((d, idx) => d.sample || `sample ${idx + 1}`);
+    const fracLow = dataPerSample.map(d => Math.max(0, Number(d.fraction_low_quality_of_total) || 0));
+    const fracProk = dataPerSample.map(d => Math.max(0, Number(d.fraction_prokaryotic_of_total) || 0));
+    const fracOther = dataPerSample.map(d => Math.max(0, Number(d.fraction_non_prokaryotic_of_total) || 0));
 
-    function yForFrac(frac) {
-        const f = Math.max(0, Math.min(maxFrac, frac));
-        return y0 - (f / maxFrac) * plotH;
+    const totalReads = dataPerSample.map(d => Math.max(0, Number(d.total_reads) || 0));
+    const lowReads = dataPerSample.map(d => Math.max(0, Number(d.low_quality_reads_est) || 0));
+    const prokReads = dataPerSample.map(d => Math.max(0, Number(d.prokaryotic_reads_est) || 0));
+    const otherReads = dataPerSample.map(d => Math.max(0, Number(d.non_prokaryotic_reads_est) || 0));
+
+    const prokColors = fracProk.map(v => {
+        if (v >= THRESH_PROK_HIGH) return "#2e7d32";
+        if (v >= THRESH_PROK_MOD) return "#f9a825";
+        return "#c62828";
+    });
+
+    const hoverLow = dataPerSample.map((d, idx) =>
+        `<b>${samples[idx]}</b><br>` +
+        `Low-quality: ${(fracLow[idx] * 100).toFixed(2)}% (${fmtMillions(lowReads[idx])} reads)<br>` +
+        `Total: ${fmtMillions(totalReads[idx])} reads`
+    );
+    const hoverProk = dataPerSample.map((d, idx) =>
+        `<b>${samples[idx]}</b><br>` +
+        `Prokaryotic: ${(fracProk[idx] * 100).toFixed(2)}% (${fmtMillions(prokReads[idx])} reads)<br>` +
+        `Total: ${fmtMillions(totalReads[idx])} reads`
+    );
+    const hoverOther = dataPerSample.map((d, idx) =>
+        `<b>${samples[idx]}</b><br>` +
+        `Other: ${(fracOther[idx] * 100).toFixed(2)}% (${fmtMillions(otherReads[idx])} reads)<br>` +
+        `Total: ${fmtMillions(totalReads[idx])} reads`
+    );
+
+    const traceLow = {
+        type: "bar",
+        name: "Low-quality",
+        x: samples,
+        y: fracLow,
+        marker: {color: "#f44336"},
+        hovertemplate: "%{text}<extra></extra>",
+        text: hoverLow,
+    };
+
+    const traceProk = {
+        type: "bar",
+        name: "Prokaryotic",
+        x: samples,
+        y: fracProk,
+        marker: {color: prokColors},
+        hovertemplate: "%{text}<extra></extra>",
+        text: hoverProk,
+    };
+
+    const traceOther = {
+        type: "bar",
+        name: "Other",
+        x: samples,
+        y: fracOther,
+        marker: {color: "#9e9e9e"},
+        hovertemplate: "%{text}<extra></extra>",
+        text: hoverOther,
+    };
+
+    const stacks = dataPerSample.map((_, idx) => fracLow[idx] + fracProk[idx] + fracOther[idx]);
+    const maxFracObserved = Math.max(...stacks, 0);
+    const has50 = maxFracObserved >= THRESH_PROK_MOD - 1e-9;
+    const has90 = maxFracObserved >= THRESH_PROK_HIGH - 1e-9;
+    const medianProkFrac = (Number(data.median_prokaryotic_fraction) || 0) / 100;
+
+    const shapes = [];
+    const annotations = [];
+
+    if (has50) {
+        shapes.push({
+            type: "line",
+            xref: "paper",
+            x0: 0,
+            x1: 1,
+            y0: THRESH_PROK_MOD,
+            y1: THRESH_PROK_MOD,
+            line: {color: "#f9a825", width: 1.4, dash: "dot"}
+        });
+        annotations.push({
+            xref: "paper",
+            x: 0.995,
+            y: THRESH_PROK_MOD,
+            xanchor: "right",
+            yanchor: "bottom",
+            text: "50%",
+            showarrow: false,
+            font: {color: "#f9a825", size: 11},
+            align: "right"
+        });
     }
 
-    const xAxis = document.createElementNS(svgns, "line");
-    xAxis.setAttribute("x1", x0);
-    xAxis.setAttribute("y1", y0);
-    xAxis.setAttribute("x2", x0 + plotW);
-    xAxis.setAttribute("y2", y0);
-    xAxis.setAttribute("stroke", "#555");
-    svg.appendChild(xAxis);
+    if (has90) {
+        shapes.push({
+            type: "line",
+            xref: "paper",
+            x0: 0,
+            x1: 1,
+            y0: THRESH_PROK_HIGH,
+            y1: THRESH_PROK_HIGH,
+            line: {color: "#2e7d32", width: 1.4, dash: "dot"}
+        });
+        annotations.push({
+            xref: "paper",
+            x: 0.995,
+            y: THRESH_PROK_HIGH,
+            xanchor: "right",
+            yanchor: "bottom",
+            text: "90%",
+            showarrow: false,
+            font: {color: "#2e7d32", size: 11},
+            align: "right"
+        });
+    }
 
-    const yAxis = document.createElementNS(svgns, "line");
-    yAxis.setAttribute("x1", x0);
-    yAxis.setAttribute("y1", y0);
-    yAxis.setAttribute("x2", x0);
-    yAxis.setAttribute("y2", margin.top);
-    yAxis.setAttribute("stroke", "#555");
-    svg.appendChild(yAxis);
-
-    makeTicksAroundTen(maxFrac).forEach(frac => {
-        const y = yForFrac(frac);
-        const tick = document.createElementNS(svgns, "line");
-        tick.setAttribute("x1", x0 - 4);
-        tick.setAttribute("y1", y);
-        tick.setAttribute("x2", x0);
-        tick.setAttribute("y2", y);
-        tick.setAttribute("stroke", "#555");
-        svg.appendChild(tick);
-
-        const lab = document.createElementNS(svgns, "text");
-        lab.setAttribute("x", x0 - 6);
-        lab.setAttribute("y", y + 3);
-        lab.setAttribute("font-size", "10");
-        lab.setAttribute("text-anchor", "end");
-        lab.textContent = (frac * 100).toFixed(0) + "%";
-        svg.appendChild(lab);
-    });
-
-    const ylabel = document.createElementNS(svgns, "text");
-    ylabel.setAttribute("x", 16);
-    ylabel.setAttribute("y", margin.top + plotH / 2);
-    ylabel.setAttribute("text-anchor", "middle");
-    ylabel.setAttribute("font-size", "11");
-    ylabel.setAttribute("transform", `rotate(-90 16 ${margin.top + plotH / 2})`);
-    ylabel.textContent = "Fraction of total reads";
-    svg.appendChild(ylabel);
-
-    const xlabel = document.createElementNS(svgns, "text");
-    xlabel.setAttribute("x", margin.left + plotW / 2);
-    xlabel.setAttribute("y", height - 8);
-    xlabel.setAttribute("text-anchor", "middle");
-    xlabel.setAttribute("font-size", "11");
-    xlabel.textContent = "Samples";
-    svg.appendChild(xlabel);
-
-    const tooltip = getOrCreateTooltip();
+    if (medianProkFrac > 0) {
+        shapes.push({
+            type: "line",
+            xref: "paper",
+            x0: 0,
+            x1: 1,
+            y0: medianProkFrac,
+            y1: medianProkFrac,
+            line: {color: "#424242", width: 1.2, dash: "dash"}
+        });
+        annotations.push({
+            xref: "paper",
+            x: 0.995,
+            y: medianProkFrac,
+            xanchor: "right",
+            yanchor: "bottom",
+            text: `median (${fmtFloat(medianProkFrac * 100, 1)}%)`,
+            showarrow: false,
+            font: {color: "#424242", size: 11},
+            align: "right"
+        });
+    }
 
     const n = dataPerSample.length;
-    const step = plotW / n;
-    const barWidth = Math.min(16, step * 0.8);
+    const tickAngle = n > 80 ? -75 : n > 40 ? -60 : -45;
+    const tickSize = n > 120 ? 7 : n > 60 ? 8 : 10;
+    const bottomMargin = n > 80 ? 200 : n > 40 ? 150 : 110;
 
-    dataPerSample.forEach((d, i) => {
-        const fracLow = d.fraction_low_quality_of_total || 0;
-        const fracProk = d.fraction_prokaryotic_of_total || 0;
-        const fracOther = d.fraction_non_prokaryotic_of_total || 0;
+    const maxCandidates = [maxFracObserved];
+    if (has50) maxCandidates.push(THRESH_PROK_MOD);
+    if (has90) maxCandidates.push(THRESH_PROK_HIGH);
+    if (medianProkFrac > 0) maxCandidates.push(medianProkFrac);
+    const maxY = Math.max(0.05, Math.min(1, Math.max(...maxCandidates) * 1.1));
 
-        const totalReads = d.total_reads || 0;
-        const lowReads = d.low_quality_reads_est || 0;
-        const prokReads = d.prokaryotic_reads_est || 0;
-        const otherReads = d.non_prokaryotic_reads_est || 0;
+    const layout = {
+        height: 360,
+        margin: {l: 80, r: 28, t: 16, b: bottomMargin},
+        bargap: 0.12,
+        barmode: "stack",
+        hovermode: "closest",
+        showlegend: true,
+        legend: {orientation: "h", y: -0.18},
+        xaxis: {
+            title: "Samples",
+            type: "category",
+            tickangle: tickAngle,
+            tickfont: {size: tickSize},
+            automargin: true,
+        },
+        yaxis: {
+            title: "Fraction of total reads",
+            range: [0, maxY],
+            tickformat: ".0%",
+            separatethousands: true,
+        },
+        shapes,
+        annotations,
+    };
 
-        const xCenter = x0 + step * i + step / 2;
-        const x = xCenter - barWidth / 2;
+    const config = {
+        displaylogo: false,
+        responsive: true,
+        modeBarButtonsToRemove: ["toggleSpikelines", "autoScale2d"],
+    };
 
-        const hLow = fracLow * plotH;
-        const hProk = fracProk * plotH;
-        const hOther = fracOther * plotH;
-
-        let currentTop = y0;
-
-        function makeSeg(height, color) {
-            if (height <= 0) return null;
-            const y = currentTop - height;
-            currentTop = y;
-
-            const rect = document.createElementNS(svgns, "rect");
-            rect.setAttribute("x", x);
-            rect.setAttribute("y", y);
-            rect.setAttribute("width", barWidth);
-            rect.setAttribute("height", height);
-            rect.setAttribute("fill", color);
-            rect.setAttribute("fill-opacity", "0.9");
-            rect.style.cursor = "pointer";
-            return rect;
-        }
-
-        const segLow = makeSeg(hLow, "#f44336");
-
-        let prokColor;
-        if (fracProk >= THRESH_PROK_HIGH) {
-            prokColor = "#2e7d32";
-        } else if (fracProk >= THRESH_PROK_MOD) {
-            prokColor = "#f9a825";
-        } else {
-            prokColor = "#c62828";
-        }
-        const segProk = makeSeg(hProk, prokColor);
-
-        const segOther = makeSeg(hOther, "#9e9e9e");
-
-        const tooltipText =
-            `${d.sample}\n` +
-            `Total: ${fmtMillions(totalReads)} reads\n` +
-            `Low-quality: ${(100*fracLow).toFixed(2)}% (${fmtMillions(lowReads)} reads)\n` +
-            `Prokaryotic: ${(100*fracProk).toFixed(2)}% (${fmtMillions(prokReads)} reads)\n` +
-            `Other: ${(100*fracOther).toFixed(2)}% (${fmtMillions(otherReads)} reads)`;
-
-        [segLow, segProk, segOther].forEach(seg => {
-            if (!seg) return;
-            seg.addEventListener("mouseenter", (evt) => {
-                seg.setAttribute("stroke", "#000");
-                seg.setAttribute("stroke-width", "1");
-                tooltip.style.display = "block";
-                tooltip.textContent = tooltipText;
-                tooltip.style.left = evt.clientX + "px";
-                tooltip.style.top = evt.clientY + "px";
-            });
-            seg.addEventListener("mousemove", (evt) => {
-                tooltip.style.left = evt.clientX + "px";
-                tooltip.style.top = evt.clientY + "px";
-            });
-            seg.addEventListener("mouseleave", () => {
-                seg.removeAttribute("stroke");
-                seg.removeAttribute("stroke-width");
-                tooltip.style.display = "none";
-            });
-            svg.appendChild(seg);
-        });
-
-        const showAll = n <= 40;
-        const show = showAll || (i % 5 === 0);
-        if (show) {
-            const lab = document.createElementNS(svgns, "text");
-            lab.setAttribute("x", xCenter);
-            lab.setAttribute("y", y0 + 10);
-            lab.setAttribute("font-size", "9");
-            lab.setAttribute("text-anchor", "end");
-            lab.setAttribute("transform", `rotate(-60 ${xCenter} ${y0 + 10})`);
-            lab.textContent = d.sample;
-            svg.appendChild(lab);
-        }
-    });
-
-    const thresholds = [
-        {frac: THRESH_PROK_MOD,  color: "#f9a825", label: "50%"},
-        {frac: THRESH_PROK_HIGH, color: "#2e7d32", label: "90%"}
-    ];
-    thresholds.forEach(t => {
-        if (t.frac > maxFracObserved + 1e-9) return;
-        const y = yForFrac(t.frac);
-        const line = document.createElementNS(svgns, "line");
-        line.setAttribute("x1", x0);
-        line.setAttribute("y1", y);
-        line.setAttribute("x2", x0 + plotW);
-        line.setAttribute("y2", y);
-        line.setAttribute("stroke", t.color);
-        line.setAttribute("stroke-width", "1.4");
-        line.setAttribute("stroke-dasharray", "4,2");
-        svg.appendChild(line);
-
-        const lab = document.createElementNS(svgns, "text");
-        lab.setAttribute("x", x0 + plotW - 4);
-        lab.setAttribute("y", y - 2);
-        lab.setAttribute("font-size", "10");
-        lab.setAttribute("text-anchor", "end");
-        lab.setAttribute("fill", t.color);
-        lab.textContent = t.label;
-        svg.appendChild(lab);
-    });
-
-    const medianProkFrac = (Number(data.median_prokaryotic_fraction) || 0) / 100;
-    if (medianProkFrac > 0) {
-        const y = yForFrac(medianProkFrac);
-        const line = document.createElementNS(svgns, "line");
-        line.setAttribute("x1", x0);
-        line.setAttribute("y1", y);
-        line.setAttribute("x2", x0 + plotW);
-        line.setAttribute("y2", y);
-        line.setAttribute("stroke", "#1976d2");
-        line.setAttribute("stroke-width", "1.2");
-        line.setAttribute("stroke-dasharray", "3,2");
-        svg.appendChild(line);
-
-        const lab = document.createElementNS(svgns, "text");
-        lab.setAttribute("x", x0 + plotW - 4);
-        lab.setAttribute("y", y - 2);
-        lab.setAttribute("font-size", "10");
-        lab.setAttribute("text-anchor", "end");
-        lab.setAttribute("fill", "#1976d2");
-        lab.textContent = `median prok (${fmtFloat(data.median_prokaryotic_fraction, 1)}%)`;
-        svg.appendChild(lab);
-    }
+    Plotly.newPlot(plotDiv, [traceLow, traceProk, traceOther], layout, config);
+    window.addEventListener("resize", () => Plotly.Plots.resize(plotDiv));
 }
 
 /* Overall metagenomic coverage (reads Nonpareil) */
