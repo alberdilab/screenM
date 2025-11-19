@@ -2053,11 +2053,90 @@ function addOverallReadCoverageSection(parent, data) {
                         <div class="redundancy-stat-note">Reads estimated for 95% coverage</div>
                     </div>
                 </div>
+                <div class="lr-target-plot-container">
+                    <div id="overall-read-plot" class="plotly-chart" style="height:240px;"></div>
+                </div>
+                <p class="small-note">
+                    Horizontal bar shows pooled reads; dashed line marks the 95% LR_reads target. Bars are green (≥ target),
+                    yellow (50–99% of target) or red (&lt; 50% of target).
+                </p>
             </div>
         </details>
     `;
 
     parent.appendChild(div);
+
+    const plotDiv = div.querySelector("#overall-read-plot");
+    const total = Number(data.total_reads);
+    const target = Number(data.lr_95_reads);
+
+    if (!isFinite(total) || !isFinite(target) || target <= 0) {
+        plotDiv.outerHTML = `<div class="small-note">Insufficient pooled read / target information to draw coverage bar.</div>`;
+        return;
+    }
+    if (typeof Plotly === "undefined") {
+        plotDiv.outerHTML = `<div class="small-note">Plotly failed to load; cannot render overall metagenomic coverage bar.</div>`;
+        return;
+    }
+
+    const ratio = total / target;
+    const color = ratio >= 1 ? "#4caf50" : ratio >= 0.5 ? "#f9a825" : "#c62828";
+
+    const fig = {
+        type: "bar",
+        orientation: "h",
+        x: [total],
+        y: ["Pooled reads"],
+        marker: {color},
+        hovertemplate: [
+            `<b>Pooled reads</b>`,
+            `Reads: ${fmtMillions(total)}`,
+            `Target (95% LR): ${fmtMillions(target)}`,
+            `Relative to target: ${(ratio * 100).toFixed(1)}%`
+        ].join("<br>") + "<extra></extra>",
+    };
+
+    const rangeMax = Math.max(total, target) * 1.1;
+
+    const layout = {
+        height: 220,
+        margin: {l: 120, r: 30, t: 10, b: 40},
+        xaxis: {
+            title: "Reads",
+            range: [0, rangeMax],
+            separatethousands: true,
+        },
+        yaxis: {showticklabels: true},
+        shapes: [
+            {
+                type: "line",
+                xref: "x",
+                yref: "paper",
+                x0: target,
+                x1: target,
+                y0: 0,
+                y1: 1,
+                line: {color: "#000", width: 1.4, dash: "dot"}
+            }
+        ],
+        annotations: [
+            {
+                x: target,
+                yref: "paper",
+                y: 1.02,
+                xanchor: "left",
+                text: "95% target",
+                showarrow: false,
+                font: {size: 11}
+            }
+        ],
+        hovermode: "closest",
+        showlegend: false,
+    };
+
+    const config = {displaylogo: false, responsive: true};
+    Plotly.newPlot(plotDiv, [fig], layout, config);
+    window.addEventListener("resize", () => Plotly.Plots.resize(plotDiv));
 }
 
 /* Overall marker coverage summary */
@@ -2103,11 +2182,90 @@ function addOverallProkCoverageSection(parent, data) {
                         <div class="redundancy-stat-note">Reads estimated for 95% coverage</div>
                     </div>
                 </div>
+                <div class="lr-target-plot-container">
+                    <div id="overall-prok-plot" class="plotly-chart" style="height:240px;"></div>
+                </div>
+                <p class="small-note">
+                    Horizontal bar shows pooled marker reads; dashed line marks the 95% LR_reads target. Bars are green (≥ target),
+                    yellow (50–99% of target) or red (&lt; 50% of target).
+                </p>
             </div>
         </details>
     `;
 
     parent.appendChild(div);
+
+    const plotDiv = div.querySelector("#overall-prok-plot");
+    const total = Number(data.total_reads);
+    const target = Number(data.lr_95_reads);
+
+    if (!isFinite(total) || !isFinite(target) || target <= 0) {
+        plotDiv.outerHTML = `<div class="small-note">Insufficient pooled marker read / target information to draw coverage bar.</div>`;
+        return;
+    }
+    if (typeof Plotly === "undefined") {
+        plotDiv.outerHTML = `<div class="small-note">Plotly failed to load; cannot render overall prokaryotic coverage bar.</div>`;
+        return;
+    }
+
+    const ratio = total / target;
+    const color = ratio >= 1 ? "#4caf50" : ratio >= 0.5 ? "#f9a825" : "#c62828";
+
+    const fig = {
+        type: "bar",
+        orientation: "h",
+        x: [total],
+        y: ["Pooled marker reads"],
+        marker: {color},
+        hovertemplate: [
+            `<b>Pooled marker reads</b>`,
+            `Reads: ${fmtMillions(total)}`,
+            `Target (95% LR): ${fmtMillions(target)}`,
+            `Relative to target: ${(ratio * 100).toFixed(1)}%`
+        ].join("<br>") + "<extra></extra>",
+    };
+
+    const rangeMax = Math.max(total, target) * 1.1;
+
+    const layout = {
+        height: 220,
+        margin: {l: 160, r: 30, t: 10, b: 40},
+        xaxis: {
+            title: "Reads",
+            range: [0, rangeMax],
+            separatethousands: true,
+        },
+        yaxis: {showticklabels: true},
+        shapes: [
+            {
+                type: "line",
+                xref: "x",
+                yref: "paper",
+                x0: target,
+                x1: target,
+                y0: 0,
+                y1: 1,
+                line: {color: "#000", width: 1.4, dash: "dot"}
+            }
+        ],
+        annotations: [
+            {
+                x: target,
+                yref: "paper",
+                y: 1.02,
+                xanchor: "left",
+                text: "95% target",
+                showarrow: false,
+                font: {size: 11}
+            }
+        ],
+        hovermode: "closest",
+        showlegend: false,
+    };
+
+    const config = {displaylogo: false, responsive: true};
+    Plotly.newPlot(plotDiv, [fig], layout, config);
+    window.addEventListener("resize", () => Plotly.Plots.resize(plotDiv));
 }
 
 /* Mash distance overview */
