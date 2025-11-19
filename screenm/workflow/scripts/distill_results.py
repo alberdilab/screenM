@@ -31,10 +31,6 @@ THRESH_PROK_MODERATE = 50.0
 
 ### Metagenomic coverage of samples
 
-# Redundancy (Nonpareil C_total)
-THRESH_COMPLETENESS_HIGH = 0.9
-THRESH_COMPLETENESS_MODERATE = 0.5
-
 # Fractions used for "many" warnings or LR_exceeds
 THRESH_WARNINGS_HIGH_FRACTION = 0.5
 THRESH_LR_EXCEEDS_FRACTION = 0.5
@@ -228,6 +224,9 @@ def compute_screening_overview(
         combined_flag = depth_flag
     else:
         combined_flag = max(reads_flag, depth_flag)
+        if {reads_flag, depth_flag} == {1, 3}:
+            # Excellent screening fraction but uneven depth → treat as moderate overall.
+            combined_flag = 2
 
     # Combined message
     msg_parts: List[str] = []
@@ -262,6 +261,7 @@ def compute_screening_overview(
         "sd_reads": sd.get("sd_reads"),
         "cv_reads": sd.get("cv_reads"),
         "flag_sequencing_depth": depth_flag,
+        "flag_sequencing_variation": depth_flag,
 
         # Combined
         "flag_screening_overview": combined_flag,
