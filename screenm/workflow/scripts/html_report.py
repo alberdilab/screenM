@@ -1840,7 +1840,7 @@ function addClustersSection(parent, clusters) {
                     cluster mates adjacent.
                 </p>
                 <div class="clusters-heatmap-scroll" style="width:100%; overflow-x:auto; overflow-y:visible;">
-                    <div id="clusters-heatmap-plot" class="plotly-chart" style="height:360px; min-width:860px;"></div>
+                    <div id="clusters-heatmap-plot" class="plotly-chart" style="min-width:860px;"></div>
                 </div>
                 <p class="small-note">
                     Hover over tiles for exact cluster assignments. Samples without an assignment in a given
@@ -2035,8 +2035,11 @@ function addClustersSection(parent, clusters) {
     const tickAngle = sampleOrder.length > 18 ? -60 : -45;
     const bottomMargin = sampleOrder.length > 18 ? 200 : 150;
 
+    const layoutHeight = 140 + sampleOrder.length * 8;
+    plotDiv.style.height = `${layoutHeight}px`;
+
     const layout = {
-        height: 140 + sampleOrder.length * 8,
+        height: layoutHeight,
         margin: {l: 90, r: 20, t: 20, b: bottomMargin},
         xaxis: {
             tickangle: tickAngle,
