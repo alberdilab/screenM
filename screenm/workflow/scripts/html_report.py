@@ -929,8 +929,8 @@ function addLowQualitySection(parent, data, depthPerSample) {
     };
 
     const maxFracObserved = Math.max(...fracs, 0);
-    const hasGoodLine = maxFracObserved >= THRESH_GOOD - 1e-9;
-    const hasModLine = maxFracObserved >= THRESH_MOD - 1e-9;
+    const hasGoodLine = maxFracObserved >= THRESH_GOOD;
+    const hasModLine = maxFracObserved >= THRESH_MOD;
     const medianFracValue = median(fracs);
     const medianRemoved = Number(medianFracValue) || 0;
 
@@ -938,7 +938,8 @@ function addLowQualitySection(parent, data, depthPerSample) {
     if (hasGoodLine) maxCandidates.push(THRESH_GOOD);
     if (hasModLine) maxCandidates.push(THRESH_MOD);
     if (medianRemoved > 0) maxCandidates.push(medianRemoved);
-    const maxFrac = Math.max(0.05, Math.max(...maxCandidates) * 1.1);
+    const rangeMax = Math.max(...maxCandidates);
+    const maxFrac = rangeMax > 0 ? rangeMax * 1.1 : 0.01;
 
     const shapes = [];
     const annotations = [];
@@ -989,7 +990,7 @@ function addLowQualitySection(parent, data, depthPerSample) {
         });
     }
 
-    if (medianRemoved > 0) {
+    if (medianRemoved > 0 && medianRemoved <= maxFrac) {
         shapes.push({
             type: "line",
             xref: "paper",
