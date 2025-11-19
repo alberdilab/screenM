@@ -1084,11 +1084,11 @@ function addProkFractionSection(parent, data, depthPerSample) {
                     <div id="prok-depth-plot" class="plotly-chart"></div>
                 </div>
                 <p class="small-note">
-                    Interactive stacked barplot of per-sample read composition. Bars are low-quality (red), prokaryotic
-                    (green/yellow/red depending on the prokaryotic fraction) and other QC-passing reads (grey).
-                    Horizontal dashed lines (if reached) mark 50% (yellow) and 90% (green) prokaryotic fraction; the
-                    median prokaryotic fraction is shown as a dark grey dashed line. Hover for exact fractions and read
-                    counts. The plot resizes with page width.
+                    Interactive stacked barplot of per-sample read composition. Bars are low-quality (dark grey),
+                    prokaryotic (green/yellow/red depending on the prokaryotic fraction) and other QC-passing reads
+                    (light grey). Horizontal dashed lines (if reached) mark 50% (yellow) and 90% (green) prokaryotic
+                    fraction; the median prokaryotic fraction is shown as a dark grey dashed line. Hover for exact
+                    fractions and read counts. The plot resizes with page width.
                 </p>
             </div>
         </details>
@@ -1148,17 +1148,17 @@ function addProkFractionSection(parent, data, depthPerSample) {
 
     const traceLow = {
         type: "bar",
-        name: "Low-quality",
+        name: "",
         x: samples,
         y: fracLow,
-        marker: {color: "#f44336"},
+        marker: {color: "#424242"},
         hovertemplate: "%{text}<extra></extra>",
         text: hoverLow,
     };
 
     const traceProk = {
         type: "bar",
-        name: "Prokaryotic",
+        name: "",
         x: samples,
         y: fracProk,
         marker: {color: prokColors},
@@ -1168,10 +1168,10 @@ function addProkFractionSection(parent, data, depthPerSample) {
 
     const traceOther = {
         type: "bar",
-        name: "Other",
+        name: "",
         x: samples,
         y: fracOther,
-        marker: {color: "#9e9e9e"},
+        marker: {color: "#bdbdbd"},
         hovertemplate: "%{text}<extra></extra>",
         text: hoverOther,
     };
@@ -1271,8 +1271,7 @@ function addProkFractionSection(parent, data, depthPerSample) {
         bargap: 0.12,
         barmode: "stack",
         hovermode: "closest",
-        showlegend: true,
-        legend: {orientation: "h", y: -0.18},
+        showlegend: false,
         xaxis: {
             title: "Samples",
             type: "category",
