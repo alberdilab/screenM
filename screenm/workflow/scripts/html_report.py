@@ -688,9 +688,9 @@ function addScreeningOverviewSection(parent, data, depthPerSample) {
 
     const colors = depths.map(val => {
         if (thresholdReads && thresholdReads > 0) {
-            return val >= thresholdReads ? "#1d4ed8" : "#c62828";
+            return val >= thresholdReads ? "#2e7d32" : "#c62828";
         }
-        return "#1d4ed8";
+        return "#1976d2";
     });
 
     const hover = depths.map((val, idx) => {
@@ -719,9 +719,12 @@ function addScreeningOverviewSection(parent, data, depthPerSample) {
 
     const shapes = [];
     const annotations = [];
-    const maxDepth = Math.max(...depths, thresholdReads || 0, medianDepth || 0);
+    const maxDepthObserved = Math.max(...depths);
+    const includeThresholdLine =
+        thresholdReads && thresholdReads > 0 && thresholdReads <= maxDepthObserved * 1.05;
+    const maxDepth = Math.max(maxDepthObserved, medianDepth || 0, includeThresholdLine ? thresholdReads : 0);
 
-    if (thresholdReads && thresholdReads > 0 && thresholdReads <= maxDepth * 1.1) {
+    if (includeThresholdLine) {
         shapes.push({
             type: "line",
             xref: "paper",
@@ -729,7 +732,7 @@ function addScreeningOverviewSection(parent, data, depthPerSample) {
             x1: 1,
             y0: thresholdReads,
             y1: thresholdReads,
-            line: {color: "#424242", width: 1.6, dash: "dot"}
+            line: {color: "#1d4ed8", width: 1.6, dash: "dot"}
         });
         annotations.push({
             xref: "paper",
@@ -739,7 +742,7 @@ function addScreeningOverviewSection(parent, data, depthPerSample) {
             yanchor: "bottom",
             text: `threshold (${fmtMillions(thresholdReads)})`,
             showarrow: false,
-            font: {color: "#424242", size: 11},
+            font: {color: "#1d4ed8", size: 11},
             align: "right"
         });
     }
@@ -752,7 +755,7 @@ function addScreeningOverviewSection(parent, data, depthPerSample) {
             x1: 1,
             y0: medianDepth,
             y1: medianDepth,
-            line: {color: "#1976d2", width: 1.4, dash: "dash"}
+            line: {color: "#424242", width: 1.4, dash: "dash"}
         });
         annotations.push({
             xref: "paper",
@@ -762,7 +765,7 @@ function addScreeningOverviewSection(parent, data, depthPerSample) {
             yanchor: "bottom",
             text: `median (${fmtMillions(medianDepth)})`,
             showarrow: false,
-            font: {color: "#1976d2", size: 11},
+            font: {color: "#424242", size: 11},
             align: "right"
         });
     }
@@ -855,10 +858,10 @@ function addLowQualitySection(parent, data, depthPerSample) {
                     <div id="quality-plot" class="plotly-chart"></div>
                 </div>
                 <p class="small-note">
-                    Interactive barplot of per-sample removed fractions (fastp). Bars are blue (&le; 5%),
-                    yellow (5–20%) or red (&gt; 20%). Horizontal dashed lines mark 5% and 20% thresholds,
-                    and the median removed fraction is shown as a blue dashed line. The plot resizes with
-                    the page width.
+                    Interactive barplot of per-sample removed fractions (fastp). Bars are green (&le; 5%),
+                    yellow (5–20%) or red (&gt; 20%). Horizontal dashed lines (when applicable) mark 5% and
+                    20% thresholds, and the median removed fraction is shown as a dark grey dashed line.
+                    The plot resizes with the page width.
                 </p>
             </div>
         </details>
@@ -890,7 +893,7 @@ function addLowQualitySection(parent, data, depthPerSample) {
     });
 
     const colors = fracs.map(v => {
-        if (v <= THRESH_GOOD) return "#1d4ed8";
+        if (v <= THRESH_GOOD) return "#2e7d32";
         if (v <= THRESH_MOD) return "#f9a825";
         return "#c62828";
     });
@@ -913,31 +916,30 @@ function addLowQualitySection(parent, data, depthPerSample) {
     };
 
     const maxFracObserved = Math.max(...fracs, 0);
-    const maxFrac = Math.max(maxFracObserved * 1.1, THRESH_MOD * 1.05, 0.05);
+    const hasGoodLine = maxFracObserved >= THRESH_GOOD - 1e-9;
+    const hasModLine = maxFracObserved >= THRESH_MOD - 1e-9;
+    const medianRemoved = Number(medianFrac) || 0;
 
-    const shapes = [
-        {
+    const maxCandidates = [maxFracObserved];
+    if (hasGoodLine) maxCandidates.push(THRESH_GOOD);
+    if (hasModLine) maxCandidates.push(THRESH_MOD);
+    if (medianRemoved > 0) maxCandidates.push(medianRemoved);
+    const maxFrac = Math.max(0.05, Math.max(...maxCandidates) * 1.1);
+
+    const shapes = [];
+    const annotations = [];
+
+    if (hasGoodLine) {
+        shapes.push({
             type: "line",
             xref: "paper",
             x0: 0,
             x1: 1,
             y0: THRESH_GOOD,
             y1: THRESH_GOOD,
-            line: {color: "#1d4ed8", width: 1.4, dash: "dot"}
-        },
-        {
-            type: "line",
-            xref: "paper",
-            x0: 0,
-            x1: 1,
-            y0: THRESH_MOD,
-            y1: THRESH_MOD,
-            line: {color: "#c62828", width: 1.4, dash: "dot"}
-        }
-    ];
-
-    const annotations = [
-        {
+            line: {color: "#2e7d32", width: 1.4, dash: "dot"}
+        });
+        annotations.push({
             xref: "paper",
             x: 0.995,
             y: THRESH_GOOD,
@@ -945,10 +947,22 @@ function addLowQualitySection(parent, data, depthPerSample) {
             yanchor: "bottom",
             text: "5%",
             showarrow: false,
-            font: {color: "#1d4ed8", size: 11},
+            font: {color: "#2e7d32", size: 11},
             align: "right"
-        },
-        {
+        });
+    }
+
+    if (hasModLine) {
+        shapes.push({
+            type: "line",
+            xref: "paper",
+            x0: 0,
+            x1: 1,
+            y0: THRESH_MOD,
+            y1: THRESH_MOD,
+            line: {color: "#c62828", width: 1.4, dash: "dot"}
+        });
+        annotations.push({
             xref: "paper",
             x: 0.995,
             y: THRESH_MOD,
@@ -958,10 +972,9 @@ function addLowQualitySection(parent, data, depthPerSample) {
             showarrow: false,
             font: {color: "#c62828", size: 11},
             align: "right"
-        }
-    ];
+        });
+    }
 
-    const medianRemoved = Number(medianFrac) || 0;
     if (medianRemoved > 0) {
         shapes.push({
             type: "line",
@@ -970,7 +983,7 @@ function addLowQualitySection(parent, data, depthPerSample) {
             x1: 1,
             y0: medianRemoved,
             y1: medianRemoved,
-            line: {color: "#1976d2", width: 1.2, dash: "dash"}
+            line: {color: "#424242", width: 1.2, dash: "dash"}
         });
         annotations.push({
             xref: "paper",
@@ -980,7 +993,7 @@ function addLowQualitySection(parent, data, depthPerSample) {
             yanchor: "bottom",
             text: `median (${(medianRemoved * 100).toFixed(1)}%)`,
             showarrow: false,
-            font: {color: "#1976d2", size: 11},
+            font: {color: "#424242", size: 11},
             align: "right"
         });
     }
