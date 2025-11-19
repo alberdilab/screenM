@@ -688,9 +688,9 @@ function addScreeningOverviewSection(parent, data, depthPerSample) {
 
     const colors = depths.map(val => {
         if (thresholdReads && thresholdReads > 0) {
-            return val >= thresholdReads ? "#2e7d32" : "#c62828";
+            return val >= thresholdReads ? "#1d4ed8" : "#c62828";
         }
-        return "#1976d2";
+        return "#1d4ed8";
     });
 
     const hover = depths.map((val, idx) => {
@@ -852,225 +852,175 @@ function addLowQualitySection(parent, data, depthPerSample) {
                     </div>
                 </div>
                 <div class="quality-plot-container">
-                    <svg id="quality-svg" class="quality-svg" viewBox="0 0 1000 320" preserveAspectRatio="none"></svg>
+                    <div id="quality-plot" class="plotly-chart"></div>
                 </div>
                 <p class="small-note">
-                    X axis: samples; Y axis: fraction of reads removed by quality filtering (fastp).
-                    Bars show per-sample removed fractions, coloured green (&le; 5%), yellow (5–20%) or
-                    red (&gt; 20%). Horizontal dashed lines mark 5% and 20% thresholds, and the median
-                    removed fraction is shown as a blue dashed line.
+                    Interactive barplot of per-sample removed fractions (fastp). Bars are blue (&le; 5%),
+                    yellow (5–20%) or red (&gt; 20%). Horizontal dashed lines mark 5% and 20% thresholds,
+                    and the median removed fraction is shown as a blue dashed line. The plot resizes with
+                    the page width.
                 </p>
             </div>
         </details>
     `;
     parent.appendChild(div);
 
-    const svg = div.querySelector("#quality-svg");
+    const plotDiv = div.querySelector("#quality-plot");
     const perSample = (depthPerSample || [])
         .filter(d => d.fraction_low_quality_of_total !== null &&
                      d.fraction_low_quality_of_total !== undefined);
 
     if (!perSample.length) {
-        svg.outerHTML = `<div class="small-note">Per-sample removed fractions not available for sequencing quality plot.</div>`;
+        plotDiv.outerHTML = `<div class="small-note">Per-sample removed fractions not available for sequencing quality plot.</div>`;
         return;
     }
 
-    const width = 1000;
-    const height = 320;
-    const margin = {left: 60, right: 20, top: 20, bottom: 80};
-    const plotW = width - margin.left - margin.right;
-    const plotH = height - margin.top - margin.bottom;
-    const svgns = "http://www.w3.org/2000/svg";
-
-    const x0 = margin.left;
-    const y0 = height - margin.bottom;
+    if (typeof Plotly === "undefined") {
+        plotDiv.outerHTML = `<div class="small-note">Plotly failed to load; cannot render sequencing quality plot.</div>`;
+        return;
+    }
 
     const THRESH_GOOD = 0.05;
     const THRESH_MOD  = 0.20;
 
-    let maxFracObserved = 0;
-    perSample.forEach(d => {
-        const f = Number(d.fraction_low_quality_of_total) || 0;
-        if (f > maxFracObserved) maxFracObserved = f;
-    });
-    let maxFrac = maxFracObserved > 0 ? maxFracObserved * 1.1 : 0.05;
-
-    function yForFrac(f) {
-        const frac = Math.max(0, Math.min(maxFrac, f));
-        return y0 - (frac / maxFrac) * plotH;
-    }
-
-    const xAxis = document.createElementNS(svgns, "line");
-    xAxis.setAttribute("x1", x0);
-    xAxis.setAttribute("y1", y0);
-    xAxis.setAttribute("x2", x0 + plotW);
-    xAxis.setAttribute("y2", y0);
-    xAxis.setAttribute("stroke", "#555");
-    svg.appendChild(xAxis);
-
-    const yAxis = document.createElementNS(svgns, "line");
-    yAxis.setAttribute("x1", x0);
-    yAxis.setAttribute("y1", y0);
-    yAxis.setAttribute("x2", x0);
-    yAxis.setAttribute("y2", margin.top);
-    yAxis.setAttribute("stroke", "#555");
-    svg.appendChild(yAxis);
-
-    const tickPercs = makeTicksAroundTen(maxFrac);
-    tickPercs.forEach(frac => {
-        const y = yForFrac(frac);
-        const tick = document.createElementNS(svgns, "line");
-        tick.setAttribute("x1", x0 - 4);
-        tick.setAttribute("y1", y);
-        tick.setAttribute("x2", x0);
-        tick.setAttribute("y2", y);
-        tick.setAttribute("stroke", "#555");
-        svg.appendChild(tick);
-
-        const lab = document.createElementNS(svgns, "text");
-        lab.setAttribute("x", x0 - 6);
-        lab.setAttribute("y", y + 3);
-        lab.setAttribute("font-size", "10");
-        lab.setAttribute("text-anchor", "end");
-        lab.textContent = (frac * 100).toFixed(0) + "%";
-        svg.appendChild(lab);
+    const samples = perSample.map((d, idx) => d.sample || `sample ${idx + 1}`);
+    const fracs = perSample.map(d => {
+        const v = Number(d.fraction_low_quality_of_total);
+        return Number.isFinite(v) && v >= 0 ? v : 0;
     });
 
-    const ylabel = document.createElementNS(svgns, "text");
-    ylabel.setAttribute("x", 16);
-    ylabel.setAttribute("y", margin.top + plotH / 2);
-    ylabel.setAttribute("text-anchor", "middle");
-    ylabel.setAttribute("font-size", "11");
-    ylabel.setAttribute("transform", `rotate(-90 16 ${margin.top + plotH / 2})`);
-    ylabel.textContent = "Reads removed by fastp (%)";
-    svg.appendChild(ylabel);
+    const colors = fracs.map(v => {
+        if (v <= THRESH_GOOD) return "#1d4ed8";
+        if (v <= THRESH_MOD) return "#f9a825";
+        return "#c62828";
+    });
 
-    const xlabel = document.createElementNS(svgns, "text");
-    xlabel.setAttribute("x", margin.left + plotW / 2);
-    xlabel.setAttribute("y", height - 8);
-    xlabel.setAttribute("text-anchor", "middle");
-    xlabel.setAttribute("font-size", "11");
-    xlabel.textContent = "Samples";
-    svg.appendChild(xlabel);
+    const hover = fracs.map((val, idx) => {
+        return [
+            `<b>${samples[idx]}</b>`,
+            `Removed: ${(val * 100).toFixed(2)}%`,
+            `Thresholds: 5% & 20%`
+        ].join("<br>");
+    });
 
-    const tooltip = getOrCreateTooltip();
+    const trace = {
+        type: "bar",
+        x: samples,
+        y: fracs,
+        marker: {color: colors},
+        hovertemplate: "%{customdata}<extra></extra>",
+        customdata: hover,
+    };
 
-    const n = perSample.length;
-    const step = plotW / n;
-    const barWidth = Math.min(16, step * 0.8);
+    const maxFracObserved = Math.max(...fracs, 0);
+    const maxFrac = Math.max(maxFracObserved * 1.1, THRESH_MOD * 1.05, 0.05);
 
-    perSample.forEach((d, i) => {
-        const frac = Number(d.fraction_low_quality_of_total) || 0;
-        const xCenter = x0 + step * i + step / 2;
-        const x = xCenter - barWidth / 2;
-        const y = yForFrac(frac);
-        const hBar = y0 - y;
-
-        let color;
-        if (frac <= THRESH_GOOD) {
-            color = "#2e7d32";
-        } else if (frac <= THRESH_MOD) {
-            color = "#f9a825";
-        } else {
-            color = "#c62828";
+    const shapes = [
+        {
+            type: "line",
+            xref: "paper",
+            x0: 0,
+            x1: 1,
+            y0: THRESH_GOOD,
+            y1: THRESH_GOOD,
+            line: {color: "#1d4ed8", width: 1.4, dash: "dot"}
+        },
+        {
+            type: "line",
+            xref: "paper",
+            x0: 0,
+            x1: 1,
+            y0: THRESH_MOD,
+            y1: THRESH_MOD,
+            line: {color: "#c62828", width: 1.4, dash: "dot"}
         }
-
-        const rect = document.createElementNS(svgns, "rect");
-        rect.setAttribute("x", x);
-        rect.setAttribute("y", y);
-        rect.setAttribute("width", barWidth);
-        rect.setAttribute("height", hBar);
-        rect.setAttribute("fill", color);
-        rect.setAttribute("fill-opacity", "0.9");
-        rect.style.cursor = "pointer";
-
-        const tooltipText =
-            `${d.sample}\n` +
-            `Removed: ${(frac * 100).toFixed(2)}%`;
-
-        rect.addEventListener("mouseenter", (evt) => {
-            rect.setAttribute("stroke", "#000");
-            rect.setAttribute("stroke-width", "1");
-            tooltip.style.display = "block";
-            tooltip.textContent = tooltipText;
-            tooltip.style.left = evt.clientX + "px";
-            tooltip.style.top = evt.clientY + "px";
-        });
-        rect.addEventListener("mousemove", (evt) => {
-            tooltip.style.left = evt.clientX + "px";
-            tooltip.style.top = evt.clientY + "px";
-        });
-        rect.addEventListener("mouseleave", () => {
-            rect.removeAttribute("stroke");
-            rect.removeAttribute("stroke-width");
-            tooltip.style.display = "none";
-        });
-
-        svg.appendChild(rect);
-
-        const showAll = n <= 40;
-        const show = showAll || (i % 5 === 0);
-        if (show) {
-            const lab = document.createElementNS(svgns, "text");
-            lab.setAttribute("x", xCenter);
-            lab.setAttribute("y", y0 + 10);
-            lab.setAttribute("font-size", "9");
-            lab.setAttribute("text-anchor", "end");
-            lab.setAttribute("transform", `rotate(-60 ${xCenter} ${y0 + 10})`);
-            lab.textContent = d.sample;
-            svg.appendChild(lab);
-        }
-    });
-
-    const thresholds = [
-        {frac: THRESH_GOOD, color: "#2e7d32", label: "5%"},
-        {frac: THRESH_MOD,  color: "#c62828", label: "20%"}
     ];
-    thresholds.forEach(t => {
-        if (t.frac > maxFracObserved + 1e-9) return;
-        const y = yForFrac(t.frac);
-        const line = document.createElementNS(svgns, "line");
-        line.setAttribute("x1", x0);
-        line.setAttribute("y1", y);
-        line.setAttribute("x2", x0 + plotW);
-        line.setAttribute("y2", y);
-        line.setAttribute("stroke", t.color);
-        line.setAttribute("stroke-width", "1.4");
-        line.setAttribute("stroke-dasharray", "4,2");
-        svg.appendChild(line);
 
-        const lab = document.createElementNS(svgns, "text");
-        lab.setAttribute("x", x0 + plotW - 4);
-        lab.setAttribute("y", y - 2);
-        lab.setAttribute("font-size", "10");
-        lab.setAttribute("text-anchor", "end");
-        lab.setAttribute("fill", t.color);
-        lab.textContent = t.label;
-        svg.appendChild(lab);
-    });
+    const annotations = [
+        {
+            xref: "paper",
+            x: 0.995,
+            y: THRESH_GOOD,
+            xanchor: "right",
+            yanchor: "bottom",
+            text: "5%",
+            showarrow: false,
+            font: {color: "#1d4ed8", size: 11},
+            align: "right"
+        },
+        {
+            xref: "paper",
+            x: 0.995,
+            y: THRESH_MOD,
+            xanchor: "right",
+            yanchor: "bottom",
+            text: "20%",
+            showarrow: false,
+            font: {color: "#c62828", size: 11},
+            align: "right"
+        }
+    ];
 
     const medianRemoved = Number(medianFrac) || 0;
     if (medianRemoved > 0) {
-        const y = yForFrac(medianRemoved);
-        const line = document.createElementNS(svgns, "line");
-        line.setAttribute("x1", x0);
-        line.setAttribute("y1", y);
-        line.setAttribute("x2", x0 + plotW);
-        line.setAttribute("y2", y);
-        line.setAttribute("stroke", "#1976d2");
-        line.setAttribute("stroke-width", "1.2");
-        line.setAttribute("stroke-dasharray", "3,2");
-        svg.appendChild(line);
-
-        const lab = document.createElementNS(svgns, "text");
-        lab.setAttribute("x", x0 + plotW - 4);
-        lab.setAttribute("y", y - 2);
-        lab.setAttribute("font-size", "10");
-        lab.setAttribute("text-anchor", "end");
-        lab.setAttribute("fill", "#1976d2");
-        lab.textContent = `median (${(medianRemoved * 100).toFixed(1)}%)`;
-        svg.appendChild(lab);
+        shapes.push({
+            type: "line",
+            xref: "paper",
+            x0: 0,
+            x1: 1,
+            y0: medianRemoved,
+            y1: medianRemoved,
+            line: {color: "#1976d2", width: 1.2, dash: "dash"}
+        });
+        annotations.push({
+            xref: "paper",
+            x: 0.995,
+            y: medianRemoved,
+            xanchor: "right",
+            yanchor: "bottom",
+            text: `median (${(medianRemoved * 100).toFixed(1)}%)`,
+            showarrow: false,
+            font: {color: "#1976d2", size: 11},
+            align: "right"
+        });
     }
+
+    const n = perSample.length;
+    const tickAngle = n > 80 ? -75 : n > 40 ? -60 : -45;
+    const tickSize = n > 120 ? 7 : n > 60 ? 8 : 10;
+    const bottomMargin = n > 80 ? 200 : n > 40 ? 150 : 110;
+
+    const layout = {
+        height: 360,
+        margin: {l: 80, r: 28, t: 16, b: bottomMargin},
+        bargap: 0.12,
+        hovermode: "closest",
+        showlegend: false,
+        xaxis: {
+            title: "Samples",
+            type: "category",
+            tickangle: tickAngle,
+            tickfont: {size: tickSize},
+            automargin: true,
+        },
+        yaxis: {
+            title: "Reads removed by fastp (%)",
+            range: [0, maxFrac],
+            tickformat: ".0%",
+            separatethousands: true,
+        },
+        shapes,
+        annotations,
+    };
+
+    const config = {
+        displaylogo: false,
+        responsive: true,
+        modeBarButtonsToRemove: ["toggleSpikelines", "autoScale2d"],
+    };
+
+    Plotly.newPlot(plotDiv, [trace], layout, config);
+    window.addEventListener("resize", () => Plotly.Plots.resize(plotDiv));
 }
 
 /* Prokaryotic fraction & depth components */
