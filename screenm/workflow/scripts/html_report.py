@@ -225,6 +225,7 @@ HTML_TEMPLATE = r"""<!DOCTYPE html>
         padding: 6px 6px 2px 6px;
         box-sizing: border-box;
         margin-top: 10px;
+        margin-bottom: 14px;
     }
 
     .seq-depth-svg,
@@ -240,7 +241,7 @@ HTML_TEMPLATE = r"""<!DOCTYPE html>
     .plotly-chart {
         width: 100%;
         min-width: 0;
-        height: 360px;
+        min-height: 320px;
     }
 
     .clusters-heatmap-scroll {
@@ -907,9 +908,9 @@ function addLowQualitySection(parent, data, depthPerSample) {
     });
 
     const categories = [
-        {key: "fraction_removed_low_quality", label: "Low-quality reads"},
+        {key: "fraction_removed_low_quality", label: "Low phred score"},
         {key: "fraction_removed_too_many_N", label: "Too many Ns"},
-        {key: "fraction_removed_low_complexity", label: "Low-complexity"},
+        {key: "fraction_removed_low_complexity", label: "Low complexity"},
         {key: "fraction_removed_too_short", label: "Too short"},
     ];
 
@@ -919,9 +920,9 @@ function addLowQualitySection(parent, data, depthPerSample) {
     }));
 
     const statusPalettes = {
-        good: ["#216e26", "#2f7f34", "#3e9043", "#4ea155"],
-        moderate: ["#d79900", "#e0a60d", "#e8b51d", "#f0c42d"],
-        poor: ["#9f1f1f", "#b12f2f", "#c23f3f", "#d45050"],
+        good: ["#0b5a24", "#187133", "#279842", "#36b150"],
+        moderate: ["#a86200", "#c17800", "#d89000", "#efaa1a"],
+        poor: ["#7a0015", "#931327", "#ac2539", "#c6384c"],
     };
 
     const statusForSample = totalRemovedFracs.map(val => {
@@ -1047,14 +1048,23 @@ function addLowQualitySection(parent, data, depthPerSample) {
     const tickSize = n > 120 ? 7 : n > 60 ? 8 : 10;
     const bottomMargin = n > 80 ? 200 : n > 40 ? 150 : 110;
 
+    const baseHeight = Math.max(360, Math.min(600, 280 + n * 2));
+    plotDiv.style.height = baseHeight + 80 + "px";
+
     const layout = {
-        height: 380,
+        height: baseHeight,
         margin: {l: 80, r: 28, t: 16, b: bottomMargin},
         bargap: 0.12,
         barmode: "stack",
         hovermode: "closest",
         showlegend: true,
-        legend: {orientation: "h", x: 0, y: 1.1},
+        legend: {
+            orientation: "h",
+            x: 0,
+            y: 1.1,
+            yanchor: "bottom",
+            xanchor: "left",
+        },
         xaxis: {
             title: "Samples",
             type: "category",
@@ -1063,7 +1073,7 @@ function addLowQualitySection(parent, data, depthPerSample) {
             automargin: true,
         },
         yaxis: {
-            title: "Reads removed by fastp (%)",
+            title: "Percentage of low-quality reads",
             range: [0, maxFrac],
             tickformat: yTickFormat,
             separatethousands: true,
