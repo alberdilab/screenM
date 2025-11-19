@@ -7,6 +7,8 @@ import statistics as stats
 
 # ---------- Global thresholds (tune here) ----------
 
+### Screening overview
+
 # Screening threshold: fraction of samples above read cutoff
 THRESH_PCT_ABOVE_ALL = 100.0  # "all samples above"
 THRESH_PCT_ABOVE_GOOD = 80.0  # "most samples above"
@@ -15,17 +17,23 @@ THRESH_PCT_ABOVE_GOOD = 80.0  # "most samples above"
 THRESH_CV_BALANCED = 0.10
 THRESH_CV_MODERATE = 0.30
 
+### Sequencing quality
+
 # Low-quality read fraction thresholds (fastp)
 THRESH_LOWQ_GOOD = 0.05   # <= 5% removed → very good
 THRESH_LOWQ_MODERATE = 0.20  # 5–20% → moderate, >20% → problematic
+
+### Prokaryotic fraction
 
 # Prokaryotic fraction (%)
 THRESH_PROK_HIGH = 90.0
 THRESH_PROK_MODERATE = 50.0
 
-# Redundancy (Nonpareil kappa_total)
-THRESH_KAPPA_HIGH = 0.9
-THRESH_KAPPA_MODERATE = 0.5
+### Metagenomic coverage of samples
+
+# Redundancy (Nonpareil C_total)
+THRESH_COMPLETENESS_HIGH = 0.9
+THRESH_COMPLETENESS_MODERATE = 0.5
 
 # Fractions used for "many" warnings or LR_exceeds
 THRESH_WARNINGS_HIGH_FRACTION = 0.5
@@ -580,13 +588,13 @@ def compute_redundancy_reads(results_json: Dict[str, Any]) -> Dict[str, Any]:
     """
     Summarise coverage/completeness on metagenome reads using Nonpareil LR targets.
 
-    We still report kappa_total statistics for reference, but colour/flags and
+    We still report C_total statistics for reference, but colour/flags and
     messaging are based on how many samples meet the LR target (coverage ratio)
     rather than on redundancy alone.
     """
     samples = results_json.get("samples", {}) or {}
 
-    kappas: List[float] = []
+    c_totals: List[float] = []
     lr_exceeds = 0
     n_with_lr = 0
     coverage_ratios: List[float] = []
@@ -607,15 +615,15 @@ def compute_redundancy_reads(results_json: Dict[str, Any]) -> Dict[str, Any]:
         if isinstance(cov, (int, float)) and cov >= 0:
             coverage_estimates.append(float(cov))
 
-        # kappa_total
-        kappa = npr.get("kappa_total")
+        # C_total
+        kappa = npr.get("C_total")
         if isinstance(kappa, str):
             try:
                 kappa = float(kappa)
             except ValueError:
                 kappa = None
         if isinstance(kappa, (int, float)):
-            kappas.append(float(kappa))
+            c_totals.append(float(kappa))
 
         # LR_reads from targets
         lr_info = _pick_target_lr_reads(npr)
@@ -639,19 +647,19 @@ def compute_redundancy_reads(results_json: Dict[str, Any]) -> Dict[str, Any]:
                 if lr_reads and lr_reads not in (0, float("inf")):
                     coverage_ratios.append(total_reads / lr_reads)
 
-    n_kappa = len(kappas)
+    n_kappa = len(c_totals)
 
     if n_kappa == 0:
         msg = (
-            "No Nonpareil-based redundancy estimates (kappa_total) were found for reads; "
+            "No Nonpareil-based redundancy estimates (C_total) were found for reads; "
             "redundancy and LR-based effort cannot be assessed."
         )
         return {
             "n_samples_kappa": 0,
-            "mean_kappa_total": None,
-            "median_kappa_total": None,
-            "sd_kappa_total": None,
-            "cv_kappa_total": None,
+            "mean_C_total": None,
+            "median_C_total": None,
+            "sd_C_total": None,
+            "cv_C_total": None,
             "flag_redundancy": 3,
             "n_samples_with_lr": n_with_lr,
             "n_samples_lr_exceeds_depth": lr_exceeds,
@@ -660,9 +668,9 @@ def compute_redundancy_reads(results_json: Dict[str, Any]) -> Dict[str, Any]:
             "message_redundancy": msg,
         }
 
-    mean_k = stats.mean(kappas)
-    median_k = stats.median(kappas)
-    sd_k = stats.pstdev(kappas) if n_kappa > 1 else 0.0
+    mean_k = stats.mean(c_totals)
+    median_k = stats.median(c_totals)
+    sd_k = stats.pstdev(c_totals) if n_kappa > 1 else 0.0
     cv_k = sd_k / mean_k if mean_k > 0 else None
     cov_median = stats.median(coverage_estimates) if coverage_estimates else None
     cov_cv = None
@@ -723,10 +731,10 @@ def compute_redundancy_reads(results_json: Dict[str, Any]) -> Dict[str, Any]:
 
     return {
         "n_samples_kappa": n_kappa,
-        "mean_kappa_total": mean_k,
-        "median_kappa_total": median_k,
-        "sd_kappa_total": sd_k,
-        "cv_kappa_total": cv_k,
+        "mean_C_total": mean_k,
+        "median_C_total": median_k,
+        "sd_C_total": sd_k,
+        "cv_C_total": cv_k,
         "coverage_median": cov_median,
         "coverage_cv": cov_cv,
         "flag_redundancy": flag_redundancy,
@@ -745,11 +753,11 @@ def compute_redundancy_markers(results_json: Dict[str, Any]) -> Dict[str, Any]:
     """
     Summarise marker-based coverage/completeness using Nonpareil LR targets.
 
-    Flags and explanations are based on target coverage; kappa_total is kept for reference.
+    Flags and explanations are based on target coverage; C_total is kept for reference.
     """
     samples = results_json.get("samples", {}) or {}
 
-    kappas: List[float] = []
+    c_totals: List[float] = []
     lr_exceeds = 0
     n_with_lr = 0
     coverage_ratios: List[float] = []
@@ -770,15 +778,15 @@ def compute_redundancy_markers(results_json: Dict[str, Any]) -> Dict[str, Any]:
         if isinstance(cov, (int, float)) and cov >= 0:
             coverage_estimates.append(float(cov))
 
-        # kappa_total for markers
-        kappa = npr.get("kappa_total")
+        # C_total for markers
+        kappa = npr.get("C_total")
         if isinstance(kappa, str):
             try:
                 kappa = float(kappa)
             except ValueError:
                 kappa = None
         if isinstance(kappa, (int, float)):
-            kappas.append(float(kappa))
+            c_totals.append(float(kappa))
 
         # LR_reads from targets
         lr_info = _pick_target_lr_reads(npr)
@@ -802,19 +810,19 @@ def compute_redundancy_markers(results_json: Dict[str, Any]) -> Dict[str, Any]:
                 if lr_reads and lr_reads not in (0, float("inf")):
                     coverage_ratios.append(depth / lr_reads)
 
-    n_kappa = len(kappas)
+    n_kappa = len(c_totals)
 
     if n_kappa == 0:
         msg = (
-            "No Nonpareil-based redundancy estimates (kappa_total) were found for marker genes; "
+            "No Nonpareil-based redundancy estimates (C_total) were found for marker genes; "
             "marker redundancy and LR-based effort cannot be assessed."
         )
         return {
             "n_samples_kappa": 0,
-            "mean_kappa_total": None,
-            "median_kappa_total": None,
-            "sd_kappa_total": None,
-            "cv_kappa_total": None,
+            "mean_C_total": None,
+            "median_C_total": None,
+            "sd_C_total": None,
+            "cv_C_total": None,
             "flag_redundancy_markers": 3,
             "n_samples_with_lr": n_with_lr,
             "n_samples_lr_exceeds_depth": lr_exceeds,
@@ -823,9 +831,9 @@ def compute_redundancy_markers(results_json: Dict[str, Any]) -> Dict[str, Any]:
             "message_redundancy_markers": msg,
         }
 
-    mean_k = stats.mean(kappas)
-    median_k = stats.median(kappas)
-    sd_k = stats.pstdev(kappas) if n_kappa > 1 else 0.0
+    mean_k = stats.mean(c_totals)
+    median_k = stats.median(c_totals)
+    sd_k = stats.pstdev(c_totals) if n_kappa > 1 else 0.0
     cv_k = sd_k / mean_k if mean_k > 0 else None
     cov_median = stats.median(coverage_estimates) if coverage_estimates else None
     cov_cv = None
@@ -886,10 +894,10 @@ def compute_redundancy_markers(results_json: Dict[str, Any]) -> Dict[str, Any]:
 
     return {
         "n_samples_kappa": n_kappa,
-        "mean_kappa_total": mean_k,
-        "median_kappa_total": median_k,
-        "sd_kappa_total": sd_k,
-        "cv_kappa_total": cv_k,
+        "mean_C_total": mean_k,
+        "median_C_total": median_k,
+        "sd_C_total": sd_k,
+        "cv_C_total": cv_k,
         "coverage_median": cov_median,
         "coverage_cv": cov_cv,
         "flag_redundancy_markers": flag_redundancy,
@@ -1412,7 +1420,7 @@ def main():
 
         overall_prok_coverage = {
             "sample": all_samples_markers.get("sample"),
-            "kappa_total": all_samples_markers.get("kappa_total"),
+            "C_total": all_samples_markers.get("C_total"),
             "coverage_total": all_samples_markers.get("C_total"),
             "coverage_percent": coverage_pct,
             "subset_reads": all_samples_markers.get("subset_reads"),
@@ -1468,7 +1476,7 @@ def main():
 
         overall_read_coverage = {
             "sample": all_samples_reads.get("sample"),
-            "kappa_total": all_samples_reads.get("kappa_total"),
+            "C_total": all_samples_reads.get("C_total"),
             "coverage_total": all_samples_reads.get("C_total"),
             "coverage_percent": coverage_pct,
             "subset_reads": all_samples_reads.get("subset_reads"),
