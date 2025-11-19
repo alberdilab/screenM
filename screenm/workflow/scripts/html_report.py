@@ -237,12 +237,9 @@ HTML_TEMPLATE = r"""<!DOCTYPE html>
         height: 320px;
     }
 
-    .plotly-scroll {
-        overflow-x: auto;
-        width: 100%;
-    }
     .plotly-chart {
-        min-width: 520px;
+        width: 100%;
+        min-width: 0;
         height: 360px;
     }
 
@@ -654,14 +651,12 @@ function addScreeningOverviewSection(parent, data, depthPerSample) {
                     </div>
                 </div>
                 <div class="seq-depth-plot-container">
-                    <div class="plotly-scroll">
-                        <div id="seq-depth-plot" class="plotly-chart"></div>
-                    </div>
+                    <div id="seq-depth-plot" class="plotly-chart"></div>
                 </div>
                 <p class="small-note">
-                    Interactive barplot of per-sample total reads. Scroll horizontally when many samples are present.
-                    Bars are green if above the screening threshold and red if below. Horizontal dashed lines mark
-                    the median sequencing depth and the read threshold.
+                    Interactive barplot of per-sample total reads that stretches to the available width and resizes
+                    with the page. Bars are green if above the screening threshold and red if below. Horizontal dashed
+                    lines mark the median sequencing depth and the read threshold.
                 </p>
             </div>
         </details>
@@ -806,11 +801,8 @@ function addScreeningOverviewSection(parent, data, depthPerSample) {
         modeBarButtonsToRemove: ["toggleSpikelines", "autoScale2d"],
     };
 
-    const chartWidth = Math.max(520, Math.min(2400, n * 26));
-    plotDiv.style.width = chartWidth + "px";
-    plotDiv.classList.add("plotly-chart");
-
     Plotly.newPlot(plotDiv, [trace], layout, config);
+    window.addEventListener("resize", () => Plotly.Plots.resize(plotDiv));
 }
 
 /* Sequencing quality */
