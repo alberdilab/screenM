@@ -237,6 +237,15 @@ HTML_TEMPLATE = r"""<!DOCTYPE html>
         height: 320px;
     }
 
+    .plotly-scroll {
+        overflow-x: auto;
+        width: 100%;
+    }
+    .plotly-chart {
+        min-width: 520px;
+        height: 360px;
+    }
+
     .clusters-heatmap-scroll {
         overflow-x: auto;
         margin-top: 10px;
@@ -310,6 +319,8 @@ HTML_TEMPLATE = r"""<!DOCTYPE html>
     .rec-badge.info { background: #1976d2; }
     .rec-badge.warn { background: #c62828; }
 </style>
+
+<script src="https://cdn.plot.ly/plotly-2.35.2.min.js"></script>
 
 </head>
 <body>
@@ -643,229 +654,163 @@ function addScreeningOverviewSection(parent, data, depthPerSample) {
                     </div>
                 </div>
                 <div class="seq-depth-plot-container">
-                    <svg id="seq-depth-svg" class="seq-depth-svg" viewBox="0 0 1000 320" preserveAspectRatio="none"></svg>
+                    <div class="plotly-scroll">
+                        <div id="seq-depth-plot" class="plotly-chart"></div>
+                    </div>
                 </div>
                 <p class="small-note">
-                    X axis: samples; Y axis: sequencing depth in reads. Bars show per-sample total read counts,
-                    coloured green if above the screening threshold and red if below. A horizontal dashed line
-                    indicates the median sequencing depth; another dashed line marks the read threshold.
+                    Interactive barplot of per-sample total reads. Scroll horizontally when many samples are present.
+                    Bars are green if above the screening threshold and red if below. Horizontal dashed lines mark
+                    the median sequencing depth and the read threshold.
                 </p>
             </div>
         </details>
     `;
     parent.appendChild(div);
 
-    const svg = div.querySelector("#seq-depth-svg");
+    const plotDiv = div.querySelector("#seq-depth-plot");
     const perSample = (depthPerSample || [])
         .filter(d => d.total_reads !== null && d.total_reads !== undefined);
 
     if (!perSample.length) {
-        svg.outerHTML = `<div class="small-note">Per-sample read counts not available for sequencing depth barplot.</div>`;
+        plotDiv.outerHTML = `<div class="small-note">Per-sample read counts not available for sequencing depth barplot.</div>`;
         return;
     }
 
-    const width = 1000;
-    const height = 320;
-    const margin = {left: 60, right: 20, top: 20, bottom: 80};
-    const plotW = width - margin.left - margin.right;
-    const plotH = height - margin.top - margin.bottom;
-    const svgns = "http://www.w3.org/2000/svg";
+    if (typeof Plotly === "undefined") {
+        plotDiv.outerHTML = `<div class="small-note">Plotly failed to load; cannot render sequencing depth plot.</div>`;
+        return;
+    }
 
     const thresholdReads = Number(data.reads_threshold) || null;
+    const medianDepth = Number(medianReads) || 0;
 
-    let maxDepth = 0;
-    perSample.forEach(d => {
-        const v = Number(d.total_reads) || 0;
-        if (v > maxDepth) maxDepth = v;
-    });
-    const maxObservedDepth = maxDepth;
-    if (maxObservedDepth <= 0) {
-        maxDepth = 1;
-    } else {
-        maxDepth = maxObservedDepth * 1.05;
-    }
-
-    const x0 = margin.left;
-    const y0 = height - margin.bottom;
-
-    function yForValue(v) {
-        const ratio = Math.max(0, Math.min(1, v / maxDepth));
-        return y0 - ratio * plotH;
-    }
-
-    const xAxis = document.createElementNS(svgns, "line");
-    xAxis.setAttribute("x1", x0);
-    xAxis.setAttribute("y1", y0);
-    xAxis.setAttribute("x2", x0 + plotW);
-    xAxis.setAttribute("y2", y0);
-    xAxis.setAttribute("stroke", "#555");
-    svg.appendChild(xAxis);
-
-    const yAxis = document.createElementNS(svgns, "line");
-    yAxis.setAttribute("x1", x0);
-    yAxis.setAttribute("y1", y0);
-    yAxis.setAttribute("x2", x0);
-    yAxis.setAttribute("y2", margin.top);
-    yAxis.setAttribute("stroke", "#555");
-    svg.appendChild(yAxis);
-
-    [0, 0.25, 0.5, 0.75, 1].forEach(frac => {
-        const val = frac * maxDepth;
-        const y = yForValue(val);
-
-        const tick = document.createElementNS(svgns, "line");
-        tick.setAttribute("x1", x0 - 4);
-        tick.setAttribute("y1", y);
-        tick.setAttribute("x2", x0);
-        tick.setAttribute("y2", y);
-        tick.setAttribute("stroke", "#555");
-        svg.appendChild(tick);
-
-        const lab = document.createElementNS(svgns, "text");
-        lab.setAttribute("x", x0 - 6);
-        lab.setAttribute("y", y + 3);
-        lab.setAttribute("font-size", "10");
-        lab.setAttribute("text-anchor", "end");
-        lab.textContent = fmtMillions(val);
-        svg.appendChild(lab);
+    const samples = perSample.map((d, idx) => d.sample || `sample ${idx + 1}`);
+    const depths = perSample.map(d => {
+        const v = Number(d.total_reads);
+        return Number.isFinite(v) && v > 0 ? v : 0;
     });
 
-    const ylabel = document.createElementNS(svgns, "text");
-    ylabel.setAttribute("x", 16);
-    ylabel.setAttribute("y", margin.top + plotH / 2);
-    ylabel.setAttribute("text-anchor", "middle");
-    ylabel.setAttribute("font-size", "11");
-    ylabel.setAttribute("transform", `rotate(-90 16 ${margin.top + plotH / 2})`);
-    ylabel.textContent = "Sequencing depth (reads)";
-    svg.appendChild(ylabel);
-
-    const xlabel = document.createElementNS(svgns, "text");
-    xlabel.setAttribute("x", margin.left + plotW / 2);
-    xlabel.setAttribute("y", height - 8);
-    xlabel.setAttribute("text-anchor", "middle");
-    xlabel.setAttribute("font-size", "11");
-    xlabel.textContent = "Samples";
-    svg.appendChild(xlabel);
-
-    const tooltip = getOrCreateTooltip();
-
-    const n = perSample.length;
-    const step = plotW / n;
-    const barWidth = Math.min(16, step * 0.8);
-
-    const colorAbove = "#2e7d32";
-    const colorBelow = "#c62828";
-
-    perSample.forEach((d, i) => {
-        const val = Number(d.total_reads) || 0;
-        const xCenter = x0 + step * i + step / 2;
-        const x = xCenter - barWidth / 2;
-        const y = yForValue(val);
-        const hBar = y0 - y;
-
-        let barColor = "#1976d2";
+    const colors = depths.map(val => {
         if (thresholdReads && thresholdReads > 0) {
-            barColor = val >= thresholdReads ? colorAbove : colorBelow;
+            return val >= thresholdReads ? "#2e7d32" : "#c62828";
         }
+        return "#1976d2";
+    });
 
-        const rect = document.createElementNS(svgns, "rect");
-        rect.setAttribute("x", x);
-        rect.setAttribute("y", y);
-        rect.setAttribute("width", barWidth);
-        rect.setAttribute("height", hBar);
-        rect.setAttribute("fill", barColor);
-        rect.setAttribute("fill-opacity", "0.9");
-        rect.style.cursor = "pointer";
-
-        const tooltipLines = [
-            `${d.sample}`,
+    const hover = depths.map((val, idx) => {
+        const lines = [
+            `<b>${samples[idx]}</b>`,
             `Depth: ${fmtMillions(val)} reads`
         ];
         if (thresholdReads && thresholdReads > 0) {
-            tooltipLines.push(`Threshold: ${fmtMillions(thresholdReads)} reads`);
-            tooltipLines.push(
-                val >= thresholdReads ? "Above threshold" : "Below threshold"
-            );
+            lines.push(`Threshold: ${fmtMillions(thresholdReads)} reads`);
+            lines.push(val >= thresholdReads ? "Above threshold" : "Below threshold");
         }
-
-        rect.addEventListener("mouseenter", (evt) => {
-            rect.setAttribute("stroke", "#000");
-            rect.setAttribute("stroke-width", "1");
-            tooltip.style.display = "block";
-            tooltip.textContent = tooltipLines.join("\n");
-            tooltip.style.left = evt.clientX + "px";
-            tooltip.style.top = evt.clientY + "px";
-        });
-        rect.addEventListener("mousemove", (evt) => {
-            tooltip.style.left = evt.clientX + "px";
-            tooltip.style.top = evt.clientY + "px";
-        });
-        rect.addEventListener("mouseleave", () => {
-            rect.removeAttribute("stroke");
-            rect.removeAttribute("stroke-width");
-            tooltip.style.display = "none";
-        });
-
-        svg.appendChild(rect);
-
-        const showAll = n <= 40;
-        const show = showAll || (i % 5 === 0);
-        if (show) {
-            const lab = document.createElementNS(svgns, "text");
-            lab.setAttribute("x", xCenter);
-            lab.setAttribute("y", y0 + 10);
-            lab.setAttribute("font-size", "9");
-            lab.setAttribute("text-anchor", "end");
-            lab.setAttribute("transform", `rotate(-60 ${xCenter} ${y0 + 10})`);
-            lab.textContent = d.sample;
-            svg.appendChild(lab);
+        if (medianDepth > 0) {
+            lines.push(`Median: ${fmtMillions(medianDepth)} reads`);
         }
+        return lines.join("<br>");
     });
 
-    const medianDepth = Number(medianReads) || 0;
+    const trace = {
+        type: "bar",
+        x: samples,
+        y: depths,
+        marker: {color: colors},
+        hovertemplate: "%{customdata}<extra></extra>",
+        customdata: hover,
+    };
+
+    const shapes = [];
+    const annotations = [];
+    const maxDepth = Math.max(...depths, thresholdReads || 0, medianDepth || 0);
+
+    if (thresholdReads && thresholdReads > 0 && thresholdReads <= maxDepth * 1.1) {
+        shapes.push({
+            type: "line",
+            xref: "paper",
+            x0: 0,
+            x1: 1,
+            y0: thresholdReads,
+            y1: thresholdReads,
+            line: {color: "#424242", width: 1.6, dash: "dot"}
+        });
+        annotations.push({
+            xref: "paper",
+            x: 0.995,
+            y: thresholdReads,
+            xanchor: "right",
+            yanchor: "bottom",
+            text: `threshold (${fmtMillions(thresholdReads)})`,
+            showarrow: false,
+            font: {color: "#424242", size: 11},
+            align: "right"
+        });
+    }
+
     if (medianDepth > 0) {
-        const y = yForValue(medianDepth);
-        const line = document.createElementNS(svgns, "line");
-        line.setAttribute("x1", x0);
-        line.setAttribute("y1", y);
-        line.setAttribute("x2", x0 + plotW);
-        line.setAttribute("y2", y);
-        line.setAttribute("stroke", "#1976d2");
-        line.setAttribute("stroke-width", "1.2");
-        line.setAttribute("stroke-dasharray", "3,2");
-        svg.appendChild(line);
-
-        const lab = document.createElementNS(svgns, "text");
-        lab.setAttribute("x", x0 + plotW - 4);
-        lab.setAttribute("y", y - 2);
-        lab.setAttribute("font-size", "10");
-        lab.setAttribute("text-anchor", "end");
-        lab.setAttribute("fill", "#1976d2");
-        lab.textContent = `median (${fmtMillions(medianDepth)})`;
-        svg.appendChild(lab);
+        shapes.push({
+            type: "line",
+            xref: "paper",
+            x0: 0,
+            x1: 1,
+            y0: medianDepth,
+            y1: medianDepth,
+            line: {color: "#1976d2", width: 1.4, dash: "dash"}
+        });
+        annotations.push({
+            xref: "paper",
+            x: 0.995,
+            y: medianDepth,
+            xanchor: "right",
+            yanchor: "bottom",
+            text: `median (${fmtMillions(medianDepth)})`,
+            showarrow: false,
+            font: {color: "#1976d2", size: 11},
+            align: "right"
+        });
     }
 
-    if (thresholdReads && thresholdReads > 0 && thresholdReads <= maxObservedDepth * 1.0001) {
-        const y = yForValue(thresholdReads);
-        const line = document.createElementNS(svgns, "line");
-        line.setAttribute("x1", x0);
-        line.setAttribute("y1", y);
-        line.setAttribute("x2", x0 + plotW);
-        line.setAttribute("y2", y);
-        line.setAttribute("stroke", "#424242");
-        line.setAttribute("stroke-width", "1.2");
-        line.setAttribute("stroke-dasharray", "4,2");
-        svg.appendChild(line);
+    const n = perSample.length;
+    const tickAngle = n > 80 ? -75 : n > 40 ? -60 : -45;
+    const tickSize = n > 120 ? 7 : n > 60 ? 8 : 10;
+    const bottomMargin = n > 80 ? 200 : n > 40 ? 150 : 110;
 
-        const lab = document.createElementNS(svgns, "text");
-        lab.setAttribute("x", x0 + plotW - 4);
-        lab.setAttribute("y", y - 2);
-        lab.setAttribute("font-size", "10");
-        lab.setAttribute("text-anchor", "end");
-        lab.setAttribute("fill", "#424242");
-        lab.textContent = `threshold (${fmtMillions(thresholdReads)})`;
-        svg.appendChild(lab);
-    }
+    const layout = {
+        height: 360,
+        margin: {l: 90, r: 28, t: 16, b: bottomMargin},
+        bargap: 0.12,
+        hovermode: "closest",
+        showlegend: false,
+        xaxis: {
+            title: "Samples",
+            type: "category",
+            tickangle: tickAngle,
+            tickfont: {size: tickSize},
+            automargin: true,
+        },
+        yaxis: {
+            title: "Sequencing depth (reads)",
+            rangemode: "tozero",
+            tickformat: ".3s",
+            separatethousands: true,
+        },
+        shapes,
+        annotations,
+    };
+
+    const config = {
+        displaylogo: false,
+        responsive: true,
+        modeBarButtonsToRemove: ["toggleSpikelines", "autoScale2d"],
+    };
+
+    const chartWidth = Math.max(520, Math.min(2400, n * 26));
+    plotDiv.style.width = chartWidth + "px";
+    plotDiv.classList.add("plotly-chart");
+
+    Plotly.newPlot(plotDiv, [trace], layout, config);
 }
 
 /* Sequencing quality */
