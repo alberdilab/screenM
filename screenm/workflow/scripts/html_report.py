@@ -1367,21 +1367,19 @@ function addRedundancyReadsSection(parent, data, depthPerSample) {
                     LR target used: ${data.lr_target_used || "NA"}% of metagenomic diversity (Nonpareil 95% LR_reads).
                 </p>
                 <div class="lr-target-plot-container">
-                    <svg id="lr-target-svg" class="lr-target-svg" viewBox="0 0 1000 320" preserveAspectRatio="none"></svg>
+                    <div id="lr-target-plot" class="plotly-chart"></div>
                 </div>
                 <p class="small-note">
-                    X axis: samples; Y axis: sequenced depth relative to the LR_reads 95% target.
-                    The black dashed midline corresponds to the LR target. Tick labels above
-                    start at 1×, showing how many times more than necessary has been sequenced;
-                    ticks below show -1×, -2×, -3× etc. Bars more than 3× short of the target
+                    Interactive barplot of sequencing depth vs. the 95% LR_reads target.
+                    The dashed midline marks the LR target (0 on the Y axis). Positive bars
+                    show how many times the target was exceeded, negative bars show how many
+                    times more coverage would be needed. Bars more than 3× short of the target
                     are shown in red.
                 </p>
             </div>
         </details>
     `;
     parent.appendChild(div);
-
-    const svg = div.querySelector("#lr-target-svg");
 
     const combined = (depthPerSample || []).map(d => {
         const observed = d.total_reads != null ? Number(d.total_reads) : null;
@@ -1398,230 +1396,149 @@ function addRedundancyReadsSection(parent, data, depthPerSample) {
         };
     }).filter(d => d.ratio != null);
 
+    const plotDiv = div.querySelector("#lr-target-plot");
+
     if (!combined.length) {
-        svg.outerHTML = `<div class="small-note">No per-sample LR_reads and depth information available to compare against LR targets (reads).</div>`;
+        plotDiv.outerHTML = `<div class="small-note">No per-sample LR_reads and depth information available to compare against LR targets (reads).</div>`;
         return;
     }
 
-    const width = 1000;
-    const height = 320;
-    const margin = {left: 60, right: 20, top: 20, bottom: 80};
-    const plotW = width - margin.left - margin.right;
-    const plotH = height - margin.top - margin.bottom;
-    const svgns = "http://www.w3.org/2000/svg";
-
-    const x0 = margin.left;
-    const yTop = margin.top;
-    const yBottom = height - margin.bottom;
-    const baselineY = yTop + plotH / 2;
-
-    function transformRatio(r) {
-        if (r >= 1) return r - 1;
-        return -(1 / r - 1);
+    if (typeof Plotly === "undefined") {
+        plotDiv.outerHTML = `<div class="small-note">Plotly failed to load; cannot render metagenomic coverage plot.</div>`;
+        return;
     }
 
+    const transformRatio = (r) => (r >= 1 ? r - 1 : -(1 / r - 1));
+
+    const samples = combined.map((d, idx) => d.sample || `sample ${idx + 1}`);
     const values = combined.map(d => transformRatio(d.ratio));
-    let maxAbs = 0;
-    values.forEach(v => {
-        const a = Math.abs(v);
-        if (a > maxAbs) maxAbs = a;
+
+    const colors = values.map(v => {
+        if (v >= 0) return "#4caf50";
+        if (v >= -3) return "#ffa000";
+        return "#c62828";
     });
-    maxAbs = Math.max(maxAbs * 1.05, 1);
 
-    function yForVal(v) {
-        const f = v / maxAbs;
-        return baselineY - f * (plotH / 2);
-    }
+    const hover = combined.map((d, idx) => {
+        const v = values[idx];
+        const extraOrNeeded = v >= 0 ? (d.ratio - 1) : (1 / d.ratio - 1);
+        return [
+            `<b>${d.sample || `sample ${idx + 1}`}</b>`,
+            `Sequenced: ${fmtMillions(d.observed)} reads`,
+            `Target (95% LR): ${fmtMillions(d.target)} reads`,
+            `Relative depth: ${(d.ratio * 100).toFixed(1)}%`,
+            v >= 0
+                ? `Excess sequencing: ${extraOrNeeded.toFixed(2)}× above target`
+                : `Additional needed: ${extraOrNeeded.toFixed(2)}× more to reach target`
+        ].filter(Boolean).join("<br>");
+    });
 
-    const xAxis = document.createElementNS(svgns, "line");
-    xAxis.setAttribute("x1", x0);
-    xAxis.setAttribute("y1", yBottom);
-    xAxis.setAttribute("x2", x0 + plotW);
-    xAxis.setAttribute("y2", yBottom);
-    xAxis.setAttribute("stroke", "#555");
-    svg.appendChild(xAxis);
-
-    const yAxis = document.createElementNS(svgns, "line");
-    yAxis.setAttribute("x1", x0);
-    yAxis.setAttribute("y1", yBottom);
-    yAxis.setAttribute("x2", x0);
-    yAxis.setAttribute("y2", yTop);
-    yAxis.setAttribute("stroke", "#555");
-    svg.appendChild(yAxis);
-
-    const baseLine = document.createElementNS(svgns, "line");
-    baseLine.setAttribute("x1", x0);
-    baseLine.setAttribute("y1", baselineY);
-    baseLine.setAttribute("x2", x0 + plotW);
-    baseLine.setAttribute("y2", baselineY);
-    baseLine.setAttribute("stroke", "#000000");
-    baseLine.setAttribute("stroke-width", "1.4");
-    baseLine.setAttribute("stroke-dasharray", "4,2");
-    svg.appendChild(baseLine);
-
-    const baseLabel = document.createElementNS(svgns, "text");
-    baseLabel.setAttribute("x", x0 + plotW - 4);
-    baseLabel.setAttribute("y", baselineY - 4);
-    baseLabel.setAttribute("font-size", "10");
-    baseLabel.setAttribute("text-anchor", "end");
-    baseLabel.setAttribute("fill", "#000000");
-    baseLabel.textContent = "LR target";
-    svg.appendChild(baseLabel);
-
+    const maxAbsRaw = Math.max(...values.map(v => Math.abs(v)), 0);
+    const maxAbs = Math.max(1, maxAbsRaw * 1.05);
     const maxTick = Math.max(1, Math.ceil(maxAbs));
     const stepTick = Math.max(1, Math.round(maxTick / 5));
+    const tickvals = [];
+    const ticktext = [];
     for (let v = -maxTick; v <= maxTick; v += stepTick) {
-        const y = yForVal(v);
-        const tick = document.createElementNS(svgns, "line");
-        tick.setAttribute("x1", x0 - 4);
-        tick.setAttribute("y1", y);
-        tick.setAttribute("x2", x0);
-        tick.setAttribute("y2", y);
-        tick.setAttribute("stroke", "#555");
-        svg.appendChild(tick);
-
-        if (v === 0) continue;
-
-        const lab = document.createElementNS(svgns, "text");
-        lab.setAttribute("x", x0 - 6);
-        lab.setAttribute("y", y + 3);
-        lab.setAttribute("font-size", "10");
-        lab.setAttribute("text-anchor", "end");
-
-        let labelStr;
-        if (v > 0) {
-            labelStr = v.toFixed(0) + "×";
-        } else {
-            labelStr = "-" + Math.abs(v).toFixed(0) + "×";
+        if (!tickvals.includes(v)) {
+            tickvals.push(v);
+            ticktext.push(v === 0 ? "target" : `${v > 0 ? v : -v}×${v < 0 ? " short" : ""}`);
         }
-        lab.textContent = labelStr;
-        svg.appendChild(lab);
     }
+
+    const shapes = [
+        {
+            type: "line",
+            xref: "paper",
+            x0: 0,
+            x1: 1,
+            y0: 0,
+            y1: 0,
+            line: {color: "#000", width: 1.4, dash: "dot"}
+        }
+    ];
+    const annotations = [
+        {
+            xref: "paper",
+            x: 0.995,
+            y: 0,
+            xanchor: "right",
+            yanchor: "bottom",
+            text: "LR target",
+            showarrow: false,
+            font: {color: "#000", size: 11}
+        }
+    ];
 
     if (maxAbs >= 3) {
-        const yThr = yForVal(-3);
-        const thrLine = document.createElementNS(svgns, "line");
-        thrLine.setAttribute("x1", x0);
-        thrLine.setAttribute("y1", yThr);
-        thrLine.setAttribute("x2", x0 + plotW);
-        thrLine.setAttribute("y2", yThr);
-        thrLine.setAttribute("stroke", "#c62828");
-        thrLine.setAttribute("stroke-width", "1.4");
-        thrLine.setAttribute("stroke-dasharray", "4,2");
-        svg.appendChild(thrLine);
-
-        const thrLabel = document.createElementNS(svgns, "text");
-        thrLabel.setAttribute("x", x0 + plotW - 4);
-        thrLabel.setAttribute("y", yThr - 2);
-        thrLabel.setAttribute("font-size", "10");
-        thrLabel.setAttribute("text-anchor", "end");
-        thrLabel.setAttribute("fill", "#c62828");
-        thrLabel.textContent = "-3×";
-        svg.appendChild(thrLabel);
+        shapes.push({
+            type: "line",
+            xref: "paper",
+            x0: 0,
+            x1: 1,
+            y0: -3,
+            y1: -3,
+            line: {color: "#c62828", width: 1.4, dash: "dot"}
+        });
+        annotations.push({
+            xref: "paper",
+            x: 0.995,
+            y: -3,
+            xanchor: "right",
+            yanchor: "bottom",
+            text: "-3×",
+            showarrow: false,
+            font: {color: "#c62828", size: 11}
+        });
     }
 
-    const ylabel = document.createElementNS(svgns, "text");
-    ylabel.setAttribute("x", 16);
-    ylabel.setAttribute("y", margin.top + plotH / 2);
-    ylabel.setAttribute("text-anchor", "middle");
-    ylabel.setAttribute("font-size", "11");
-    ylabel.setAttribute("transform", `rotate(-90 16 ${margin.top + plotH / 2})`);
-    ylabel.textContent = "Sequenced depth vs LR target (extra / missing ×)";
-    svg.appendChild(ylabel);
+    const n = samples.length;
+    const tickAngle = n > 80 ? -75 : n > 40 ? -60 : -45;
+    const tickSize = n > 120 ? 7 : n > 60 ? 8 : 10;
+    const bottomMargin = n > 80 ? 200 : n > 40 ? 150 : 110;
 
-    const xlabel = document.createElementNS(svgns, "text");
-    xlabel.setAttribute("x", margin.left + plotW / 2);
-    xlabel.setAttribute("y", height - 8);
-    xlabel.setAttribute("text-anchor", "middle");
-    xlabel.setAttribute("font-size", "11");
-    xlabel.textContent = "Samples";
-    svg.appendChild(xlabel);
+    const trace = {
+        type: "bar",
+        x: samples,
+        y: values,
+        marker: {color: colors},
+        hovertemplate: "%{customdata}<extra></extra>",
+        customdata: hover,
+    };
 
-    const tooltip = getOrCreateTooltip();
+    const layout = {
+        height: 360,
+        margin: {l: 80, r: 28, t: 16, b: bottomMargin},
+        bargap: 0.18,
+        hovermode: "closest",
+        showlegend: false,
+        xaxis: {
+            title: "Samples",
+            type: "category",
+            tickangle: tickAngle,
+            tickfont: {size: tickSize},
+            automargin: true,
+        },
+        yaxis: {
+            title: "Sequenced depth vs LR target (extra / missing ×)",
+            range: [-maxAbs, maxAbs],
+            tickvals,
+            ticktext,
+            separatethousands: true,
+            zeroline: false,
+        },
+        shapes,
+        annotations,
+    };
 
-    const n = combined.length;
-    const stepX = plotW / n;
-    const barWidth = Math.min(16, stepX * 0.8);
+    const config = {
+        displaylogo: false,
+        responsive: true,
+        modeBarButtonsToRemove: ["toggleSpikelines", "autoScale2d"],
+    };
 
-    combined.forEach((d, i) => {
-        const ratio = d.ratio;
-        const v = transformRatio(ratio);
-        const yVal = yForVal(v);
-
-        const xCenter = x0 + stepX * i + stepX / 2;
-        const x = xCenter - barWidth / 2;
-
-        let yRect, hRect;
-        if (v >= 0) {
-            yRect = yVal;
-            hRect = baselineY - yVal;
-        } else {
-            yRect = baselineY;
-            hRect = yVal - baselineY;
-        }
-        hRect = Math.abs(hRect);
-
-        let fillColor;
-        if (v >= 0) {
-            fillColor = "#4caf50";
-        } else if (v >= -3) {
-            fillColor = "#ffa000";
-        } else {
-            fillColor = "#c62828";
-        }
-
-        const rect = document.createElementNS(svgns, "rect");
-        rect.setAttribute("x", x);
-        rect.setAttribute("y", yRect);
-        rect.setAttribute("width", barWidth);
-        rect.setAttribute("height", hRect);
-        rect.setAttribute("fill", fillColor);
-        rect.setAttribute("fill-opacity", "0.9");
-        rect.style.cursor = "pointer";
-
-        const extraOrNeeded = v >= 0 ? (ratio - 1) : (1 / ratio - 1);
-        const tooltipText =
-            `${d.sample}\n` +
-            `Sequenced: ${fmtMillions(d.observed)} reads\n` +
-            `Target (95% LR): ${fmtMillions(d.target)} reads\n` +
-            `Relative depth: ${(ratio * 100).toFixed(1)}%\n` +
-            (v >= 0
-                ? `Excess sequencing: ${extraOrNeeded.toFixed(2)}× above target`
-                : `Additional needed: ${extraOrNeeded.toFixed(2)}× more to reach target`);
-
-        rect.addEventListener("mouseenter", (evt) => {
-            rect.setAttribute("stroke", "#000");
-            rect.setAttribute("stroke-width", "1");
-            tooltip.style.display = "block";
-            tooltip.textContent = tooltipText;
-            tooltip.style.left = evt.clientX + "px";
-            tooltip.style.top = evt.clientY + "px";
-        });
-        rect.addEventListener("mousemove", (evt) => {
-            tooltip.style.left = evt.clientX + "px";
-            tooltip.style.top = evt.clientY + "px";
-        });
-        rect.addEventListener("mouseleave", () => {
-            rect.removeAttribute("stroke");
-            rect.removeAttribute("stroke-width");
-            tooltip.style.display = "none";
-        });
-
-        svg.appendChild(rect);
-
-        const showAll = n <= 40;
-        const show = showAll || (i % 5 === 0);
-        if (show) {
-            const lab = document.createElementNS(svgns, "text");
-            lab.setAttribute("x", xCenter);
-            lab.setAttribute("y", yBottom + 10);
-            lab.setAttribute("font-size", "9");
-            lab.setAttribute("text-anchor", "end");
-            lab.setAttribute("transform", `rotate(-60 ${xCenter} ${yBottom + 10})`);
-            lab.textContent = d.sample;
-            svg.appendChild(lab);
-        }
-    });
+    Plotly.newPlot(plotDiv, [trace], layout, config);
+    window.addEventListener("resize", () => Plotly.Plots.resize(plotDiv));
 }
 
 /* Prokaryotic coverage (markers Nonpareil) */
@@ -1692,20 +1609,18 @@ function addRedundancyMarkersSection(parent, data, redBiplotPerSample) {
                     LR target used: ${data.lr_target_used || "NA"}% of marker-based diversity (Nonpareil 95% LR_reads).
                 </p>
                 <div class="lr-target-markers-plot-container">
-                    <svg id="lr-target-markers-svg" class="lr-target-markers-svg" viewBox="0 0 1000 320" preserveAspectRatio="none"></svg>
+                    <div id="lr-target-markers-plot" class="plotly-chart"></div>
                 </div>
                 <p class="small-note">
-                    X axis: samples; Y axis: estimated marker coverage relative to the 95% target.
-                    The black dashed midline corresponds to the 95% coverage target. Bars above it show excess
-                    coverage (1×, 2×, ...), while bars below show how many times more coverage would be needed
-                    (-1×, -2×, -3× etc.). Bars more than 3× short of the target are shown in red.
+                    Interactive barplot of marker coverage vs. the 95% target. The dashed midline corresponds
+                    to the 95% coverage target (0 on the Y axis). Positive bars show excess coverage (1×, 2×, ...),
+                    while negative bars show how many times more coverage would be needed (-1×, -2×, -3× etc.).
+                    Bars more than 3× short of the target are shown in red.
                 </p>
             </div>
         </details>
     `;
     parent.appendChild(div);
-
-    const svg = div.querySelector("#lr-target-markers-svg");
 
     const combined = (redBiplotPerSample || []).map(r => {
         const coverage = r.coverage_markers != null ? Number(r.coverage_markers) : null;
@@ -1720,229 +1635,148 @@ function addRedundancyMarkersSection(parent, data, redBiplotPerSample) {
         };
     }).filter(d => d.ratio != null);
 
+    const plotDiv = div.querySelector("#lr-target-markers-plot");
+
     if (!combined.length) {
-        svg.outerHTML = `<div class="small-note">No per-sample marker coverage / LR target information available for marker redundancy plot.</div>`;
+        plotDiv.outerHTML = `<div class="small-note">No per-sample marker coverage / LR target information available for marker redundancy plot.</div>`;
         return;
     }
 
-    const width = 1000;
-    const height = 320;
-    const margin = {left: 60, right: 20, top: 20, bottom: 80};
-    const plotW = width - margin.left - margin.right;
-    const plotH = height - margin.top - margin.bottom;
-    const svgns = "http://www.w3.org/2000/svg";
-
-    const x0 = margin.left;
-    const yTop = margin.top;
-    const yBottom = height - margin.bottom;
-    const baselineY = yTop + plotH / 2;
-
-    function transformRatio(r) {
-        if (r >= 1) return r - 1;
-        return -(1 / r - 1);
+    if (typeof Plotly === "undefined") {
+        plotDiv.outerHTML = `<div class="small-note">Plotly failed to load; cannot render prokaryotic coverage plot.</div>`;
+        return;
     }
 
+    const transformRatio = (r) => (r >= 1 ? r - 1 : -(1 / r - 1));
+
+    const samples = combined.map((d, idx) => d.sample || `sample ${idx + 1}`);
     const values = combined.map(d => transformRatio(d.ratio));
-    let maxAbs = 0;
-    values.forEach(v => {
-        const a = Math.abs(v);
-        if (a > maxAbs) maxAbs = a;
+
+    const colors = values.map(v => {
+        if (v >= 0) return "#4caf50";
+        if (v >= -3) return "#ffa000";
+        return "#c62828";
     });
-    maxAbs = Math.max(maxAbs * 1.05, 1);
 
-    function yForVal(v) {
-        const f = v / maxAbs;
-        return baselineY - f * (plotH / 2);
-    }
+    const hover = combined.map((d, idx) => {
+        const v = values[idx];
+        const extraOrNeeded = v >= 0 ? (d.ratio - 1) : (1 / d.ratio - 1);
+        return [
+            `<b>${d.sample || `sample ${idx + 1}`}</b>`,
+            `Coverage (markers): ${(d.coverage * 100).toFixed(2)}%`,
+            `Relative to 95% target: ${(d.ratio * 100).toFixed(1)}%`,
+            v >= 0
+                ? `Excess coverage: ${extraOrNeeded.toFixed(2)}× above target`
+                : `Additional needed: ${extraOrNeeded.toFixed(2)}× more to reach target`
+        ].filter(Boolean).join("<br>");
+    });
 
-    const xAxis = document.createElementNS(svgns, "line");
-    xAxis.setAttribute("x1", x0);
-    xAxis.setAttribute("y1", yBottom);
-    xAxis.setAttribute("x2", x0 + plotW);
-    xAxis.setAttribute("y2", yBottom);
-    xAxis.setAttribute("stroke", "#555");
-    svg.appendChild(xAxis);
-
-    const yAxis = document.createElementNS(svgns, "line");
-    yAxis.setAttribute("x1", x0);
-    yAxis.setAttribute("y1", yBottom);
-    yAxis.setAttribute("x2", x0);
-    yAxis.setAttribute("y2", yTop);
-    yAxis.setAttribute("stroke", "#555");
-    svg.appendChild(yAxis);
-
-    const baseLine = document.createElementNS(svgns, "line");
-    baseLine.setAttribute("x1", x0);
-    baseLine.setAttribute("y1", baselineY);
-    baseLine.setAttribute("x2", x0 + plotW);
-    baseLine.setAttribute("y2", baselineY);
-    baseLine.setAttribute("stroke", "#000000");
-    baseLine.setAttribute("stroke-width", "1.4");
-    baseLine.setAttribute("stroke-dasharray", "4,2");
-    svg.appendChild(baseLine);
-
-    const baseLabel = document.createElementNS(svgns, "text");
-    baseLabel.setAttribute("x", x0 + plotW - 4);
-    baseLabel.setAttribute("y", baselineY - 4);
-    baseLabel.setAttribute("font-size", "10");
-    baseLabel.setAttribute("text-anchor", "end");
-    baseLabel.setAttribute("fill", "#000000");
-    baseLabel.textContent = "95% coverage target";
-    svg.appendChild(baseLabel);
-
+    const maxAbsRaw = Math.max(...values.map(v => Math.abs(v)), 0);
+    const maxAbs = Math.max(1, maxAbsRaw * 1.05);
     const maxTick = Math.max(1, Math.ceil(maxAbs));
     const stepTick = Math.max(1, Math.round(maxTick / 5));
+    const tickvals = [];
+    const ticktext = [];
     for (let v = -maxTick; v <= maxTick; v += stepTick) {
-        const y = yForVal(v);
-        const tick = document.createElementNS(svgns, "line");
-        tick.setAttribute("x1", x0 - 4);
-        tick.setAttribute("y1", y);
-        tick.setAttribute("x2", x0);
-        tick.setAttribute("y2", y);
-        tick.setAttribute("stroke", "#555");
-        svg.appendChild(tick);
-
-        if (v === 0) continue;
-
-        const lab = document.createElementNS(svgns, "text");
-        lab.setAttribute("x", x0 - 6);
-        lab.setAttribute("y", y + 3);
-        lab.setAttribute("font-size", "10");
-        lab.setAttribute("text-anchor", "end");
-
-        let labelStr;
-        if (v > 0) {
-            labelStr = v.toFixed(0) + "×";
-        } else {
-            labelStr = "-" + Math.abs(v).toFixed(0) + "×";
+        if (!tickvals.includes(v)) {
+            tickvals.push(v);
+            ticktext.push(v === 0 ? "target" : `${v > 0 ? v : -v}×${v < 0 ? " short" : ""}`);
         }
-        lab.textContent = labelStr;
-        svg.appendChild(lab);
     }
+
+    const shapes = [
+        {
+            type: "line",
+            xref: "paper",
+            x0: 0,
+            x1: 1,
+            y0: 0,
+            y1: 0,
+            line: {color: "#000", width: 1.4, dash: "dot"}
+        }
+    ];
+    const annotations = [
+        {
+            xref: "paper",
+            x: 0.995,
+            y: 0,
+            xanchor: "right",
+            yanchor: "bottom",
+            text: "95% coverage target",
+            showarrow: false,
+            font: {color: "#000", size: 11}
+        }
+    ];
 
     if (maxAbs >= 3) {
-        const yThr = yForVal(-3);
-        const thrLine = document.createElementNS(svgns, "line");
-        thrLine.setAttribute("x1", x0);
-        thrLine.setAttribute("y1", yThr);
-        thrLine.setAttribute("x2", x0 + plotW);
-        thrLine.setAttribute("y2", yThr);
-        thrLine.setAttribute("stroke", "#c62828");
-        thrLine.setAttribute("stroke-width", "1.4");
-        thrLine.setAttribute("stroke-dasharray", "4,2");
-        svg.appendChild(thrLine);
-
-        const thrLabel = document.createElementNS(svgns, "text");
-        thrLabel.setAttribute("x", x0 + plotW - 4);
-        thrLabel.setAttribute("y", yThr - 2);
-        thrLabel.setAttribute("font-size", "10");
-        thrLabel.setAttribute("text-anchor", "end");
-        thrLabel.setAttribute("fill", "#c62828");
-        thrLabel.textContent = "-3×";
-        svg.appendChild(thrLabel);
+        shapes.push({
+            type: "line",
+            xref: "paper",
+            x0: 0,
+            x1: 1,
+            y0: -3,
+            y1: -3,
+            line: {color: "#c62828", width: 1.4, dash: "dot"}
+        });
+        annotations.push({
+            xref: "paper",
+            x: 0.995,
+            y: -3,
+            xanchor: "right",
+            yanchor: "bottom",
+            text: "-3×",
+            showarrow: false,
+            font: {color: "#c62828", size: 11}
+        });
     }
 
-    const ylabel = document.createElementNS(svgns, "text");
-    ylabel.setAttribute("x", 16);
-    ylabel.setAttribute("y", margin.top + plotH / 2);
-    ylabel.setAttribute("text-anchor", "middle");
-    ylabel.setAttribute("font-size", "11");
-    ylabel.setAttribute("transform", `rotate(-90 16 ${margin.top + plotH / 2})`);
-    ylabel.textContent = "Marker coverage vs 95% target (extra / missing ×)";
-    svg.appendChild(ylabel);
+    const n = samples.length;
+    const tickAngle = n > 80 ? -75 : n > 40 ? -60 : -45;
+    const tickSize = n > 120 ? 7 : n > 60 ? 8 : 10;
+    const bottomMargin = n > 80 ? 200 : n > 40 ? 150 : 110;
 
-    const xlabel = document.createElementNS(svgns, "text");
-    xlabel.setAttribute("x", margin.left + plotW / 2);
-    xlabel.setAttribute("y", height - 8);
-    xlabel.setAttribute("text-anchor", "middle");
-    xlabel.setAttribute("font-size", "11");
-    xlabel.textContent = "Samples";
-    svg.appendChild(xlabel);
+    const trace = {
+        type: "bar",
+        x: samples,
+        y: values,
+        marker: {color: colors},
+        hovertemplate: "%{customdata}<extra></extra>",
+        customdata: hover,
+    };
 
-    const tooltip = getOrCreateTooltip();
+    const layout = {
+        height: 360,
+        margin: {l: 80, r: 28, t: 16, b: bottomMargin},
+        bargap: 0.18,
+        hovermode: "closest",
+        showlegend: false,
+        xaxis: {
+            title: "Samples",
+            type: "category",
+            tickangle: tickAngle,
+            tickfont: {size: tickSize},
+            automargin: true,
+        },
+        yaxis: {
+            title: "Marker coverage vs 95% target (extra / missing ×)",
+            range: [-maxAbs, maxAbs],
+            tickvals,
+            ticktext,
+            separatethousands: true,
+            zeroline: false,
+        },
+        shapes,
+        annotations,
+    };
 
-    const n = combined.length;
-    const stepX = plotW / n;
-    const barWidth = Math.min(16, stepX * 0.8);
+    const config = {
+        displaylogo: false,
+        responsive: true,
+        modeBarButtonsToRemove: ["toggleSpikelines", "autoScale2d"],
+    };
 
-    combined.forEach((d, i) => {
-        const ratio = d.ratio;
-        const v = transformRatio(ratio);
-        const yVal = yForVal(v);
-
-        const xCenter = x0 + stepX * i + stepX / 2;
-        const x = xCenter - barWidth / 2;
-
-        let yRect, hRect;
-        if (v >= 0) {
-            yRect = yVal;
-            hRect = baselineY - yVal;
-        } else {
-            yRect = baselineY;
-            hRect = yVal - baselineY;
-        }
-        hRect = Math.abs(hRect);
-
-        let fillColor;
-        if (v >= 0) {
-            fillColor = "#4caf50";
-        } else if (v >= -3) {
-            fillColor = "#ffa000";
-        } else {
-            fillColor = "#c62828";
-        }
-
-        const rect = document.createElementNS(svgns, "rect");
-        rect.setAttribute("x", x);
-        rect.setAttribute("y", yRect);
-        rect.setAttribute("width", barWidth);
-        rect.setAttribute("height", hRect);
-        rect.setAttribute("fill", fillColor);
-        rect.setAttribute("fill-opacity", "0.9");
-        rect.style.cursor = "pointer";
-
-        const extraOrNeeded = v >= 0 ? (ratio - 1) : (1 / ratio - 1);
-        const tooltipText =
-            `${d.sample}\n` +
-            `Coverage (markers): ${(d.coverage * 100).toFixed(2)}%\n` +
-            `Relative to 95% target: ${(ratio * 100).toFixed(1)}%\n` +
-            (v >= 0
-                ? `Excess coverage: ${extraOrNeeded.toFixed(2)}× above target`
-                : `Additional needed: ${extraOrNeeded.toFixed(2)}× more to reach target`);
-
-        rect.addEventListener("mouseenter", (evt) => {
-            rect.setAttribute("stroke", "#000");
-            rect.setAttribute("stroke-width", "1");
-            tooltip.style.display = "block";
-            tooltip.textContent = tooltipText;
-            tooltip.style.left = evt.clientX + "px";
-            tooltip.style.top = evt.clientY + "px";
-        });
-        rect.addEventListener("mousemove", (evt) => {
-            tooltip.style.left = evt.clientX + "px";
-            tooltip.style.top = evt.clientY + "px";
-        });
-        rect.addEventListener("mouseleave", () => {
-            rect.removeAttribute("stroke");
-            rect.removeAttribute("stroke-width");
-            tooltip.style.display = "none";
-        });
-
-        svg.appendChild(rect);
-
-        const showAll = n <= 40;
-        const show = showAll || (i % 5 === 0);
-        if (show) {
-            const lab = document.createElementNS(svgns, "text");
-            lab.setAttribute("x", xCenter);
-            lab.setAttribute("y", yBottom + 10);
-            lab.setAttribute("font-size", "9");
-            lab.setAttribute("text-anchor", "end");
-            lab.setAttribute("transform", `rotate(-60 ${xCenter} ${yBottom + 10})`);
-            lab.textContent = d.sample;
-            svg.appendChild(lab);
-        }
-    });
+    Plotly.newPlot(plotDiv, [trace], layout, config);
+    window.addEventListener("resize", () => Plotly.Plots.resize(plotDiv));
 }
 
 /* Sample clusters */
