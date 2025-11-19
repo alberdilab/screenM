@@ -89,7 +89,9 @@ def compute_screening_threshold(data_json: Dict[str, Any]) -> Dict[str, Any]:
             flag = 1
             message = (
                 f"All samples ({n_above}/{n_total}, {percent_above:.1f}%) are above the "
-                f"read threshold ({min_reads} reads)."
+                f"read threshold ({min_reads} reads). If you want higher accuracy of the estimations, "
+                f"you might consider increasing the read threshold using the -r flag, although this "
+                f"will require longer computation times."
             )
         elif percent_above >= THRESH_PCT_ABOVE_GOOD:
             flag = 2
@@ -170,13 +172,15 @@ def compute_sequencing_depth(results_json: Dict[str, Any]) -> Dict[str, Any]:
             flag = 2
             message = (
                 f"Sequencing depth shows moderate variation across samples (CV = {cv_reads:.3f}), "
-                f"so average estimates may not fully reflect all samples."
+                f"so average estimates may not fully reflect all samples. Consider looking at individual sample values "
+                f"to assess whether any samples deviate significantly from the average patterns."
             )
         else:
             flag = 3
             message = (
                 f"Sequencing depth is uneven across samples (CV = {cv_reads:.3f}), "
-                "so average estimates may be misleading for some libraries."
+                f"so average estimates may be misleading for some libraries. Look at individual sample values "
+                f"to identify the samples that deviate significantly from the average patterns."
             )
 
     return {
