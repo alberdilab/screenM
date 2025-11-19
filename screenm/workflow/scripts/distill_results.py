@@ -343,6 +343,7 @@ def compute_low_quality(results_json: Dict[str, Any]) -> Dict[str, Any]:
 
     frac_removed_list: List[float] = []
     low_quality_frac_list: List[float] = []
+    too_short_frac_list: List[float] = []
     adapter_frac_list: List[float] = []
     duplication_rates: List[float] = []
     total_reads_all = 0
@@ -372,10 +373,12 @@ def compute_low_quality(results_json: Dict[str, Any]) -> Dict[str, Any]:
 
         frac_removed = removed / total if total > 0 else 0.0
         low_quality_frac = low_q / total if total > 0 else 0.0
+        too_short_frac = too_short / total if total > 0 else 0.0
         adapter_frac = adapter_trimmed / total if total > 0 else 0.0
 
         frac_removed_list.append(frac_removed)
         low_quality_frac_list.append(low_quality_frac)
+        too_short_frac_list.append(too_short_frac)
         adapter_frac_list.append(adapter_frac)
         if isinstance(duplication, (int, float)) and duplication >= 0:
             duplication_rates.append(float(duplication))
@@ -392,6 +395,7 @@ def compute_low_quality(results_json: Dict[str, Any]) -> Dict[str, Any]:
             "mean_fraction_removed": None,
             "sd_fraction_removed": None,
             "mean_fraction_low_quality": None,
+            "mean_fraction_too_short": None,
             "mean_fraction_adapter_trimmed": None,
             "mean_duplication_rate": None,
             "flag_low_quality": 3,
@@ -406,6 +410,7 @@ def compute_low_quality(results_json: Dict[str, Any]) -> Dict[str, Any]:
     mean_frac = stats.mean(frac_removed_list)
     sd_frac = stats.pstdev(frac_removed_list) if n_samples_with_fastp > 1 else 0.0
     mean_low_q = stats.mean(low_quality_frac_list)
+    mean_too_short = stats.mean(too_short_frac_list)
     mean_adapter = stats.mean(adapter_frac_list)
     mean_dup = stats.mean(duplication_rates) if duplication_rates else None
     percent_removed_overall = (
@@ -490,6 +495,7 @@ def compute_low_quality(results_json: Dict[str, Any]) -> Dict[str, Any]:
         "mean_fraction_removed": mean_frac,
         "sd_fraction_removed": sd_frac,
         "mean_fraction_low_quality": mean_low_q,
+        "mean_fraction_too_short": mean_too_short,
         "mean_fraction_adapter_trimmed": mean_adapter,
         "mean_duplication_rate": mean_dup,
         "flag_low_quality": flag,

@@ -225,7 +225,7 @@ HTML_TEMPLATE = r"""<!DOCTYPE html>
         padding: 6px 6px 2px 6px;
         box-sizing: border-box;
         margin-top: 10px;
-        margin-bottom: 14px;
+        margin-bottom: 6px;
     }
 
     .seq-depth-svg,
@@ -817,9 +817,9 @@ function addLowQualitySection(parent, data, depthPerSample) {
 
     const msg = data.message_low_quality || "";
 
-    const overall = data.percent_removed_reads_overall;
     const meanFrac = data.mean_fraction_removed;
     const meanLowQ = data.mean_fraction_low_quality;
+    const meanTooShort = data.mean_fraction_too_short;
     const meanAdapter = data.mean_fraction_adapter_trimmed;
     const meanDup = data.mean_duplication_rate;
     const pct = (value) => (value === null || value === undefined ? null : 100 * value);
@@ -843,19 +843,19 @@ function addLowQualitySection(parent, data, depthPerSample) {
                 <p class="summary-message">${msg}</p>
                 <div class="quality-stats">
                     <div class="quality-stat-item">
-                        <div class="quality-stat-label">Overall removed</div>
-                        <div class="quality-stat-value">${fmtFloat(overall, 2)}%</div>
-                        <div class="quality-stat-note">Fraction of reads removed across all samples</div>
-                    </div>
-                    <div class="quality-stat-item">
-                        <div class="quality-stat-label">Mean removed per sample</div>
+                        <div class="quality-stat-label">Low-quality reads</div>
                         <div class="quality-stat-value">${fmtFloat(pct(meanFrac), 2)}%</div>
                         <div class="quality-stat-note">Average fraction removed per sample</div>
                     </div>
                     <div class="quality-stat-item">
-                        <div class="quality-stat-label">Low-quality reads</div>
+                        <div class="quality-stat-label">Low phred score</div>
                         <div class="quality-stat-value">${fmtFloat(pct(meanLowQ), 2)}%</div>
-                        <div class="quality-stat-note">Average proportion flagged as low quality</div>
+                        <div class="quality-stat-note">Average proportion flagged as low phred</div>
+                    </div>
+                    <div class="quality-stat-item">
+                        <div class="quality-stat-label">Too short</div>
+                        <div class="quality-stat-value">${fmtFloat(pct(meanTooShort), 2)}%</div>
+                        <div class="quality-stat-note">Average fraction removed due to length filters</div>
                     </div>
                     <div class="quality-stat-item">
                         <div class="quality-stat-label">Adapter-trimmed reads</div>
@@ -1048,8 +1048,8 @@ function addLowQualitySection(parent, data, depthPerSample) {
     const tickSize = n > 120 ? 7 : n > 60 ? 8 : 10;
     const bottomMargin = n > 80 ? 200 : n > 40 ? 150 : 110;
 
-    const baseHeight = Math.max(360, Math.min(600, 280 + n * 2));
-    plotDiv.style.height = baseHeight + 80 + "px";
+    const baseHeight = Math.max(340, Math.min(560, 260 + n * 2));
+    plotDiv.style.height = baseHeight + "px";
 
     const layout = {
         height: baseHeight,
@@ -1061,7 +1061,7 @@ function addLowQualitySection(parent, data, depthPerSample) {
         legend: {
             orientation: "h",
             x: 0,
-            y: 1.1,
+            y: 1.12,
             yanchor: "bottom",
             xanchor: "left",
         },
