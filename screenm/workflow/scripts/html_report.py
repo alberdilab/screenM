@@ -1836,10 +1836,11 @@ function addClustersSection(parent, clusters) {
                 <p class="small-note">
                     Heatmap below shows cluster assignments per sample. Rows correspond to marker-based
                     and read-based clustering; columns are samples. Colour palettes are distinct per row,
-                    so cluster IDs are not directly comparable between the two.
+                    so cluster IDs are not directly comparable between the two. Samples are ordered to keep
+                    cluster mates adjacent.
                 </p>
-                <div class="clusters-heatmap-scroll">
-                    <svg id="clusters-heatmap-svg" class="clusters-heatmap-svg" viewBox="0 0 1000 210" preserveAspectRatio="none"></svg>
+                <div class="clusters-heatmap-scroll" style="width:100%; overflow-x:auto; overflow-y:visible;">
+                    <div id="clusters-heatmap-plot" class="plotly-chart" style="height:360px; min-width:860px;"></div>
                 </div>
                 <p class="small-note">
                     Hover over tiles for exact cluster assignments. Samples without an assignment in a given
@@ -1850,9 +1851,7 @@ function addClustersSection(parent, clusters) {
     `;
     parent.appendChild(div);
 
-    const svg = div.querySelector("#clusters-heatmap-svg");
-    const svgns = "http://www.w3.org/2000/svg";
-    const tooltip = getOrCreateTooltip();
+    const plotDiv = div.querySelector("#clusters-heatmap-plot");
 
     const markersPS = (markers.clusters || []).flatMap(cl => {
         const cid = cl.cluster_id;
@@ -1867,7 +1866,7 @@ function addClustersSection(parent, clusters) {
     });
 
     if (!markersPS.length && !readsPS.length) {
-        svg.outerHTML = `<div class="small-note">Per-sample cluster assignments not available; heatmap cannot be drawn.</div>`;
+        plotDiv.outerHTML = `<div class="small-note">Per-sample cluster assignments not available; heatmap cannot be drawn.</div>`;
         return;
     }
 
@@ -1888,6 +1887,10 @@ function addClustersSection(parent, clusters) {
     samples.sort();
 
     const nSamples = samples.length;
+    if (!nSamples) {
+        plotDiv.outerHTML = `<div class="small-note">Per-sample cluster assignments not available; heatmap cannot be drawn.</div>`;
+        return;
+    }
 
     const markerPalette = [
         "#08306b", "#08519c", "#2171b5", "#4292c6",
@@ -1919,95 +1922,114 @@ function addClustersSection(parent, clusters) {
     const markerColors = buildClusterColorMap(markersMap, markerPalette);
     const readColors = buildClusterColorMap(readsMap, readPalette);
 
-    const height = 240;
-    const margin = {left: 80, right: 20, top: 20, bottom: 60};
-    const rows = 2;
-    const cellH = (height - margin.top - margin.bottom) / rows;
-    const baseCellW = 20;
-    const width = Math.max(1000, margin.left + margin.right + nSamples * baseCellW);
-    svg.setAttribute("viewBox", `0 0 ${width} ${height}`);
+    const markerClustersPresent = Object.keys(markerColors).length > 0;
+    const readClustersPresent = Object.keys(readColors).length > 0;
 
-    const plotW = width - margin.left - margin.right;
-    const x0 = margin.left;
-
-    function drawRow(rowIndex, label, map, colorMap, defaultColor) {
-        const yRowTop = margin.top + rowIndex * cellH;
-        const labelX = 10;
-        thelabelY = yRowTop + cellH / 2 + 4;
-        const labelText = document.createElementNS(svgns, "text");
-        labelText.setAttribute("x", labelX);
-        labelText.setAttribute("y", thelabelY);
-        labelText.setAttribute("font-size", "11");
-        labelText.setAttribute("text-anchor", "start");
-        labelText.textContent = label;
-        svg.appendChild(labelText);
-
-        const cellW = plotW / nSamples;
-
-        samples.forEach((sampleName, i) => {
-            const cluster = map[sampleName];
-            const hasCluster = cluster !== null && cluster !== undefined;
-            const fill = hasCluster ? (colorMap[cluster] || defaultColor) : "#eeeeee";
-
-            const x = x0 + i * cellW;
-            const y = yRowTop;
-
-            const rect = document.createElementNS(svgns, "rect");
-            rect.setAttribute("x", x);
-            rect.setAttribute("y", y);
-            rect.setAttribute("width", cellW);
-            rect.setAttribute("height", cellH);
-            rect.setAttribute("fill", fill);
-            rect.setAttribute("stroke", "#ffffff");
-            rect.setAttribute("stroke-width", "0.5");
-            rect.style.cursor = hasCluster ? "pointer" : "default";
-
-            const tooltipText = hasCluster
-                ? `${sampleName}\n${label}: cluster ${cluster}`
-                : `${sampleName}\n${label}: no cluster assigned`;
-
-            rect.addEventListener("mouseenter", (evt) => {
-                rect.setAttribute("stroke", "#000");
-                rect.setAttribute("stroke-width", "1");
-                tooltip.style.display = "block";
-                tooltip.textContent = tooltipText;
-                tooltip.style.left = evt.clientX + "px";
-                tooltip.style.top = evt.clientY + "px";
-            });
-            rect.addEventListener("mousemove", (evt) => {
-                tooltip.style.left = evt.clientX + "px";
-                tooltip.style.top = evt.clientY + "px";
-            });
-            rect.addEventListener("mouseleave", () => {
-                rect.setAttribute("stroke", "#ffffff");
-                rect.setAttribute("stroke-width", "0.5");
-                tooltip.style.display = "none";
-            });
-
-            svg.appendChild(rect);
-
-            if (rowIndex === rows - 1) {
-                const showAll = nSamples <= 40;
-                const show = showAll || (i % 5 === 0);
-                if (show) {
-                    const lab = document.createElementNS(svgns, "text");
-                    lab.setAttribute("x", x + cellW / 2);
-                    lab.setAttribute("y", height - 8);
-                    lab.setAttribute("font-size", "9");
-                    lab.setAttribute("text-anchor", "end");
-                    lab.setAttribute(
-                        "transform",
-                        `rotate(-60 ${x + cellW / 2} ${height - 8})`
-                    );
-                    lab.textContent = sampleName;
-                    svg.appendChild(lab);
-                }
-            }
+    // Order to keep cluster mates adjacent; prefer marker clusters, else read clusters.
+    let sampleOrder = [...samples];
+    const groupBy = markerClustersPresent ? markersMap : (readClustersPresent ? readsMap : null);
+    if (groupBy) {
+        const clList = Array.from(new Set(
+            sampleOrder
+                .map(s => groupBy[s])
+                .filter(v => v !== null && v !== undefined)
+        )).sort((a, b) => {
+            const na = Number(a), nb = Number(b);
+            if (!isNaN(na) && !isNaN(nb)) return na - nb;
+            return String(a).localeCompare(String(b));
         });
+        const grouped = [];
+        clList.forEach(cl => {
+            sampleOrder.forEach(s => {
+                if (groupBy[s] === cl) grouped.push(s);
+            });
+        });
+        const noCluster = sampleOrder.filter(s => groupBy[s] === null || groupBy[s] === undefined);
+        sampleOrder = [...grouped, ...noCluster];
     }
 
-    drawRow(0, "Markers", markersMap, markerColors, "#9ecae1");
-    drawRow(1, "Reads", readsMap, readColors, "#fcae91");
+    if (typeof Plotly === "undefined") {
+        plotDiv.outerHTML = `<div class="small-note">Plotly failed to load; cannot render sample clusters heatmap.</div>`;
+        return;
+    }
+
+    const clusterOrderMap = {};
+    let idxAssign = 0;
+    Object.keys(markerColors).forEach(cl => { clusterOrderMap[cl] = idxAssign++; });
+    Object.keys(readColors).forEach(cl => {
+        if (clusterOrderMap[cl] === undefined) clusterOrderMap[cl] = idxAssign++;
+    });
+    const missingVal = -1;
+    const maxVal = Math.max(idxAssign - 1, 0);
+    const colorscale = [[0, "#eeeeee"]];
+    Object.keys(clusterOrderMap).forEach(cl => {
+        const pos = (clusterOrderMap[cl] - missingVal) / (maxVal - missingVal || 1);
+        const color = markerColors[cl] || readColors[cl] || "#999999";
+        colorscale.push([pos, color]);
+    });
+    colorscale.sort((a, b) => a[0] - b[0]);
+
+    const yLabels = ["Markers", "Reads"];
+    const z = [[], []];
+    const text = [[], []];
+    sampleOrder.forEach(sample => {
+        const mCl = markersMap.hasOwnProperty(sample) ? markersMap[sample] : null;
+        const rCl = readsMap.hasOwnProperty(sample) ? readsMap[sample] : null;
+        const mVal = mCl === null || mCl === undefined ? missingVal : clusterOrderMap[mCl] ?? missingVal;
+        const rVal = rCl === null || rCl === undefined ? missingVal : clusterOrderMap[rCl] ?? missingVal;
+        z[0].push(mVal);
+        z[1].push(rVal);
+        text[0].push(
+            mCl === null || mCl === undefined
+                ? `${sample}<br>Markers: not assigned`
+                : `${sample}<br>Markers cluster: ${mCl}`
+        );
+        text[1].push(
+            rCl === null || rCl === undefined
+                ? `${sample}<br>Reads: not assigned`
+                : `${sample}<br>Reads cluster: ${rCl}`
+        );
+    });
+
+    const heatmap = {
+        type: "heatmap",
+        x: sampleOrder,
+        y: yLabels,
+        z,
+        text,
+        hovertemplate: "%{text}<extra></extra>",
+        colorscale,
+        zmin: missingVal,
+        zmax: Math.max(maxVal, 0),
+        showscale: false,
+    };
+
+    const tickAngle = sampleOrder.length > 18 ? -60 : -45;
+    const bottomMargin = sampleOrder.length > 18 ? 200 : 150;
+
+    const layout = {
+        height: 140 + sampleOrder.length * 8,
+        margin: {l: 90, r: 20, t: 20, b: bottomMargin},
+        xaxis: {
+            tickangle: tickAngle,
+            automargin: true,
+        },
+        yaxis: {
+            automargin: true,
+            autorange: "reversed",
+        },
+        hovermode: "closest",
+        showlegend: false,
+    };
+
+    const config = {
+        displaylogo: false,
+        responsive: true,
+        modeBarButtonsToRemove: ["toggleSpikelines", "autoScale2d"],
+    };
+
+    Plotly.newPlot(plotDiv, [heatmap], layout, config);
+    window.addEventListener("resize", () => Plotly.Plots.resize(plotDiv));
 }
 
 /* Overall metagenomic coverage summary */
