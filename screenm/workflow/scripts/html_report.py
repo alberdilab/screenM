@@ -1501,13 +1501,13 @@ function addRedundancyReadsSection(parent, data, depthPerSample) {
     const stepTick = Math.max(1, Math.round(maxTick / 5));
     const tickvals = [];
     const ticktext = [];
-    const formatTick = (val) => {
+    const formatDepthTick = (val) => {
         if (val === 0) return "target";
         if (val > 0) return `${val + 1}×`;
         const denom = 1 - val;
         return `1/${denom}×`;
     };
-    const formatTick = (val) => {
+    const formatCoverageTick = (val) => {
         if (val === 0) return "target";
         if (val > 0) return `${val + 1}×`;
         const denom = 1 - val;
@@ -1517,7 +1517,7 @@ function addRedundancyReadsSection(parent, data, depthPerSample) {
         const rounded = Math.round(v);
         if (!tickvals.includes(rounded)) {
             tickvals.push(rounded);
-            ticktext.push(formatTick(rounded));
+            ticktext.push(formatDepthTick(rounded));
         }
     }
 
@@ -1756,7 +1756,7 @@ function addRedundancyMarkersSection(parent, data, redBiplotPerSample) {
         const rounded = Math.round(v);
         if (!tickvals.includes(rounded)) {
             tickvals.push(rounded);
-            ticktext.push(formatTick(rounded));
+            ticktext.push(formatCoverageTick(rounded));
         }
     }
 
