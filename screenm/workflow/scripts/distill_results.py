@@ -229,11 +229,41 @@ def compute_screening_overview(
             combined_flag = 2
 
     # Combined message
+    def _variation_transition(depth_flag: Optional[int], variation_flag: Optional[int]) -> str:
+        """Pick a linker word to keep the tone natural."""
+        if depth_flag is None or variation_flag is None:
+            return ""
+        if depth_flag == 1:
+            return "Additionally" if variation_flag == 1 else "However"
+        if depth_flag == 2:
+            if variation_flag == 1:
+                return "On the bright side"
+            return "Additionally" if variation_flag == 2 else "However"
+        if depth_flag == 3:
+            if variation_flag == 1:
+                return "Still"
+            return "Still" if variation_flag == 2 else "Additionally"
+        return ""
+
+    def _apply_transition(transition: str, text: str) -> str:
+        if not transition:
+            return text.strip()
+        stripped = text.strip()
+        if not stripped:
+            return stripped
+        if stripped.lower().startswith(transition.lower()):
+            return stripped
+        lowered = stripped[0].lower() + stripped[1:] if len(stripped) > 1 else stripped.lower()
+        return f"{transition}, {lowered}"
+
     msg_parts: List[str] = []
-    if st.get("message_reads_threshold"):
-        msg_parts.append(st["message_reads_threshold"].strip())
-    if sd.get("message_sequencing_depth"):
-        msg_parts.append(sd["message_sequencing_depth"].strip())
+    reads_msg = st.get("message_reads_threshold")
+    if reads_msg:
+        msg_parts.append(reads_msg.strip())
+    variation_msg = sd.get("message_sequencing_depth")
+    if variation_msg:
+        transition = _variation_transition(depth_flag, sd.get("flag_sequencing_variation", depth_flag))
+        msg_parts.append(_apply_transition(transition, variation_msg))
 
     if sd.get("n_samples", 0) == 0:
         msg_parts.append(
