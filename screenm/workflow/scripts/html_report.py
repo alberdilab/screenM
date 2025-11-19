@@ -931,7 +931,8 @@ function addLowQualitySection(parent, data, depthPerSample) {
     const maxFracObserved = Math.max(...fracs, 0);
     const hasGoodLine = maxFracObserved >= THRESH_GOOD - 1e-9;
     const hasModLine = maxFracObserved >= THRESH_MOD - 1e-9;
-    const medianRemoved = Number(medianFrac) || 0;
+    const medianFracValue = median(fracs);
+    const medianRemoved = Number(medianFracValue) || 0;
 
     const maxCandidates = [maxFracObserved];
     if (hasGoodLine) maxCandidates.push(THRESH_GOOD);
