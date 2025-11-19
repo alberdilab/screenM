@@ -1953,18 +1953,44 @@ function addClustersSection(parent, clusters) {
         return;
     }
 
-    const clusterOrderMap = {};
-    let idxAssign = 0;
-    Object.keys(markerColors).forEach(cl => { clusterOrderMap[cl] = idxAssign++; });
-    Object.keys(readColors).forEach(cl => {
-        if (clusterOrderMap[cl] === undefined) clusterOrderMap[cl] = idxAssign++;
-    });
+    const markerClusterList = Object.keys(markerColors);
+    const readClusterList = Object.keys(readColors);
+
+    const markerClusterMap = {};
+    markerClusterList.forEach((cl, idx) => { markerClusterMap[cl] = idx; });
+    const readStart = markerClusterList.length;
+    const readClusterMap = {};
+    readClusterList.forEach((cl, idx) => { readClusterMap[cl] = readStart + idx; });
+
     const missingVal = -1;
-    const maxVal = Math.max(idxAssign - 1, 0);
-    const colorscale = [[0, "#eeeeee"]];
-    Object.keys(clusterOrderMap).forEach(cl => {
-        const pos = (clusterOrderMap[cl] - missingVal) / (maxVal - missingVal || 1);
-        const color = markerColors[cl] || readColors[cl] || "#999999";
+    const maxVal = Math.max(
+        markerClusterList.length ? markerClusterList.length - 1 : 0,
+        readClusterList.length ? readStart + readClusterList.length - 1 : 0,
+        0
+    );
+
+    const coldPalette = [
+        "#08306b", "#08519c", "#2171b5", "#2c7fb8", "#41b6c4",
+        "#66c2a4", "#7bccc4", "#a1dab4", "#c7e9c0", "#edf8fb"
+    ];
+    const warmPalette = [
+        "#7f0000", "#b30000", "#e31a1c", "#fc4e2a", "#fd8d3c",
+        "#feb24c", "#ffdd57", "#ffb300", "#ff7f00", "#d95f0e"
+    ];
+
+    const colorscale = [];
+    const range = maxVal - missingVal || 1;
+    colorscale.push([0, "#ffffff"]);
+    markerClusterList.forEach((cl, idx) => {
+        const val = markerClusterMap[cl];
+        const pos = (val - missingVal) / range;
+        const color = coldPalette[idx % coldPalette.length];
+        colorscale.push([pos, color]);
+    });
+    readClusterList.forEach((cl, idx) => {
+        const val = readClusterMap[cl];
+        const pos = (val - missingVal) / range;
+        const color = warmPalette[idx % warmPalette.length];
         colorscale.push([pos, color]);
     });
     colorscale.sort((a, b) => a[0] - b[0]);
@@ -1975,8 +2001,8 @@ function addClustersSection(parent, clusters) {
     sampleOrder.forEach(sample => {
         const mCl = markersMap.hasOwnProperty(sample) ? markersMap[sample] : null;
         const rCl = readsMap.hasOwnProperty(sample) ? readsMap[sample] : null;
-        const mVal = mCl === null || mCl === undefined ? missingVal : clusterOrderMap[mCl] ?? missingVal;
-        const rVal = rCl === null || rCl === undefined ? missingVal : clusterOrderMap[rCl] ?? missingVal;
+        const mVal = mCl === null || mCl === undefined ? missingVal : markerClusterMap[mCl];
+        const rVal = rCl === null || rCl === undefined ? missingVal : readClusterMap[rCl];
         z[0].push(mVal);
         z[1].push(rVal);
         text[0].push(
@@ -2002,6 +2028,8 @@ function addClustersSection(parent, clusters) {
         zmin: missingVal,
         zmax: Math.max(maxVal, 0),
         showscale: false,
+        xgap: 1,
+        ygap: 1,
     };
 
     const tickAngle = sampleOrder.length > 18 ? -60 : -45;
