@@ -24,6 +24,8 @@ THRESH_LOWQ_GOOD = 0.05   # <= 5% removed → very good
 THRESH_LOWQ_MODERATE = 0.20  # 5–20% → moderate, >20% → problematic
 THRESH_FASTP_LOWQUAL_GOOD = 0.02  # <=2% low-quality reads → clean
 THRESH_FASTP_LOWQUAL_MODERATE = 0.05
+THRESH_FASTP_COMPLEXITY_GOOD = 0.02
+THRESH_FASTP_COMPLEXITY_MODERATE = 0.05
 THRESH_FASTP_ADAPTER_GOOD = 0.10  # <=10% adapter trimming → minimal
 THRESH_FASTP_ADAPTER_MODERATE = 0.20
 THRESH_FASTP_TOOSHORT_GOOD = 0.02
@@ -345,6 +347,7 @@ def compute_low_quality(results_json: Dict[str, Any]) -> Dict[str, Any]:
 
     frac_removed_list: List[float] = []
     low_quality_frac_list: List[float] = []
+    low_complex_frac_list: List[float] = []
     too_short_frac_list: List[float] = []
     adapter_frac_list: List[float] = []
     duplication_rates: List[float] = []
@@ -375,11 +378,13 @@ def compute_low_quality(results_json: Dict[str, Any]) -> Dict[str, Any]:
 
         frac_removed = removed / total if total > 0 else 0.0
         low_quality_frac = low_q / total if total > 0 else 0.0
+        low_complex_frac = low_complex / total if total > 0 else 0.0
         too_short_frac = too_short / total if total > 0 else 0.0
         adapter_frac = adapter_trimmed / total if total > 0 else 0.0
 
         frac_removed_list.append(frac_removed)
         low_quality_frac_list.append(low_quality_frac)
+        low_complex_frac_list.append(low_complex_frac)
         too_short_frac_list.append(too_short_frac)
         adapter_frac_list.append(adapter_frac)
         if isinstance(duplication, (int, float)) and duplication >= 0:
@@ -397,14 +402,16 @@ def compute_low_quality(results_json: Dict[str, Any]) -> Dict[str, Any]:
             "mean_fraction_removed": None,
             "sd_fraction_removed": None,
             "mean_fraction_low_quality": None,
+            "mean_fraction_low_complexity": None,
             "mean_fraction_too_short": None,
             "mean_fraction_adapter_trimmed": None,
             "mean_duplication_rate": None,
-            "flag_low_quality": 3,
-            "flag_low_quality_reads": 3,
-            "flag_too_short_reads": 3,
+            "flag_sequencing_quality": 3,
+            "flag_phred_score": 3,
+            "flag_complexity": 3,
+            "flag_too_short": 3,
             "flag_adapter_trimming": 3,
-            "flag_duplication_rate": 3,
+            "flag_duplication": 3,
             "message_low_quality": (
                 "No fastp-derived quality metrics were found; low-quality reads cannot be assessed."
             ),
@@ -413,6 +420,7 @@ def compute_low_quality(results_json: Dict[str, Any]) -> Dict[str, Any]:
     mean_frac = stats.mean(frac_removed_list)
     sd_frac = stats.pstdev(frac_removed_list) if n_samples_with_fastp > 1 else 0.0
     mean_low_q = stats.mean(low_quality_frac_list)
+    mean_low_complex = stats.mean(low_complex_frac_list)
     mean_too_short = stats.mean(too_short_frac_list)
     mean_adapter = stats.mean(adapter_frac_list)
     mean_dup = stats.mean(duplication_rates) if duplication_rates else None
@@ -426,7 +434,7 @@ def compute_low_quality(results_json: Dict[str, Any]) -> Dict[str, Any]:
         flag = 1
         message = (
             f"On average {mean_frac*100:.1f}% of reads are flagged as low-quality, "
-            "indicating generally high sequencing quality. In consequence, sequencing quality is not likely to "
+            "indicating generally high sequencing performance. Sequencing quality is therefore not likely to "
             "be a limiting factor for downstream analyses."
         )
     elif mean_frac <= THRESH_LOWQ_MODERATE:
@@ -456,14 +464,17 @@ def compute_low_quality(results_json: Dict[str, Any]) -> Dict[str, Any]:
             return 2
         return 3
 
-    flag_low_quality_reads = _flag_from_thresholds(
+    flag_phred = _flag_from_thresholds(
         mean_low_q, THRESH_FASTP_LOWQUAL_GOOD, THRESH_FASTP_LOWQUAL_MODERATE
     )
-    flag_adapter = _flag_from_thresholds(
-        mean_adapter, THRESH_FASTP_ADAPTER_GOOD, THRESH_FASTP_ADAPTER_MODERATE
+    flag_complexity = _flag_from_thresholds(
+        mean_low_complex, THRESH_FASTP_COMPLEXITY_GOOD, THRESH_FASTP_COMPLEXITY_MODERATE
     )
     flag_too_short = _flag_from_thresholds(
         mean_too_short, THRESH_FASTP_TOOSHORT_GOOD, THRESH_FASTP_TOOSHORT_MODERATE
+    )
+    flag_adapter = _flag_from_thresholds(
+        mean_adapter, THRESH_FASTP_ADAPTER_GOOD, THRESH_FASTP_ADAPTER_MODERATE
     )
     flag_dup = _flag_from_thresholds(
         mean_dup, THRESH_FASTP_DUPLICATION_GOOD, THRESH_FASTP_DUPLICATION_MODERATE
@@ -482,31 +493,49 @@ def compute_low_quality(results_json: Dict[str, Any]) -> Dict[str, Any]:
         3: "Roughly {pct:.1f}% of reads fail phred-score checks, signalling systemic quality issues that erode effective depth.",
         "missing": "Low phred-score reads could not be quantified.",
     }
+    template_complexity = {
+        1: "Low-complexity reads are uncommon ({pct:.1f}%), so repetitive fragments are not inflating filtering.",
+        2: "{pct:.1f}% of reads are flagged as low complexity, which can point to repetitive artifacts in a subset of libraries.",
+        3: "Approximately {pct:.1f}% of reads are filtered for low complexity, suggesting sequencing/library artifacts dominate.",
+        "missing": "Low-complexity filtering could not be quantified.",
+    }
     template_too_short = {
-        1: "Reads filtered as too short are rare ({pct:.1f}%), indicating insert-size selection is consistent.",
-        2: "Roughly {pct:.1f}% of reads are discarded for being too short, hinting at mild fragmentation or tagmentation issues.",
-        3: "Around {pct:.1f}% of reads are removed as too short, pointing to aggressive shearing or residual adapters.",
+        1: "Reads flagged as too short are rare ({pct:.1f}%), indicating insert-size selection is consistent.",
+        2: "Roughly {pct:.1f}% of reads are flagged as too short, hinting at mild fragmentation or tagmentation issues.",
+        3: "Around {pct:.1f}% of reads are removed as too short, pointing to excessive DNA shearing or degradation, or excessive residual adapters.",
         "missing": "Length-based filtering could not be evaluated.",
     }
     template_adapter = {
-        1: "Adapter trimming remains minor ({pct:.1f}%), suggesting libraries were well sized.",
-        2: "Adapter trimming affects {pct:.1f}% of reads, suggesting some inserts are shorter than expected.",
-        3: "Adapter trimming removes about {pct:.1f}% of reads; consider revisiting fragmentation and size-selection steps.",
+        1: "Adapter trimming remains minor ({pct:.1f}%), suggesting library fragment-sizes were appropriate.",
+        2: "Adapter trimming affects {pct:.1f}% of reads, indicating that a significant proportion of inserts are shorter than the employed read length.",
+        3: "Adapter trimming was applied to about {pct:.1f}% of reads, reducing the effective length of the reads.",
         "missing": "Adapter trimming events could not be quantified.",
     }
     template_dup = {
         1: "Duplicate reads remain modest ({pct:.1f}%), so technical replicates should not hurt effective depth.",
-        2: "Duplicates account for {pct:.1f}% of reads; expect effective depth to be slightly lower than raw counts suggest.",
-        3: "Duplicates comprise about {pct:.1f}% of reads, meaning many molecules are PCR replicates and true coverage is markedly lower.",
+        2: "Duplicates account for {pct:.1f}% of reads; expect effective depth to be slightly lower than raw counts suggest. This might impact assembly quality and introduce biases in contig and MAG quantification.",
+        3: "Duplicates comprise about {pct:.1f}% of reads, meaning many molecules are PCR replicates and true coverage is markedly lower. This will likely impact assembly quality and introduce biases in contig and MAG quantification.",
         "missing": "Duplicate rates could not be quantified.",
     }
 
     parts = [message]
-    parts.append(_describe_metric(mean_low_q, flag_low_quality_reads, template_low_phred))
+    parts.append(_describe_metric(mean_low_q, flag_phred, template_low_phred))
+    parts.append(_describe_metric(mean_low_complex, flag_complexity, template_complexity))
     parts.append(_describe_metric(mean_too_short, flag_too_short, template_too_short))
     parts.append(_describe_metric(mean_adapter, flag_adapter, template_adapter))
     parts.append(_describe_metric(mean_dup, flag_dup, template_dup))
     enriched_message = " ".join(p for p in parts if p)
+
+    subset_flags = [flag_phred, flag_complexity, flag_too_short, flag_adapter, flag_dup]
+    valid_flags = [f for f in subset_flags if f is not None]
+    if not valid_flags:
+        flag_overall = 3
+    elif any(f == 3 for f in valid_flags):
+        flag_overall = 3
+    elif any(f == 2 for f in valid_flags):
+        flag_overall = 2
+    else:
+        flag_overall = 1
 
     return {
         "n_samples": n_samples_with_fastp,
@@ -516,14 +545,16 @@ def compute_low_quality(results_json: Dict[str, Any]) -> Dict[str, Any]:
         "mean_fraction_removed": mean_frac,
         "sd_fraction_removed": sd_frac,
         "mean_fraction_low_quality": mean_low_q,
+        "mean_fraction_low_complexity": mean_low_complex,
         "mean_fraction_too_short": mean_too_short,
         "mean_fraction_adapter_trimmed": mean_adapter,
         "mean_duplication_rate": mean_dup,
-        "flag_low_quality": flag,
-        "flag_low_quality_reads": flag_low_quality_reads,
-        "flag_too_short_reads": flag_too_short,
+        "flag_sequencing_quality": flag_overall,
+        "flag_phred_score": flag_phred,
+        "flag_complexity": flag_complexity,
+        "flag_too_short": flag_too_short,
         "flag_adapter_trimming": flag_adapter,
-        "flag_duplication_rate": flag_dup,
+        "flag_duplication": flag_dup,
         "message_low_quality": enriched_message,
     }
 
@@ -1320,7 +1351,7 @@ def compute_recommendations(summary: Dict[str, Any]) -> Dict[str, Any]:
     items: List[Dict[str, Any]] = []
 
     screen = summary.get("screening_overview", {}) or {}
-    lowq = summary.get("low_quality_reads", {}) or {}
+    lowq = summary.get("sequencing_quality", {}) or {}
     prok = summary.get("prokaryotic_fraction", {}) or {}
     red_reads = summary.get("redundancy_reads", {}) or {}
     red_mark = summary.get("redundancy_markers", {}) or {}
@@ -1336,7 +1367,7 @@ def compute_recommendations(summary: Dict[str, Any]) -> Dict[str, Any]:
 
     # Depth balance / quality / prok signals
     depth_cv = screen.get("cv_reads")
-    lowq_flag = lowq.get("flag_low_quality", 3)
+    lowq_flag = lowq.get("flag_sequencing_quality", 3)
     prok_flag = prok.get("flag_prokaryotic_fraction", 3)
 
     markers_block = clusters.get("markers", {}) or {}
@@ -1491,7 +1522,7 @@ def main():
 
     recommendations = compute_recommendations({
         "screening_overview": screening_overview,
-        "low_quality_reads": low_quality,
+            "sequencing_quality": low_quality,
         "prokaryotic_fraction": prok_fraction,
         "redundancy_reads": redundancy_reads,
         "redundancy_markers": redundancy_markers,
@@ -1632,7 +1663,7 @@ def main():
         "meta": meta,
         "summary": {
             "screening_overview": screening_overview,
-            "low_quality_reads": low_quality,
+            "sequencing_quality": low_quality,
             "prokaryotic_fraction": prok_fraction,
             "redundancy_reads": redundancy_reads,
             "redundancy_markers": redundancy_markers,

@@ -523,7 +523,7 @@ function addProjectHighlights(container, distill, summary) {
             value: fmtMillions(
                 summary.total_reads_all_samples !== undefined && summary.total_reads_all_samples !== null
                     ? summary.total_reads_all_samples
-                    : (summary.low_quality_reads || {}).total_reads
+                    : (summary.sequencing_quality || {}).total_reads
             ),
             note: "Sum of input reads across samples"
         },
@@ -813,18 +813,19 @@ function addScreeningOverviewSection(parent, data, depthPerSample) {
 function addLowQualitySection(parent, data, depthPerSample) {
     if (!data) return;
     const div = document.createElement("div");
-    div.className = "section " + flagClass(data.flag_low_quality);
+    div.className = "section " + flagClass(data.flag_sequencing_quality);
 
     const msg = data.message_low_quality || "";
 
     const meanFrac = data.mean_fraction_removed;
     const meanLowQ = data.mean_fraction_low_quality;
+    const meanComplex = data.mean_fraction_low_complexity;
     const meanTooShort = data.mean_fraction_too_short;
     const meanAdapter = data.mean_fraction_adapter_trimmed;
     const meanDup = data.mean_duplication_rate;
     const pct = (value) => (value === null || value === undefined ? null : 100 * value);
 
-    const status = sectionStatus("Sequencing quality", data.flag_low_quality);
+    const status = sectionStatus("Sequencing quality", data.flag_sequencing_quality);
 
     div.innerHTML = `
         <h2 class="section-title">Sequencing quality</h2>
@@ -853,6 +854,11 @@ function addLowQualitySection(parent, data, depthPerSample) {
                         <div class="quality-stat-note">Average proportion flagged as low phred</div>
                     </div>
                     <div class="quality-stat-item">
+                        <div class="quality-stat-label">Low-complexity reads</div>
+                        <div class="quality-stat-value">${fmtFloat(pct(meanComplex), 2)}%</div>
+                        <div class="quality-stat-note">Average fraction filtered for low complexity</div>
+                    </div>
+                    <div class="quality-stat-item">
                         <div class="quality-stat-label">Too short</div>
                         <div class="quality-stat-value">${fmtFloat(pct(meanTooShort), 2)}%</div>
                         <div class="quality-stat-note">Average fraction removed due to length filters</div>
@@ -872,11 +878,11 @@ function addLowQualitySection(parent, data, depthPerSample) {
                     <div id="quality-plot" class="plotly-chart"></div>
                 </div>
                 <p class="small-note">
-                    Interactive stacked barplot showing why reads are discarded by fastp. Overall bar colour stays
-                    green (&le; 5%), yellow (5–20%) or red (&gt; 20%) depending on the total removed fraction, while
-                    each stack segments low-quality, too many Ns, low-complexity and too-short reads. Horizontal dashed
-                    lines (when applicable) mark the 5% and 20% thresholds, and the median removed fraction appears as
-                    a dark grey dashed line. The plot resizes with the page width.
+                    Interactive stacked barplot showing the type of deficience of low-quality reads. Overall bar colour stays
+                    green (&le; 5%), yellow (5-20%) or red (&gt; 20%) depending on the total removed fraction, while
+                    each stack segments low-phred-score, too many Ns, low-complexity and too-short reads. Horizontal dashed
+                    lines (when at applicable scale) mark the 5% and 20% thresholds, and the median removed fraction appears as
+                    a dark grey dashed line.
                 </p>
             </div>
         </details>
@@ -2614,7 +2620,7 @@ function main() {
 
     addProjectHighlights(highlightsDiv, distill, S);
     addScreeningOverviewSection(summaryDiv, S.screening_overview, depthPerSample);
-    addLowQualitySection(summaryDiv, S.low_quality_reads, depthPerSample);
+    addLowQualitySection(summaryDiv, S.sequencing_quality, depthPerSample);
     addProkFractionSection(summaryDiv, S.prokaryotic_fraction, depthPerSample);
     addRedundancyReadsSection(summaryDiv, S.redundancy_reads, depthPerSample);
     addOverallReadCoverageSection(summaryDiv, S.overall_metagenomic_coverage);
