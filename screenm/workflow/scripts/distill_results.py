@@ -359,7 +359,6 @@ def compute_low_quality(results_json: Dict[str, Any]) -> Dict[str, Any]:
         too_n = fastp.get("too_many_N_reads", 0) or 0
         low_complex = fastp.get("low_complexity_reads", 0) or 0
         too_short = fastp.get("too_short_reads", 0) or 0
-        too_long = fastp.get("too_long_reads", 0) or 0
         adapter_trimmed = fastp.get("adapter_trimmed_reads", 0) or 0
         duplication = fastp.get("duplication")
         if isinstance(duplication, str):
@@ -368,7 +367,7 @@ def compute_low_quality(results_json: Dict[str, Any]) -> Dict[str, Any]:
             except ValueError:
                 duplication = None
 
-        removed = low_q + too_n + low_complex + too_short + too_long
+        removed = low_q + too_n + low_complex + too_short
         removed = max(0, min(removed, total))
 
         frac_removed = removed / total if total > 0 else 0.0

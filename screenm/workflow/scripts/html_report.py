@@ -871,10 +871,11 @@ function addLowQualitySection(parent, data, depthPerSample) {
                     <div id="quality-plot" class="plotly-chart"></div>
                 </div>
                 <p class="small-note">
-                    Interactive barplot of per-sample removed fractions (fastp). Bars are green (&le; 5%),
-                    yellow (5–20%) or red (&gt; 20%). Horizontal dashed lines (when applicable) mark 5% and
-                    20% thresholds, and the median removed fraction is shown as a dark grey dashed line.
-                    The plot resizes with the page width.
+                    Interactive stacked barplot showing why reads are discarded by fastp. Overall bar colour stays
+                    green (&le; 5%), yellow (5–20%) or red (&gt; 20%) depending on the total removed fraction, while
+                    each stack segments low-quality, too many Ns, low-complexity and too-short reads. Horizontal dashed
+                    lines (when applicable) mark the 5% and 20% thresholds, and the median removed fraction appears as
+                    a dark grey dashed line. The plot resizes with the page width.
                 </p>
             </div>
         </details>
@@ -900,38 +901,65 @@ function addLowQualitySection(parent, data, depthPerSample) {
     const THRESH_MOD  = 0.20;
 
     const samples = perSample.map((d, idx) => d.sample || `sample ${idx + 1}`);
-    const fracs = perSample.map(d => {
+    const totalRemovedFracs = perSample.map(d => {
         const v = Number(d.fraction_low_quality_of_total);
         return Number.isFinite(v) && v >= 0 ? v : 0;
     });
 
-    const colors = fracs.map(v => {
-        if (v <= THRESH_GOOD) return "#2e7d32";
-        if (v <= THRESH_MOD) return "#f9a825";
-        return "#c62828";
-    });
+    const categories = [
+        {key: "fraction_removed_low_quality", label: "Low-quality reads"},
+        {key: "fraction_removed_too_many_N", label: "Too many Ns"},
+        {key: "fraction_removed_low_complexity", label: "Low-complexity"},
+        {key: "fraction_removed_too_short", label: "Too short"},
+    ];
 
-    const hover = fracs.map((val, idx) => {
-        return [
-            `<b>${samples[idx]}</b>`,
-            `Removed: ${(val * 100).toFixed(2)}%`,
-            `Thresholds: 5% & 20%`
-        ].join("<br>");
-    });
+    const categoryValues = categories.map(cat => perSample.map(sample => {
+        const v = Number(sample[cat.key]);
+        return Number.isFinite(v) && v >= 0 ? v : 0;
+    }));
 
-    const trace = {
-        type: "bar",
-        x: samples,
-        y: fracs,
-        marker: {color: colors},
-        hovertemplate: "%{customdata}<extra></extra>",
-        customdata: hover,
+    const statusPalettes = {
+        good: ["#216e26", "#2f7f34", "#3e9043", "#4ea155"],
+        moderate: ["#d79900", "#e0a60d", "#e8b51d", "#f0c42d"],
+        poor: ["#9f1f1f", "#b12f2f", "#c23f3f", "#d45050"],
     };
 
-    const maxFracObserved = Math.max(...fracs, 0);
+    const statusForSample = totalRemovedFracs.map(val => {
+        if (val <= THRESH_GOOD) return "good";
+        if (val <= THRESH_MOD) return "moderate";
+        return "poor";
+    });
+
+    const traces = categories.map((cat, catIdx) => {
+        const yVals = categoryValues[catIdx];
+        const colors = yVals.map((_, sampleIdx) => {
+            const status = statusForSample[sampleIdx];
+            const palette = statusPalettes[status] || statusPalettes.poor;
+            return palette[catIdx % palette.length];
+        });
+        const custom = yVals.map((val, sampleIdx) => {
+            const totalReads = Math.max(0, Number(perSample[sampleIdx].total_reads) || 0);
+            const reads = totalReads * val;
+            return (
+                `<b>${samples[sampleIdx]}</b><br>` +
+                `${cat.label}: ${(val * 100).toFixed(2)}% (${fmtMillions(reads)} reads)`
+            );
+        });
+        return {
+            type: "bar",
+            name: cat.label,
+            x: samples,
+            y: yVals,
+            marker: {color: colors},
+            hovertemplate: "%{customdata}<extra></extra>",
+            customdata: custom,
+        };
+    });
+
+    const maxFracObserved = Math.max(...totalRemovedFracs, 0);
     const hasGoodLine = maxFracObserved >= THRESH_GOOD;
     const hasModLine = maxFracObserved >= THRESH_MOD;
-    const medianFracValue = median(fracs);
+    const medianFracValue = median(totalRemovedFracs);
     const medianRemoved = Number(medianFracValue) || 0;
 
     const maxCandidates = [maxFracObserved];
@@ -940,6 +968,7 @@ function addLowQualitySection(parent, data, depthPerSample) {
     if (medianRemoved > 0) maxCandidates.push(medianRemoved);
     const rangeMax = Math.max(...maxCandidates);
     const maxFrac = rangeMax > 0 ? rangeMax * 1.1 : 0.01;
+    const yTickFormat = (maxFrac * 100) < 10 ? ".1%" : ".0%";
 
     const shapes = [];
     const annotations = [];
@@ -1019,11 +1048,13 @@ function addLowQualitySection(parent, data, depthPerSample) {
     const bottomMargin = n > 80 ? 200 : n > 40 ? 150 : 110;
 
     const layout = {
-        height: 360,
+        height: 380,
         margin: {l: 80, r: 28, t: 16, b: bottomMargin},
         bargap: 0.12,
+        barmode: "stack",
         hovermode: "closest",
-        showlegend: false,
+        showlegend: true,
+        legend: {orientation: "h", x: 0, y: 1.1},
         xaxis: {
             title: "Samples",
             type: "category",
@@ -1034,7 +1065,7 @@ function addLowQualitySection(parent, data, depthPerSample) {
         yaxis: {
             title: "Reads removed by fastp (%)",
             range: [0, maxFrac],
-            tickformat: ".0%",
+            tickformat: yTickFormat,
             separatethousands: true,
         },
         shapes,
@@ -1047,7 +1078,7 @@ function addLowQualitySection(parent, data, depthPerSample) {
         modeBarButtonsToRemove: ["toggleSpikelines", "autoScale2d"],
     };
 
-    Plotly.newPlot(plotDiv, [trace], layout, config);
+    Plotly.newPlot(plotDiv, traces, layout, config);
     window.addEventListener("resize", () => Plotly.Plots.resize(plotDiv));
 }
 

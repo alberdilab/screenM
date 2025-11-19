@@ -25,33 +25,57 @@ def _get_total_reads(sample_data: Dict[str, Any]) -> Optional[float]:
     return None
 
 
-def _estimate_low_quality_reads(sample_data: Dict[str, Any],
-                                total_reads: Optional[float]) -> (Optional[float], Optional[float]):
+def _estimate_low_quality_reads(
+    sample_data: Dict[str, Any],
+    total_reads: Optional[float],
+) -> (
+    Optional[float],
+    Optional[float],
+    Dict[str, Optional[float]],
+):
     """
     Estimate low-quality reads from fastp, scaled to the full library.
 
-    Returns (removed_fraction, low_quality_est).
+    Returns (removed_fraction, low_quality_est, removal_breakdown), where
+    removal_breakdown contains per-category fractions relative to the fastp total.
     """
     fastp = sample_data.get("fastp", {}) or {}
     fastp_total = fastp.get("total_reads")
 
     if not isinstance(fastp_total, (int, float)) or fastp_total <= 0:
-        return None, None
+        return None, None, {
+            "low_quality": None,
+            "too_many_N": None,
+            "low_complexity": None,
+            "too_short": None,
+        }
 
     low_q = fastp.get("low_quality_reads", 0) or 0
     too_n = fastp.get("too_many_N_reads", 0) or 0
     low_complex = fastp.get("low_complexity_reads", 0) or 0
     too_short = fastp.get("too_short_reads", 0) or 0
-    too_long = fastp.get("too_long_reads", 0) or 0
 
-    removed = low_q + too_n + low_complex + too_short + too_long
+    removed_components = {
+        "low_quality": low_q,
+        "too_many_N": too_n,
+        "low_complexity": low_complex,
+        "too_short": too_short,
+    }
+
+    removed = sum(removed_components.values())
     removed = max(0, min(removed, fastp_total))  # clamp
 
     removed_fraction = removed / float(fastp_total)
     low_quality_est = (
         removed_fraction * total_reads if total_reads is not None else None
     )
-    return removed_fraction, low_quality_est
+
+    breakdown = {
+        key: (value / float(fastp_total)) if fastp_total else None
+        for key, value in removed_components.items()
+    }
+
+    return removed_fraction, low_quality_est, breakdown
 
 
 def _get_singlem_prok_fraction(sample_data: Dict[str, Any]) -> Optional[float]:
@@ -149,9 +173,11 @@ def compute_depth_components_per_sample(results_json: Dict[str, Any]) -> List[Di
     for sample_name, sample_data in samples.items():
         total_reads = _get_total_reads(sample_data)
 
-        removed_fraction, low_quality_est = _estimate_low_quality_reads(
-            sample_data, total_reads
-        )
+        (
+            removed_fraction,
+            low_quality_est,
+            removal_breakdown,
+        ) = _estimate_low_quality_reads(sample_data, total_reads)
 
         # QC-passing reads
         if total_reads is None:
@@ -181,6 +207,8 @@ def compute_depth_components_per_sample(results_json: Dict[str, Any]) -> List[Di
             frac_prok = None
             frac_non_prok = None
 
+        removal_breakdown = removal_breakdown or {}
+
         targets_95 = _get_nonpareil_targets_95(sample_data)
 
         per_sample.append(
@@ -197,6 +225,10 @@ def compute_depth_components_per_sample(results_json: Dict[str, Any]) -> List[Di
                     .get("read_fraction", None)
                 ),
                 "fraction_low_quality_of_total": frac_lowq,
+                "fraction_removed_low_quality": removal_breakdown.get("low_quality"),
+                "fraction_removed_too_many_N": removal_breakdown.get("too_many_N"),
+                "fraction_removed_low_complexity": removal_breakdown.get("low_complexity"),
+                "fraction_removed_too_short": removal_breakdown.get("too_short"),
                 "fraction_prokaryotic_of_total": frac_prok,
                 "fraction_non_prokaryotic_of_total": frac_non_prok,
                 # 95% Nonpareil targets (reads and markers)
