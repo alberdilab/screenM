@@ -205,7 +205,7 @@ def compute_screening_overview(
     the key metrics from both aspects plus a combined flag/message.
 
     Combined flag:
-      - based on the "worst" (max) of flag_reads_threshold and flag_sequencing_depth
+      - based on the "worst" (max) of flag_reads_threshold and flag_sequencing_variation
         whenever both are available,
       - falls back gracefully when one of them cannot be evaluated.
     """
@@ -262,7 +262,7 @@ def compute_screening_overview(
         msg_parts.append(reads_msg.strip())
     variation_msg = sd.get("message_sequencing_depth")
     if variation_msg:
-        transition = _variation_transition(depth_flag, sd.get("flag_sequencing_variation", depth_flag))
+        transition = _variation_transition(reads_flag, depth_flag)
         msg_parts.append(_apply_transition(transition, variation_msg))
 
     if sd.get("n_samples", 0) == 0:
@@ -290,7 +290,7 @@ def compute_screening_overview(
         "median_reads": sd.get("median_reads"),
         "sd_reads": sd.get("sd_reads"),
         "cv_reads": sd.get("cv_reads"),
-        "flag_sequencing_depth": depth_flag,
+        "flag_sequencing_depth": reads_flag,
         "flag_sequencing_variation": depth_flag,
 
         # Combined
