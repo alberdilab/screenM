@@ -2328,23 +2328,18 @@ function addMashDistanceSection(parent, clusters) {
                     </div>
                 </div>
                 <div class="clusters-heatmap-scroll" style="margin-top:12px; max-height:720px; width:100%; overflow:auto;">
-                    <div style="display:flex; gap:8px; margin-bottom:8px;">
-                        <button id="mash-tab-markers" class="tab-btn active">Markers</button>
-                        <button id="mash-tab-reads" class="tab-btn">Reads</button>
-                    </div>
-                    <svg id="mash-heatmap-markers" class="clusters-heatmap-svg"></svg>
-                    <svg id="mash-heatmap-reads" class="clusters-heatmap-svg" style="display:none;"></svg>
+                    <div id="mash-heatmap-plot" class="plotly-chart" style="height:540px; min-width:720px;"></div>
                 </div>
+                <p class="small-note">
+                    Upper triangle shows marker-based distances; lower triangle shows read-based distances. Samples are ordered
+                    by marker similarity. Cells without data are blank.
+                </p>
             </div>
         </details>
     `;
     parent.appendChild(div);
 
-    const heatMarkers = div.querySelector("#mash-heatmap-markers");
-    const heatReads = div.querySelector("#mash-heatmap-reads");
-    const tabMarkers = div.querySelector("#mash-tab-markers");
-    const tabReads = div.querySelector("#mash-tab-reads");
-    const svgns = "http://www.w3.org/2000/svg";
+    const plotDiv = div.querySelector("#mash-heatmap-plot");
 
     const allSamples = Array.from(new Set(
         [...markersPairs, ...readsPairs].flatMap(p => [p.sample1, p.sample2])
@@ -2384,126 +2379,105 @@ function addMashDistanceSection(parent, clusters) {
         return order;
     }
 
-    const sharedOrder = orderSamples(markersPairs.length ? markersPairs : readsPairs);
-
-    function drawHeatmap(svg, pairs) {
-        const sampleSet = new Set();
-        pairs.forEach(p => { if (p.sample1) sampleSet.add(p.sample1); if (p.sample2) sampleSet.add(p.sample2); });
-        let samples = Array.from(sampleSet);
-        if (sharedOrder && sharedOrder.length === samples.length) {
-            samples = sharedOrder;
-        } else {
-            samples.sort();
-        }
-        const n = samples.length;
-        if (!n) {
-            svg.outerHTML = `<div class="small-note">No pairwise distances available.</div>`;
-            return;
-        }
-
-        const map = {};
-        let maxD = 0;
-        pairs.forEach(p => {
-            const d = Number(p.distance);
-            if (!isFinite(d) || p.sample1 == null || p.sample2 == null) return;
-            map[`${p.sample1}||${p.sample2}`] = d;
-            map[`${p.sample2}||${p.sample1}`] = d;
-            if (d > maxD) maxD = d;
-        });
-        if (maxD <= 0) maxD = 1;
-
-        const margin = {left: 160, right: 30, top: 160, bottom: 60};
-        const cellSize = Math.max(26, Math.min(40, (1200 - margin.left - margin.right) / Math.max(n, 20)));
-        const width = margin.left + margin.right + n * cellSize;
-        const height = margin.top + margin.bottom + n * cellSize;
-        svg.setAttribute("viewBox", `0 0 ${width} ${height}`);
-        svg.style.width = `${width}px`;
-        svg.style.height = `${height}px`;
-
-        function colorFor(val) {
-            const f = Math.max(0, Math.min(1, val / maxD));
-            const c = Math.round(255 - f * 220);
-            return `rgb(${c},${c+40},255)`;
-        }
-
-        samples.forEach((s1, i) => {
-            samples.forEach((s2, j) => {
-                const key = `${s1}||${s2}`;
-                const d = map[key];
-                const has = d != null;
-                const fill = has ? colorFor(d) : "#eeeeee";
-                const x = margin.left + j * cellSize;
-                const y = margin.top + i * cellSize;
-                const rect = document.createElementNS(svgns, "rect");
-                rect.setAttribute("x", x);
-                rect.setAttribute("y", y);
-                rect.setAttribute("width", cellSize);
-                rect.setAttribute("height", cellSize);
-                rect.setAttribute("fill", fill);
-                rect.setAttribute("stroke", "#ffffff");
-                rect.setAttribute("stroke-width", "0.5");
-                if (has) {
-                    rect.style.cursor = "pointer";
-                    rect.addEventListener("mouseenter", (evt) => {
-                        const tooltip = getOrCreateTooltip();
-                        tooltip.style.display = "block";
-                        tooltip.textContent = `${s1} vs ${s2}\nMash distance: ${fmtFloat(d, 4)}`;
-                        tooltip.style.left = evt.clientX + "px";
-                        tooltip.style.top = evt.clientY + "px";
-                    });
-                    rect.addEventListener("mousemove", (evt) => {
-                        const tooltip = getOrCreateTooltip();
-                        tooltip.style.left = evt.clientX + "px";
-                        tooltip.style.top = evt.clientY + "px";
-                    });
-                    rect.addEventListener("mouseleave", () => {
-                        const tooltip = getOrCreateTooltip();
-                        tooltip.style.display = "none";
-                    });
-                }
-                svg.appendChild(rect);
-            });
-        });
-
-        samples.forEach((s, idx) => {
-            const x = margin.left + idx * cellSize + cellSize / 2;
-            const yTop = margin.top - 18;
-            const labTop = document.createElementNS(svgns, "text");
-            labTop.setAttribute("x", x);
-            labTop.setAttribute("y", yTop);
-            labTop.setAttribute("font-size", "10");
-            labTop.setAttribute("text-anchor", "end");
-            labTop.setAttribute("transform", `rotate(-60 ${x} ${yTop})`);
-            labTop.textContent = s;
-            svg.appendChild(labTop);
-
-            const labLeft = document.createElementNS(svgns, "text");
-            labLeft.setAttribute("x", margin.left - 10);
-            labLeft.setAttribute("y", margin.top + idx * cellSize + cellSize / 2 + 4);
-            labLeft.setAttribute("font-size", "10");
-            labLeft.setAttribute("text-anchor", "end");
-            labLeft.textContent = s;
-            svg.appendChild(labLeft);
-        });
+    const orderedSamples = orderSamples(markersPairs.length ? markersPairs : readsPairs);
+    if (!orderedSamples.length) {
+        plotDiv.outerHTML = `<div class="small-note">No pairwise distances available.</div>`;
+        return;
     }
 
-    drawHeatmap(heatMarkers, markersPairs);
-    drawHeatmap(heatReads, readsPairs);
-
-    if (tabMarkers && tabReads) {
-        tabMarkers.addEventListener("click", () => {
-            tabMarkers.classList.add("active");
-            tabReads.classList.remove("active");
-            heatMarkers.style.display = "block";
-            heatReads.style.display = "none";
-        });
-        tabReads.addEventListener("click", () => {
-            tabReads.classList.add("active");
-            tabMarkers.classList.remove("active");
-            heatMarkers.style.display = "none";
-            heatReads.style.display = "block";
-        });
+    if (typeof Plotly === "undefined") {
+        plotDiv.outerHTML = `<div class="small-note">Plotly failed to load; cannot render Mash distance heatmap.</div>`;
+        return;
     }
+
+    const markersMap = {};
+    markersPairs.forEach(p => {
+        const d = Number(p.distance);
+        if (!isFinite(d) || p.sample1 == null || p.sample2 == null) return;
+        markersMap[`${p.sample1}||${p.sample2}`] = d;
+        markersMap[`${p.sample2}||${p.sample1}`] = d;
+    });
+    const readsMap = {};
+    readsPairs.forEach(p => {
+        const d = Number(p.distance);
+        if (!isFinite(d) || p.sample1 == null || p.sample2 == null) return;
+        readsMap[`${p.sample1}||${p.sample2}`] = d;
+        readsMap[`${p.sample2}||${p.sample1}`] = d;
+    });
+
+    const n = orderedSamples.length;
+    const z = Array.from({length: n}, () => Array(n).fill(null));
+    const text = Array.from({length: n}, () => Array(n).fill(""));
+    let maxD = 0;
+
+    orderedSamples.forEach((s1, i) => {
+        orderedSamples.forEach((s2, j) => {
+            if (i === j) return;
+            const key = `${s1}||${s2}`;
+            let d = null;
+            let source = "";
+            if (i < j && markersMap.hasOwnProperty(key)) {
+                d = markersMap[key];
+                source = "Markers";
+            } else if (i > j && readsMap.hasOwnProperty(key)) {
+                d = readsMap[key];
+                source = "Reads";
+            }
+            if (d != null) {
+                z[i][j] = d;
+                text[i][j] = `${s1} vs ${s2}<br>${source} distance: ${fmtFloat(d, 4)}`;
+                if (d > maxD) maxD = d;
+            }
+        });
+    });
+    if (maxD <= 0) maxD = 1;
+
+    const heatmap = {
+        type: "heatmap",
+        x: orderedSamples,
+        y: orderedSamples,
+        z,
+        text,
+        hovertemplate: "%{text}<extra></extra>",
+        colorscale: [
+            [0, "#f7fbff"],
+            [1, "#08306b"]
+        ],
+        zmin: 0,
+        zmax: maxD,
+        colorbar: {
+            title: "Mash distance",
+            titleside: "right"
+        },
+        showscale: true,
+    };
+
+    const tickAngle = n > 18 ? -60 : -45;
+    const bottomMargin = n > 18 ? 220 : 160;
+    const leftMargin = n > 12 ? 170 : 140;
+
+    const layout = {
+        height: 90 * Math.min(n, 8) + 220,
+        margin: {l: leftMargin, r: 40, t: 20, b: bottomMargin},
+        xaxis: {
+            tickangle: tickAngle,
+            automargin: true,
+        },
+        yaxis: {
+            automargin: true,
+            autorange: "reversed",
+        },
+        hovermode: "closest",
+    };
+
+    const config = {
+        displaylogo: false,
+        responsive: true,
+        modeBarButtonsToRemove: ["toggleSpikelines", "autoScale2d"],
+    };
+
+    Plotly.newPlot(plotDiv, [heatmap], layout, config);
+    window.addEventListener("resize", () => Plotly.Plots.resize(plotDiv));
 }
 
 /* Sample clusters */
