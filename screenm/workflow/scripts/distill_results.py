@@ -26,6 +26,8 @@ THRESH_FASTP_LOWQUAL_GOOD = 0.02  # <=2% low-quality reads → clean
 THRESH_FASTP_LOWQUAL_MODERATE = 0.05
 THRESH_FASTP_ADAPTER_GOOD = 0.10  # <=10% adapter trimming → minimal
 THRESH_FASTP_ADAPTER_MODERATE = 0.20
+THRESH_FASTP_TOOSHORT_GOOD = 0.02
+THRESH_FASTP_TOOSHORT_MODERATE = 0.05
 THRESH_FASTP_DUPLICATION_GOOD = 0.05  # <=5% duplicates → low redundancy
 THRESH_FASTP_DUPLICATION_MODERATE = 0.15
 
@@ -400,6 +402,7 @@ def compute_low_quality(results_json: Dict[str, Any]) -> Dict[str, Any]:
             "mean_duplication_rate": None,
             "flag_low_quality": 3,
             "flag_low_quality_reads": 3,
+            "flag_too_short_reads": 3,
             "flag_adapter_trimming": 3,
             "flag_duplication_rate": 3,
             "message_low_quality": (
@@ -422,21 +425,21 @@ def compute_low_quality(results_json: Dict[str, Any]) -> Dict[str, Any]:
     if mean_frac <= THRESH_LOWQ_GOOD:
         flag = 1
         message = (
-            f"On average {mean_frac*100:.1f}% of reads are removed by quality filtering, "
-            "indicating generally high read quality. Sequencing quality is not likely to "
+            f"On average {mean_frac*100:.1f}% of reads are flagged as low-quality, "
+            "indicating generally high sequencing quality. In consequence, sequencing quality is not likely to "
             "be a limiting factor for downstream analyses."
         )
     elif mean_frac <= THRESH_LOWQ_MODERATE:
         flag = 2
         message = (
-            f"On average {mean_frac*100:.1f}% of reads are removed by quality filtering. "
+            f"On average {mean_frac*100:.1f}% of reads are flagged as low-quality. "
             "Some libraries may have noticeable quality issues, so the effective sequencing "
             "depth could be lower than expected for those samples."
         )
     else:
         flag = 3
         message = (
-            f"On average {mean_frac*100:.1f}% of reads are removed by quality filtering. "
+            f"On average {mean_frac*100:.1f}% of reads are flagged as low-quality. "
             "A substantial fraction of sequencing effort is lost to low quality, Ns, or "
             "length/complexity filters. These results suggest issues during library preparation or "
             "sequencing, leading to compromised data quality. Consider revisiting library preparation"
@@ -459,32 +462,50 @@ def compute_low_quality(results_json: Dict[str, Any]) -> Dict[str, Any]:
     flag_adapter = _flag_from_thresholds(
         mean_adapter, THRESH_FASTP_ADAPTER_GOOD, THRESH_FASTP_ADAPTER_MODERATE
     )
+    flag_too_short = _flag_from_thresholds(
+        mean_too_short, THRESH_FASTP_TOOSHORT_GOOD, THRESH_FASTP_TOOSHORT_MODERATE
+    )
     flag_dup = _flag_from_thresholds(
         mean_dup, THRESH_FASTP_DUPLICATION_GOOD, THRESH_FASTP_DUPLICATION_MODERATE
     )
 
-    def _describe_metric(value: Optional[float], flag_value: int, label: str) -> str:
+    def _describe_metric(value: Optional[float], flag_value: int, templates: Dict[Any, str]) -> str:
         if value is None:
-            return f"{label} could not be evaluated."
+            return templates.get("missing", "")
         pct = value * 100
-        if flag_value == 1:
-            return f"{label} remain low at {pct:.1f}% on average."
-        if flag_value == 2:
-            return (
-                f"{label} average {pct:.1f}% of reads, suggesting some libraries may need closer QC."
-            )
-        return (
-            f"{label} consume roughly {pct:.1f}% of reads, which points to systematic issues that warrant investigation."
-        )
+        entry = templates.get(flag_value) or templates.get("default", "")
+        return entry.format(pct=pct)
+
+    template_low_phred = {
+        1: "Reads failing phred-score checks are scarce ({pct:.1f}%), so trimming losses are negligible.",
+        2: "About {pct:.1f}% of reads are flagged for low phred quality, slightly reducing usable depth in those libraries.",
+        3: "Roughly {pct:.1f}% of reads fail phred-score checks, signalling systemic quality issues that erode effective depth.",
+        "missing": "Low phred-score reads could not be quantified.",
+    }
+    template_too_short = {
+        1: "Reads filtered as too short are rare ({pct:.1f}%), indicating insert-size selection is consistent.",
+        2: "Roughly {pct:.1f}% of reads are discarded for being too short, hinting at mild fragmentation or tagmentation issues.",
+        3: "Around {pct:.1f}% of reads are removed as too short, pointing to aggressive shearing or residual adapters.",
+        "missing": "Length-based filtering could not be evaluated.",
+    }
+    template_adapter = {
+        1: "Adapter trimming remains minor ({pct:.1f}%), suggesting libraries were well sized.",
+        2: "Adapter trimming affects {pct:.1f}% of reads, suggesting some inserts are shorter than expected.",
+        3: "Adapter trimming removes about {pct:.1f}% of reads; consider revisiting fragmentation and size-selection steps.",
+        "missing": "Adapter trimming events could not be quantified.",
+    }
+    template_dup = {
+        1: "Duplicate reads remain modest ({pct:.1f}%), so technical replicates should not hurt effective depth.",
+        2: "Duplicates account for {pct:.1f}% of reads; expect effective depth to be slightly lower than raw counts suggest.",
+        3: "Duplicates comprise about {pct:.1f}% of reads, meaning many molecules are PCR replicates and true coverage is markedly lower.",
+        "missing": "Duplicate rates could not be quantified.",
+    }
 
     parts = [message]
-    parts.append(_describe_metric(mean_low_q, flag_low_quality_reads, "Low-quality reads"))
-    parts.append(
-        _describe_metric(mean_adapter, flag_adapter, "Adapter trimming events")
-    )
-    parts.append(
-        _describe_metric(mean_dup, flag_dup, "Duplicate reads")
-    )
+    parts.append(_describe_metric(mean_low_q, flag_low_quality_reads, template_low_phred))
+    parts.append(_describe_metric(mean_too_short, flag_too_short, template_too_short))
+    parts.append(_describe_metric(mean_adapter, flag_adapter, template_adapter))
+    parts.append(_describe_metric(mean_dup, flag_dup, template_dup))
     enriched_message = " ".join(p for p in parts if p)
 
     return {
@@ -500,6 +521,7 @@ def compute_low_quality(results_json: Dict[str, Any]) -> Dict[str, Any]:
         "mean_duplication_rate": mean_dup,
         "flag_low_quality": flag,
         "flag_low_quality_reads": flag_low_quality_reads,
+        "flag_too_short_reads": flag_too_short,
         "flag_adapter_trimming": flag_adapter,
         "flag_duplication_rate": flag_dup,
         "message_low_quality": enriched_message,
