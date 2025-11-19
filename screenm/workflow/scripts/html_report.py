@@ -1152,8 +1152,8 @@ function addProkFractionSection(parent, data, depthPerSample) {
         x: samples,
         y: fracLow,
         marker: {color: "#424242"},
-        hovertemplate: "%{text}<extra></extra>",
-        text: hoverLow,
+        hovertemplate: "%{customdata}<extra></extra>",
+        customdata: hoverLow,
     };
 
     const traceProk = {
@@ -1162,8 +1162,8 @@ function addProkFractionSection(parent, data, depthPerSample) {
         x: samples,
         y: fracProk,
         marker: {color: prokColors},
-        hovertemplate: "%{text}<extra></extra>",
-        text: hoverProk,
+        hovertemplate: "%{customdata}<extra></extra>",
+        customdata: hoverProk,
     };
 
     const traceOther = {
@@ -1171,9 +1171,9 @@ function addProkFractionSection(parent, data, depthPerSample) {
         name: "",
         x: samples,
         y: fracOther,
-        marker: {color: "#bdbdbd"},
-        hovertemplate: "%{text}<extra></extra>",
-        text: hoverOther,
+        marker: {color: "#e0e0e0"},
+        hovertemplate: "%{customdata}<extra></extra>",
+        customdata: hoverOther,
     };
 
     const stacks = dataPerSample.map((_, idx) => fracLow[idx] + fracProk[idx] + fracOther[idx]);
