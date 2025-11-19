@@ -2327,7 +2327,7 @@ function addMashDistanceSection(parent, clusters) {
                         <div class="redundancy-stat-note">Coefficient of variation</div>
                     </div>
                 </div>
-                <div class="clusters-heatmap-scroll" style="margin-top:12px; max-height:720px; width:100%; overflow:auto;">
+                <div class="clusters-heatmap-scroll" style="margin-top:12px; width:100%; overflow-x:auto; overflow-y:visible;">
                     <div id="mash-heatmap-plot" class="plotly-chart" style="height:540px; min-width:720px;"></div>
                 </div>
                 <p class="small-note">
@@ -2456,8 +2456,10 @@ function addMashDistanceSection(parent, clusters) {
     const bottomMargin = n > 18 ? 220 : 160;
     const leftMargin = n > 12 ? 170 : 140;
 
+    const layoutHeight = Math.max(420, n * 26 + 240);
+
     const layout = {
-        height: 90 * Math.min(n, 8) + 220,
+        height: layoutHeight,
         margin: {l: leftMargin, r: 40, t: 20, b: bottomMargin},
         xaxis: {
             tickangle: tickAngle,
