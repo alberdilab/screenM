@@ -3951,7 +3951,7 @@ function addOverallProkCoverageSection(parent, data) {
     window.addEventListener("resize", () => Plotly.Plots.resize(plotDiv));
 }
 
-/* Mash distance overview */
+/* Pairwise sample dissimilarities */
 function addMashDistanceSection(parent, clusters) {
     if (!clusters) return;
 
@@ -3974,10 +3974,10 @@ function addMashDistanceSection(parent, clusters) {
 
     const div = document.createElement("div");
     div.className = "section " + flagClass(clusters.flag_clusters);
-    const status = sectionStatus("Mash distance overview", clusters.flag_clusters);
+    const status = sectionStatus("Pairwise sample dissimilarities", clusters.flag_clusters);
 
     div.innerHTML = `
-        <h2 class="section-title">Mash distance overview</h2>
+        <h2 class="section-title">Pairwise sample dissimilarities</h2>
         <p class="section-intro">
             Average pairwise Mash distances across all samples (markers and reads), with heatmaps for both.
         </p>
@@ -4011,7 +4011,7 @@ function addMashDistanceSection(parent, clusters) {
                     </div>
                 </div>
                 <div class="clusters-heatmap-scroll" style="margin-top:12px; width:100%; overflow-x:auto; overflow-y:visible;">
-                    <div id="mash-heatmap-plot" class="plotly-chart" style="height:540px; min-width:720px;"></div>
+                    <div id="mash-heatmap-plot" class="plotly-chart" style="height:420px; min-width:720px;"></div>
                 </div>
                 <p class="small-note">
                     Upper triangle shows marker-based distances; lower triangle shows read-based distances. Samples are ordered
@@ -4089,8 +4089,10 @@ function addMashDistanceSection(parent, clusters) {
     });
 
     const n = orderedSamples.length;
-    const z = Array.from({length: n}, () => Array(n).fill(null));
-    const text = Array.from({length: n}, () => Array(n).fill(""));
+    const zMarkers = Array.from({length: n}, () => Array(n).fill(null));
+    const textMarkers = Array.from({length: n}, () => Array(n).fill(""));
+    const zReads = Array.from({length: n}, () => Array(n).fill(null));
+    const textReads = Array.from({length: n}, () => Array(n).fill(""));
     let maxD = 0;
 
     orderedSamples.forEach((s1, i) => {
@@ -4107,25 +4109,32 @@ function addMashDistanceSection(parent, clusters) {
                 source = "Reads";
             }
             if (d != null) {
-                z[i][j] = d;
-                text[i][j] = `${s1} vs ${s2}<br>${source} distance: ${fmtFloat(d, 4)}`;
+                if (source === "Markers") {
+                    zMarkers[i][j] = d;
+                    textMarkers[i][j] = `${s1} vs ${s2}<br>${source} distance: ${fmtFloat(d, 4)}`;
+                } else {
+                    zReads[i][j] = d;
+                    textReads[i][j] = `${s1} vs ${s2}<br>${source} distance: ${fmtFloat(d, 4)}`;
+                }
                 if (d > maxD) maxD = d;
             }
         });
     });
     if (maxD <= 0) maxD = 1;
 
-    const heatmap = {
+    const makeColorscale = (colors) =>
+        colors.map((c, idx) => [idx / Math.max(1, colors.length - 1), c]);
+
+    const markersHeatmap = {
         type: "heatmap",
         x: orderedSamples,
         y: orderedSamples,
-        z,
-        text,
+        z: zMarkers,
+        text: textMarkers,
         hovertemplate: "%{text}<extra></extra>",
-        colorscale: [
-            [0, "#f7fbff"],
-            [1, "#08306b"]
-        ],
+        colorscale: makeColorscale([
+            "#f7fbff", "#c6dbef", "#9ecae1", "#6baed6", "#3182bd", "#08519c", "#08306b"
+        ]),
         zmin: 0,
         zmax: maxD,
         colorbar: {
@@ -4134,12 +4143,26 @@ function addMashDistanceSection(parent, clusters) {
         },
         showscale: true,
     };
+    const readsHeatmap = {
+        type: "heatmap",
+        x: orderedSamples,
+        y: orderedSamples,
+        z: zReads,
+        text: textReads,
+        hovertemplate: "%{text}<extra></extra>",
+        colorscale: makeColorscale([
+            "#fff5eb", "#fdd0a2", "#fdae6b", "#fd8d3c", "#f16913", "#d94801", "#8c2d04"
+        ]),
+        zmin: 0,
+        zmax: maxD,
+        showscale: false,
+    };
 
     const tickAngle = n > 18 ? -60 : -45;
-    const bottomMargin = n > 18 ? 220 : 160;
+    const bottomMargin = n > 18 ? 140 : 100;
     const leftMargin = n > 12 ? 170 : 140;
 
-    const layoutHeight = Math.max(420, n * 26 + 240);
+    const layoutHeight = Math.max(320, n * 20 + 220);
 
     const layout = {
         height: layoutHeight,
@@ -4161,7 +4184,7 @@ function addMashDistanceSection(parent, clusters) {
         modeBarButtonsToRemove: ["toggleSpikelines", "autoScale2d"],
     };
 
-    Plotly.newPlot(plotDiv, [heatmap], layout, config);
+    Plotly.newPlot(plotDiv, [markersHeatmap, readsHeatmap], layout, config);
     window.addEventListener("resize", () => Plotly.Plots.resize(plotDiv));
 }
 
