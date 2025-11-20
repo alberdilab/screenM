@@ -2184,7 +2184,7 @@ function addOverallCoverageSection(parent, data) {
                     </div>
                 </div>
                 <div class="lr-target-plot-container">
-                    <div id="overall-coverage-plot" class="plotly-chart" style="height:240px;"></div>
+                    <div id="overall-coverage-plot" class="plotly-chart" style="height:200px;"></div>
                 </div>
                 <p class="small-note">
                     The horizontal bar shows pooled reads; vertical dashed lines mark the metagenomic (blue) and marker (purple)
@@ -2232,7 +2232,7 @@ function addOverallCoverageSection(parent, data) {
         annotations.push({
             x: targetValue,
             yref: "paper",
-            y: position === "bottom" ? -0.08 : 1.04,
+            y: position === "bottom" ? 0.15 : 0.85,
             xanchor: "left",
             text: label,
             showarrow: false,
@@ -2266,8 +2266,8 @@ function addOverallCoverageSection(parent, data) {
     const rangeMax = Math.max(totalReads, maxTarget) * 1.1;
 
     const layout = {
-        height: 200,
-        margin: {l: 140, r: 30, t: 10, b: 20},
+        height: 180,
+        margin: {l: 140, r: 30, t: 10, b: 10},
         xaxis: {
             title: "Reads",
             range: [0, rangeMax],
