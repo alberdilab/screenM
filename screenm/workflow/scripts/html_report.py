@@ -2106,7 +2106,7 @@ function addClustersSection(parent, clusters) {
     const tickAngle = sampleOrder.length > 18 ? -60 : -45;
     const bottomMargin = sampleOrder.length > 18 ? 160 : 120;
 
-    const layoutHeight = Math.max(220, 100 + sampleOrder.length * 12);
+    const layoutHeight = Math.max(140, 60 + sampleOrder.length * 8);
     plotDiv.style.height = `${layoutHeight}px`;
 
     const layout = {
