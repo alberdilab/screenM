@@ -4138,8 +4138,9 @@ function addMashDistanceSection(parent, clusters) {
         zmin: 0,
         zmax: maxD,
         colorbar: {
-            title: "Mash distance",
-            titleside: "right"
+            title: "Dissimilarity (markers)",
+            titleside: "right",
+            x: 1.12,
         },
         showscale: true,
     };
@@ -4155,7 +4156,12 @@ function addMashDistanceSection(parent, clusters) {
         ]),
         zmin: 0,
         zmax: maxD,
-        showscale: false,
+        colorbar: {
+            title: "Dissimilarity (reads)",
+            titleside: "right",
+            x: 1.02,
+        },
+        showscale: true,
     };
 
     const tickAngle = n > 18 ? -60 : -45;
@@ -4184,7 +4190,7 @@ function addMashDistanceSection(parent, clusters) {
         modeBarButtonsToRemove: ["toggleSpikelines", "autoScale2d"],
     };
 
-    Plotly.newPlot(plotDiv, [markersHeatmap, readsHeatmap], layout, config);
+    Plotly.newPlot(plotDiv, [readsHeatmap, markersHeatmap], layout, config);
     window.addEventListener("resize", () => Plotly.Plots.resize(plotDiv));
 }
 
