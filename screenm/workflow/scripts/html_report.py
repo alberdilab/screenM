@@ -2059,7 +2059,8 @@ function addClustersSection(parent, clusters) {
 
     const yLabels = ["Markers", "Reads"];
     const z = [[], []];
-    const text = [[], []];
+    const displayText = [[], []];
+    const hoverText = [[], []];
     sampleOrder.forEach(sample => {
         const mCl = markersMap.hasOwnProperty(sample) ? markersMap[sample] : null;
         const rCl = readsMap.hasOwnProperty(sample) ? readsMap[sample] : null;
@@ -2067,12 +2068,14 @@ function addClustersSection(parent, clusters) {
         const rVal = rCl === null || rCl === undefined ? missingVal : readClusterMap[rCl];
         z[0].push(mVal);
         z[1].push(rVal);
-        text[0].push(
+        displayText[0].push(mCl === null || mCl === undefined ? "" : String(mCl));
+        displayText[1].push(rCl === null || rCl === undefined ? "" : String(rCl));
+        hoverText[0].push(
             mCl === null || mCl === undefined
                 ? `${sample}<br>Markers: not assigned`
                 : `${sample}<br>Markers cluster: ${mCl}`
         );
-        text[1].push(
+        hoverText[1].push(
             rCl === null || rCl === undefined
                 ? `${sample}<br>Reads: not assigned`
                 : `${sample}<br>Reads cluster: ${rCl}`
@@ -2084,8 +2087,14 @@ function addClustersSection(parent, clusters) {
         x: sampleOrder,
         y: yLabels,
         z,
-        text,
-        hovertemplate: "%{text}<extra></extra>",
+        text: displayText,
+        texttemplate: "%{text}",
+        textfont: {
+            color: "#111111",
+            size: 12,
+        },
+        customdata: hoverText,
+        hovertemplate: "%{customdata}<extra></extra>",
         colorscale,
         zmin: missingVal,
         zmax: Math.max(maxVal, 0),
@@ -2095,9 +2104,9 @@ function addClustersSection(parent, clusters) {
     };
 
     const tickAngle = sampleOrder.length > 18 ? -60 : -45;
-    const bottomMargin = sampleOrder.length > 18 ? 200 : 150;
+    const bottomMargin = sampleOrder.length > 18 ? 160 : 120;
 
-    const layoutHeight = 140 + sampleOrder.length * 8;
+    const layoutHeight = Math.max(220, 100 + sampleOrder.length * 12);
     plotDiv.style.height = `${layoutHeight}px`;
 
     const layout = {
