@@ -1661,6 +1661,41 @@ def main():
             "message_overall_read_coverage": msg_reads,
         }
 
+    overall_combined_coverage = None
+    if overall_read_coverage or overall_prok_coverage:
+        message_parts: List[str] = []
+        combined_flags: List[int] = []
+        if overall_read_coverage:
+            msg = overall_read_coverage.get("message_overall_read_coverage")
+            if msg:
+                message_parts.append(msg)
+            fr = overall_read_coverage.get("flag_overall_read_coverage")
+            if isinstance(fr, int):
+                combined_flags.append(fr)
+        if overall_prok_coverage:
+            msg = overall_prok_coverage.get("message_overall_prok_coverage")
+            if msg:
+                message_parts.append(msg)
+            fm = overall_prok_coverage.get("flag_overall_prok_coverage")
+            if isinstance(fm, int):
+                combined_flags.append(fm)
+
+        if not combined_flags:
+            combined_flag = 3
+        elif any(f == 3 for f in combined_flags):
+            combined_flag = 3
+        elif any(f == 2 for f in combined_flags):
+            combined_flag = 2
+        else:
+            combined_flag = 1
+
+        overall_combined_coverage = {
+            "metagenomic": overall_read_coverage,
+            "prokaryotic": overall_prok_coverage,
+            "flag_overall_coverage": combined_flag,
+            "message_overall_coverage": " ".join(message_parts).strip(),
+        }
+
     distilled: Dict[str, Any] = {
         "meta": meta,
         "summary": {
@@ -1675,6 +1710,7 @@ def main():
             "recommendations": recommendations,
             "overall_prokaryotic_coverage": overall_prok_coverage,
             "overall_metagenomic_coverage": overall_read_coverage,
+            "overall_coverage_summary": overall_combined_coverage,
         },
     }
 

@@ -830,9 +830,9 @@ function addLowQualitySection(parent, data, depthPerSample) {
     div.innerHTML = `
         <h2 class="section-title">Sequencing quality</h2>
         <p class="section-intro">
-            This section reports how many reads are discarded by quality trimming and filtering across samples.
-            High proportions of low-quality reads may indicate suboptimal sequencing performance, so it is important 
-            to quantify the extent of this potential issue.
+            This section reports statistics about different type of low-quality reads and their potential impact on downstream analyses.
+            High proportions of low-quality reads may indicate suboptimal sequencing performance, reducing the effective sequencing depth 
+            for metagenomicn assembly and microbiome profiling.
         </p>
         <details>
             <summary>
@@ -1110,8 +1110,11 @@ function addProkFractionSection(parent, data, depthPerSample) {
     div.innerHTML = `
         <h2 class="section-title">Prokaryotic fraction</h2>
         <p class="section-intro">
-            This section describes how much of the sequencing effort is targeting prokaryotic genomes
-            versus non-prokaryotic or low-quality reads.
+            This section describes how much of the sequencing effort is covering prokaryotic genomes
+            in comparison to non-prokaryotic genomes. These values are estimated based on marker-gene
+            profiling of metagenomic reads. A high prokaryotic fraction is desirable for metagenomic
+            assembly and microbiome profiling, while a low prokaryotic fraction may indicate
+            contamination with host or other non-prokaryotic DNA.
         </p>
         <details>
             <summary>
@@ -2105,18 +2108,32 @@ function addClustersSection(parent, clusters) {
     window.addEventListener("resize", () => Plotly.Plots.resize(plotDiv));
 }
 
-/* Overall metagenomic coverage summary */
-function addOverallReadCoverageSection(parent, data) {
+/* Combined overall coverage summary */
+function addOverallCoverageSection(parent, data) {
     if (!data) return;
-    const div = document.createElement("div");
-    div.className = "section " + flagClass(data.flag_overall_read_coverage);
+    const metaBlock = data.metagenomic || {};
+    const prokBlock = data.prokaryotic || {};
+    if (!metaBlock && !prokBlock) return;
 
-    const status = sectionStatus("Overall metagenomic coverage", data.flag_overall_read_coverage);
+    const combinedFlag = data.flag_overall_coverage
+        ?? metaBlock.flag_overall_read_coverage
+        ?? prokBlock.flag_overall_prok_coverage
+        ?? 3;
+    const status = sectionStatus("Overall coverage", combinedFlag);
+    const message =
+        data.message_overall_coverage ||
+        [
+            metaBlock.message_overall_read_coverage,
+            prokBlock.message_overall_prok_coverage,
+        ].filter(Boolean).join(" " );
+
+    const div = document.createElement("div");
+    div.className = "section " + flagClass(combinedFlag);
 
     div.innerHTML = `
-        <h2 class="section-title">Overall metagenomic coverage</h2>
+        <h2 class="section-title">Overall coverage (reads & markers)</h2>
         <p class="section-intro">
-            Aggregated Nonpareil metagenomic coverage across all samples.
+            Pooled Nonpareil results combining metagenomic reads and marker genes for the entire project.
         </p>
         <details>
             <summary>
@@ -2125,30 +2142,40 @@ function addOverallReadCoverageSection(parent, data) {
                 <span class="summary-hint">(click to expand)</span>
             </summary>
             <div class="content">
-                <p class="summary-message">${data.message_overall_read_coverage || ""}</p>
+                <p class="summary-message">${message}</p>
                 <div class="redundancy-stats">
                     <div class="redundancy-stat-item">
-                        <div class="redundancy-stat-label">Coverage (C_total)</div>
-                        <div class="redundancy-stat-value">${data.coverage_percent != null ? fmtFloat(data.coverage_percent, 1) + "%" : "NA"}</div>
-                        <div class="redundancy-stat-note">Pooled metagenomic coverage across all samples</div>
+                        <div class="redundancy-stat-label">Metagenomic coverage (C_total)</div>
+                        <div class="redundancy-stat-value">${metaBlock.coverage_percent != null ? fmtFloat(metaBlock.coverage_percent, 1) + "%" : "NA"}</div>
+                        <div class="redundancy-stat-note">Pooled reads across all samples</div>
                     </div>
                     <div class="redundancy-stat-item">
-                        <div class="redundancy-stat-label">Total reads</div>
-                        <div class="redundancy-stat-value">${fmtMillions(data.total_reads)}</div>
-                        <div class="redundancy-stat-note">Sum of reads included in pooled metagenomic Nonpareil</div>
+                        <div class="redundancy-stat-label">Metagenomic LR target (95%)</div>
+                        <div class="redundancy-stat-value">${fmtMillions(metaBlock.lr_95_reads)}</div>
+                        <div class="redundancy-stat-note">Reads estimated for 95% metagenomic coverage</div>
                     </div>
                     <div class="redundancy-stat-item">
-                        <div class="redundancy-stat-label">LR target (95%)</div>
-                        <div class="redundancy-stat-value">${fmtMillions(data.lr_95_reads)}</div>
-                        <div class="redundancy-stat-note">Reads estimated for 95% coverage</div>
+                        <div class="redundancy-stat-label">Marker coverage (C_total)</div>
+                        <div class="redundancy-stat-value">${prokBlock.coverage_percent != null ? fmtFloat(prokBlock.coverage_percent, 1) + "%" : "NA"}</div>
+                        <div class="redundancy-stat-note">Pooled marker coverage across all samples</div>
+                    </div>
+                    <div class="redundancy-stat-item">
+                        <div class="redundancy-stat-label">Marker LR target (95%)</div>
+                        <div class="redundancy-stat-value">${fmtMillions(prokBlock.lr_95_reads)}</div>
+                        <div class="redundancy-stat-note">Reads estimated for 95% marker coverage</div>
+                    </div>
+                    <div class="redundancy-stat-item">
+                        <div class="redundancy-stat-label">Total pooled reads</div>
+                        <div class="redundancy-stat-value">${fmtMillions(metaBlock.total_reads ?? prokBlock.total_reads)}</div>
+                        <div class="redundancy-stat-note">Sum of reads considered by pooled Nonpareil</div>
                     </div>
                 </div>
                 <div class="lr-target-plot-container">
-                    <div id="overall-read-plot" class="plotly-chart" style="height:240px;"></div>
+                    <div id="overall-coverage-plot" class="plotly-chart" style="height:240px;"></div>
                 </div>
                 <p class="small-note">
-                    Horizontal bar shows pooled reads; dashed line marks the 95% LR_reads target. Bars are green (≥ target),
-                    yellow (50–99% of target) or red (&lt; 50% of target).
+                    The horizontal bar shows pooled reads; vertical dashed lines mark the metagenomic (blue) and marker (purple)
+                    95% LR_reads targets.
                 </p>
             </div>
         </details>
@@ -2156,76 +2183,1623 @@ function addOverallReadCoverageSection(parent, data) {
 
     parent.appendChild(div);
 
-    const plotDiv = div.querySelector("#overall-read-plot");
-    const total = Number(data.total_reads);
-    const target = Number(data.lr_95_reads);
-
-    if (!isFinite(total) || !isFinite(target) || target <= 0) {
-        plotDiv.outerHTML = `<div class="small-note">Insufficient pooled read / target information to draw coverage bar.</div>`;
+    const plotDiv = div.querySelector("#overall-coverage-plot");
+    const totalReads = Number(metaBlock.total_reads ?? prokBlock.total_reads);
+    if (!isFinite(totalReads) || totalReads <= 0) {
+        plotDiv.outerHTML = `<div class="small-note">Pooled read information was unavailable for the combined coverage plot.</div>`;
         return;
     }
     if (typeof Plotly === "undefined") {
-        plotDiv.outerHTML = `<div class="small-note">Plotly failed to load; cannot render overall metagenomic coverage bar.</div>`;
+        plotDiv.outerHTML = `<div class="small-note">Plotly failed to load; cannot render combined coverage plot.</div>`;
         return;
     }
 
-    const ratio = total / target;
-    const color = ratio >= 1 ? "#4caf50" : ratio >= 0.5 ? "#f9a825" : "#c62828";
+    const barColor = combinedFlag === 1 ? "#4caf50" : combinedFlag === 2 ? "#f9a825" : "#c62828";
+    const shapes = [];
+    const annotations = [];
+
+    const addTargetLine = (targetValue, label, color) => {
+        if (!isFinite(targetValue) || targetValue <= 0) return;
+        shapes.push({
+            type: "line",
+            xref: "x",
+            yref: "paper",
+            x0: targetValue,
+            x1: targetValue,
+            y0: 0,
+            y1: 1,
+            line: {color, width: 1.4, dash: "dot"}
+        });
+        annotations.push({
+            x: targetValue,
+            yref: "paper",
+            y: 1.04,
+            xanchor: "left",
+            text: label,
+            showarrow: false,
+            font: {size: 11, color},
+        });
+    };
+
+    addTargetLine(Number(metaBlock.lr_95_reads), "Metagenomic target", "#1e88e5");
+    addTargetLine(Number(prokBlock.lr_95_reads), "Marker target", "#8e24aa");
 
     const fig = {
         type: "bar",
         orientation: "h",
-        x: [total],
+        x: [totalReads],
         y: ["Pooled reads"],
-        marker: {color},
+        marker: {color: barColor},
         hovertemplate: [
             `<b>Pooled reads</b>`,
-            `Reads: ${fmtMillions(total)}`,
-            `Target (95% LR): ${fmtMillions(target)}`,
-            `Relative to target: ${(ratio * 100).toFixed(1)}%`
-        ].join("<br>") + "<extra></extra>",
+            `Reads: ${fmtMillions(totalReads)}`,
+            metaBlock.lr_95_reads ? `Metagenomic target: ${fmtMillions(metaBlock.lr_95_reads)}` : null,
+            prokBlock.lr_95_reads ? `Marker target: ${fmtMillions(prokBlock.lr_95_reads)}` : null,
+        ].filter(Boolean).join("<br>") + "<extra></extra>",
     };
 
-    const rangeMax = Math.max(total, target) * 1.1;
+    const maxTarget = Math.max(
+        totalReads,
+        Number(metaBlock.lr_95_reads) || 0,
+        Number(prokBlock.lr_95_reads) || 0,
+    );
+    const rangeMax = Math.max(totalReads, maxTarget) * 1.1;
 
     const layout = {
         height: 220,
-        margin: {l: 120, r: 30, t: 10, b: 40},
+        margin: {l: 140, r: 30, t: 10, b: 40},
         xaxis: {
             title: "Reads",
             range: [0, rangeMax],
             separatethousands: true,
         },
         yaxis: {showticklabels: true},
-        shapes: [
-            {
-                type: "line",
-                xref: "x",
-                yref: "paper",
-                x0: target,
-                x1: target,
-                y0: 0,
-                y1: 1,
-                line: {color: "#000", width: 1.4, dash: "dot"}
-            }
-        ],
-        annotations: [
-            {
-                x: target,
-                yref: "paper",
-                y: 1.02,
-                xanchor: "left",
-                text: "95% target",
-                showarrow: false,
-                font: {size: 11}
-            }
-        ],
+        shapes,
+        annotations,
         hovermode: "closest",
         showlegend: false,
     };
 
     const config = {displaylogo: false, responsive: true};
     Plotly.newPlot(plotDiv, [fig], layout, config);
+    window.addEventListener("resize", () => Plotly.Plots.resize(plotDiv));
+}
+
+/* Prokaryotic coverage (markers Nonpareil) */
+function addRedundancyMarkersSection(parent, data, redBiplotPerSample) {
+    if (!data) return;
+    const div = document.createElement("div");
+    div.className = "section " + flagClass(data.flag_redundancy_markers);
+
+    const msg = data.message_redundancy_markers || "";
+
+    const nLR = data.n_samples_with_lr || 0;
+    const nBelow = data.n_samples_lr_exceeds_depth || 0;
+    const nAtOrAbove = nLR ? (nLR - nBelow) : 0;
+    const fracAtOrAbove = nLR ? (100 * nAtOrAbove / nLR) : null;
+    const coverageVals = (Array.isArray(data.coverage_ratios) && data.coverage_ratios.length)
+        ? data.coverage_ratios.filter(v => typeof v === "number" && isFinite(v))
+        : (data.coverage_median !== undefined ? [data.coverage_median] : []);
+    const covMedian = data.coverage_median != null ? data.coverage_median : median(coverageVals);
+    const covCV = data.coverage_cv != null ? data.coverage_cv : coeffVar(coverageVals);
+
+    const status = sectionStatus("Prokaryotic coverage", data.flag_redundancy_markers);
+
+    div.innerHTML = `
+        <h2 class="section-title">Prokaryotic coverage of samples</h2>
+        <p class="section-intro">
+            This section evaluates coverage of marker genes relative to the 95% Nonpareil target.
+        </p>
+        <details>
+            <summary>
+                <span class="status-emoji">${status.emoji}</span>
+                <span class="status-text">${status.text}</span>
+                <span class="summary-hint">(click to expand)</span>
+            </summary>
+            <div class="content">
+                <p class="summary-message">${msg}</p>
+                <div class="redundancy-stats">
+                    <div class="redundancy-stat-item">
+                        <div class="redundancy-stat-label">Coverage median</div>
+                        <div class="redundancy-stat-value">${covMedian === null ? "NA" : fmtFloat(covMedian * 100, 1)}%</div>
+                        <div class="redundancy-stat-note">Estimated Nonpareil coverage (C_total)</div>
+                    </div>
+                    <div class="redundancy-stat-item">
+                        <div class="redundancy-stat-label">Coverage CV</div>
+                        <div class="redundancy-stat-value">${covCV === null ? "NA" : fmtFloat(covCV, 3)}</div>
+                        <div class="redundancy-stat-note">Coefficient of variation of coverage estimates</div>
+                    </div>
+                    <div class="redundancy-stat-item">
+                        <div class="redundancy-stat-label">Samples above LR target</div>
+                        <div class="redundancy-stat-value">
+                            ${fmtInt(nAtOrAbove)} / ${fmtInt(nLR)}
+                        </div>
+                        <div class="redundancy-stat-note">
+                            ${fracAtOrAbove === null ? "NA" : fmtFloat(fracAtOrAbove, 1) + "%"} of samples with LR target
+                        </div>
+                    </div>
+                </div>
+                <p class="small-note">
+                    LR target used: ${data.lr_target_used || "NA"}% of marker-based diversity (Nonpareil 95% LR_reads).
+                </p>
+                <div class="lr-target-markers-plot-container">
+                    <div id="lr-target-markers-plot" class="plotly-chart"></div>
+                </div>
+                <p class="small-note">
+                    Interactive barplot of marker coverage vs. the 95% target. The dashed midline corresponds
+                    to the 95% coverage target (0 on the Y axis). Positive bars show excess coverage (1×, 2×, ...),
+                    while negative bars show how many times more coverage would be needed (-1×, -2×, -3× etc.).
+                    Bars more than 3× short of the target are shown in red.
+                </p>
+            </div>
+        </details>
+    `;
+    parent.appendChild(div);
+
+    const combined = (redBiplotPerSample || []).map(r => {
+        const coverage = r.coverage_markers != null ? Number(r.coverage_markers) : null;
+        let ratio = null;
+        if (coverage != null && coverage > 0) {
+            ratio = coverage / 0.95;
+        }
+        return {
+            sample: r.sample,
+            coverage,
+            ratio
+        };
+    }).filter(d => d.ratio != null);
+
+    const plotDiv = div.querySelector("#lr-target-markers-plot");
+
+    if (!combined.length) {
+        plotDiv.outerHTML = `<div class="small-note">No per-sample marker coverage / LR target information available for marker redundancy plot.</div>`;
+        return;
+    }
+
+    if (typeof Plotly === "undefined") {
+        plotDiv.outerHTML = `<div class="small-note">Plotly failed to load; cannot render prokaryotic coverage plot.</div>`;
+        return;
+    }
+
+    const transformRatio = (r) => (r >= 1 ? r - 1 : -(1 / r - 1));
+
+    const samples = combined.map((d, idx) => d.sample || `sample ${idx + 1}`);
+    const values = combined.map(d => transformRatio(d.ratio));
+
+    const colors = values.map(v => {
+        if (v >= 0) return "#4caf50";
+        if (v >= -3) return "#ffa000";
+        return "#c62828";
+    });
+
+    const hover = combined.map((d, idx) => {
+        const v = values[idx];
+        const extraOrNeeded = v >= 0 ? (d.ratio - 1) : (1 / d.ratio - 1);
+        return [
+            `<b>${d.sample || `sample ${idx + 1}`}</b>`,
+            `Coverage (markers): ${(d.coverage * 100).toFixed(2)}%`,
+            `Relative to 95% target: ${(d.ratio * 100).toFixed(1)}%`,
+            v >= 0
+                ? `Excess coverage: ${extraOrNeeded.toFixed(2)}× above target`
+                : `Additional needed: ${extraOrNeeded.toFixed(2)}× more to reach target`
+        ].filter(Boolean).join("<br>");
+    });
+
+    const maxAbsRaw = Math.max(...values.map(v => Math.abs(v)), 0);
+    const maxAbs = Math.max(1, maxAbsRaw * 1.05);
+    const maxTick = Math.max(1, Math.ceil(maxAbs));
+    const stepTick = Math.max(1, Math.round(maxTick / 5));
+    const tickvals = [];
+    const ticktext = [];
+    for (let v = -maxTick; v <= maxTick; v += stepTick) {
+        if (!tickvals.includes(v)) {
+            tickvals.push(v);
+            ticktext.push(v === 0 ? "target" : `${v > 0 ? v : -v}×${v < 0 ? " short" : ""}`);
+        }
+    }
+
+    const shapes = [
+        {
+            type: "line",
+            xref: "paper",
+            x0: 0,
+            x1: 1,
+            y0: 0,
+            y1: 0,
+            line: {color: "#000", width: 1.4, dash: "dot"}
+        }
+    ];
+    const annotations = [
+        {
+            xref: "paper",
+            x: 0.995,
+            y: 0,
+            xanchor: "right",
+            yanchor: "bottom",
+            text: "95% coverage target",
+            showarrow: false,
+            font: {color: "#000", size: 11}
+        }
+    ];
+
+    if (maxAbs >= 3) {
+        shapes.push({
+            type: "line",
+            xref: "paper",
+            x0: 0,
+            x1: 1,
+            y0: -3,
+            y1: -3,
+            line: {color: "#c62828", width: 1.4, dash: "dot"}
+        });
+        annotations.push({
+            xref: "paper",
+            x: 0.995,
+            y: -3,
+            xanchor: "right",
+            yanchor: "bottom",
+            text: "-3×",
+            showarrow: false,
+            font: {color: "#c62828", size: 11}
+        });
+    }
+
+    const n = samples.length;
+    const tickAngle = n > 80 ? -75 : n > 40 ? -60 : -45;
+    const tickSize = n > 120 ? 7 : n > 60 ? 8 : 10;
+    const bottomMargin = n > 80 ? 200 : n > 40 ? 150 : 110;
+
+    const trace = {
+        type: "bar",
+        x: samples,
+        y: values,
+        marker: {color: colors},
+        hovertemplate: "%{customdata}<extra></extra>",
+        customdata: hover,
+    };
+
+    const layout = {
+        height: 360,
+        margin: {l: 80, r: 28, t: 16, b: bottomMargin},
+        bargap: 0.18,
+        hovermode: "closest",
+        showlegend: false,
+        xaxis: {
+            title: "Samples",
+            type: "category",
+            tickangle: tickAngle,
+            tickfont: {size: tickSize},
+            automargin: true,
+        },
+        yaxis: {
+            title: "Marker coverage in relation to target completeness",
+            range: [-maxAbs, maxAbs],
+            tickvals,
+            ticktext,
+            separatethousands: true,
+            zeroline: false,
+        },
+        shapes,
+        annotations,
+    };
+
+    const config = {
+        displaylogo: false,
+        responsive: true,
+        modeBarButtonsToRemove: ["toggleSpikelines", "autoScale2d"],
+    };
+
+    Plotly.newPlot(plotDiv, [trace], layout, config);
+    window.addEventListener("resize", () => Plotly.Plots.resize(plotDiv));
+}
+
+/* Sample clusters */
+function addClustersSection(parent, clusters) {
+    if (!clusters) return;
+    const div = document.createElement("div");
+    div.className = "section " + flagClass(clusters.flag_clusters);
+
+    const msg = clusters.message_clusters || "";
+    const markers = clusters.markers || {};
+    const reads = clusters.reads || {};
+
+    const nClustersMarkers = markers.n_clusters != null ? markers.n_clusters : "NA";
+    const nClustersReads = reads.n_clusters != null ? reads.n_clusters : "NA";
+    const withinMarkers = markers.mean_within_distance != null ? markers.mean_within_distance : null;
+    const betweenMarkers = markers.mean_between_distance != null ? markers.mean_between_distance : null;
+    const withinReads = reads.mean_within_distance != null ? reads.mean_within_distance : null;
+    const betweenReads = reads.mean_between_distance != null ? reads.mean_between_distance : null;
+
+    const status = sectionStatus("Sample clusters", clusters.flag_clusters);
+
+    div.innerHTML = `
+        <h2 class="section-title">Sample clusters</h2>
+        <p class="section-intro">
+            This section highlights similarity-based clusters inferred from Mash distances on reads and marker genes.
+        </p>
+        <details>
+            <summary>
+                <span class="status-emoji">${status.emoji}</span>
+                <span class="status-text">${status.text}</span>
+                <span class="summary-hint">(click to expand)</span>
+            </summary>
+            <div class="content">
+                <p class="summary-message">${msg}</p>
+                <div class="cluster-stats">
+                    <div class="cluster-stat-item">
+                        <div class="cluster-stat-label">Marker-based clusters</div>
+                        <div class="cluster-stat-value">${fmtInt(nClustersMarkers)}</div>
+                        <div class="cluster-stat-note">Clusters inferred from marker-based Mash distances</div>
+                    </div>
+                    <div class="cluster-stat-item">
+                        <div class="cluster-stat-label">Read-based clusters</div>
+                        <div class="cluster-stat-value">${fmtInt(nClustersReads)}</div>
+                        <div class="cluster-stat-note">Clusters inferred from read-based Mash distances</div>
+                    </div>
+                    <div class="cluster-stat-item">
+                        <div class="cluster-stat-label">Within / between (markers)</div>
+                        <div class="cluster-stat-value">${fmtFloat(withinMarkers, 3)} / ${fmtFloat(betweenMarkers, 3)}</div>
+                        <div class="cluster-stat-note">Mean Mash distance within / between marker clusters</div>
+                    </div>
+                    <div class="cluster-stat-item">
+                        <div class="cluster-stat-label">Within / between (reads)</div>
+                        <div class="cluster-stat-value">${fmtFloat(withinReads, 3)} / ${fmtFloat(betweenReads, 3)}</div>
+                        <div class="cluster-stat-note">Mean Mash distance within / between read clusters</div>
+                    </div>
+                </div>
+                <p class="small-note">
+                    Heatmap below shows cluster assignments per sample. Rows correspond to marker-based
+                    and read-based clustering; columns are samples. Colour palettes are distinct per row,
+                    so cluster IDs are not directly comparable between the two. Samples are ordered to keep
+                    cluster mates adjacent.
+                </p>
+                <div class="clusters-heatmap-scroll" style="width:100%; overflow-x:auto; overflow-y:visible;">
+                    <div id="clusters-heatmap-plot" class="plotly-chart" style="min-width:860px;"></div>
+                </div>
+                <p class="small-note">
+                    Hover over tiles for exact cluster assignments. Samples without an assignment in a given
+                    row are shown as light grey.
+                </p>
+            </div>
+        </details>
+    `;
+    parent.appendChild(div);
+
+    const plotDiv = div.querySelector("#clusters-heatmap-plot");
+
+    const markersPS = (markers.clusters || []).flatMap(cl => {
+        const cid = cl.cluster_id;
+        const members = cl.members || [];
+        return members.map(m => ({ sample: m, cluster: cid }));
+    });
+
+    const readsPS = (reads.clusters || []).flatMap(cl => {
+        const cid = cl.cluster_id;
+        const members = cl.members || [];
+        return members.map(m => ({ sample: m, cluster: cid }));
+    });
+
+    if (!markersPS.length && !readsPS.length) {
+        plotDiv.outerHTML = `<div class="small-note">Per-sample cluster assignments not available; heatmap cannot be drawn.</div>`;
+        return;
+    }
+
+    const markersMap = {};
+    markersPS.forEach(d => {
+        if (d.sample != null) markersMap[d.sample] = d.cluster;
+    });
+
+    const readsMap = {};
+    readsPS.forEach(d => {
+        if (d.sample != null) readsMap[d.sample] = d.cluster;
+    });
+
+    const sampleSet = new Set();
+    Object.keys(markersMap).forEach(s => sampleSet.add(s));
+    Object.keys(readsMap).forEach(s => sampleSet.add(s));
+    const samples = Array.from(sampleSet);
+    samples.sort();
+
+    const nSamples = samples.length;
+    if (!nSamples) {
+        plotDiv.outerHTML = `<div class="small-note">Per-sample cluster assignments not available; heatmap cannot be drawn.</div>`;
+        return;
+    }
+
+    const markerPalette = [
+        "#08306b", "#08519c", "#2171b5", "#4292c6",
+        "#41b6c4", "#1d91c0", "#2c7fb8", "#7fcdbb",
+        "#0c2c84", "#4eb3d3", "#2b8cbe", "#a1dab4"
+    ];
+    const readPalette = [
+        "#7f0000", "#b30000", "#e31a1c", "#ff7f00",
+        "#f03b20", "#bd0026", "#fd8d3c", "#fc4e2a",
+        "#b10026", "#dd1c77", "#df65b0", "#ff1493"
+    ];
+
+    function buildClusterColorMap(map, palette) {
+        const clusters = Array.from(new Set(
+            Object.values(map).filter(v => v !== null && v !== undefined)
+        ));
+        clusters.sort((a, b) => {
+            const na = Number(a), nb = Number(b);
+            if (!isNaN(na) && !isNaN(nb)) return na - nb;
+            return String(a).localeCompare(String(b));
+        });
+        const colorMap = {};
+        clusters.forEach((cl, idx) => {
+            colorMap[cl] = palette[idx % palette.length];
+        });
+        return colorMap;
+    }
+
+    const markerColors = buildClusterColorMap(markersMap, markerPalette);
+    const readColors = buildClusterColorMap(readsMap, readPalette);
+
+    const markerClustersPresent = Object.keys(markerColors).length > 0;
+    const readClustersPresent = Object.keys(readColors).length > 0;
+
+    // Order to keep cluster mates adjacent; prefer marker clusters, else read clusters.
+    let sampleOrder = [...samples];
+    const groupBy = markerClustersPresent ? markersMap : (readClustersPresent ? readsMap : null);
+    if (groupBy) {
+        const clList = Array.from(new Set(
+            sampleOrder
+                .map(s => groupBy[s])
+                .filter(v => v !== null && v !== undefined)
+        )).sort((a, b) => {
+            const na = Number(a), nb = Number(b);
+            if (!isNaN(na) && !isNaN(nb)) return na - nb;
+            return String(a).localeCompare(String(b));
+        });
+        const grouped = [];
+        clList.forEach(cl => {
+            sampleOrder.forEach(s => {
+                if (groupBy[s] === cl) grouped.push(s);
+            });
+        });
+        const noCluster = sampleOrder.filter(s => groupBy[s] === null || groupBy[s] === undefined);
+        sampleOrder = [...grouped, ...noCluster];
+    }
+
+    if (typeof Plotly === "undefined") {
+        plotDiv.outerHTML = `<div class="small-note">Plotly failed to load; cannot render sample clusters heatmap.</div>`;
+        return;
+    }
+
+    const markerClusterList = Object.keys(markerColors);
+    const readClusterList = Object.keys(readColors);
+
+    const markerClusterMap = {};
+    markerClusterList.forEach((cl, idx) => { markerClusterMap[cl] = idx; });
+    const readStart = markerClusterList.length;
+    const readClusterMap = {};
+    readClusterList.forEach((cl, idx) => { readClusterMap[cl] = readStart + idx; });
+
+    const missingVal = -1;
+    const maxVal = Math.max(
+        markerClusterList.length ? markerClusterList.length - 1 : 0,
+        readClusterList.length ? readStart + readClusterList.length - 1 : 0,
+        0
+    );
+
+    const coldPalette = [
+        "#08306b", "#08519c", "#2171b5", "#2c7fb8", "#41b6c4",
+        "#66c2a4", "#7bccc4", "#a1dab4", "#c7e9c0", "#edf8fb"
+    ];
+    const warmPalette = [
+        "#7f0000", "#b30000", "#e31a1c", "#fc4e2a", "#fd8d3c",
+        "#feb24c", "#ffdd57", "#ffb300", "#ff7f00", "#d95f0e"
+    ];
+
+    const colorscale = [];
+    const range = maxVal - missingVal || 1;
+    colorscale.push([0, "#ffffff"]);
+    markerClusterList.forEach((cl, idx) => {
+        const val = markerClusterMap[cl];
+        const pos = (val - missingVal) / range;
+        const color = coldPalette[idx % coldPalette.length];
+        colorscale.push([pos, color]);
+    });
+    readClusterList.forEach((cl, idx) => {
+        const val = readClusterMap[cl];
+        const pos = (val - missingVal) / range;
+        const color = warmPalette[idx % warmPalette.length];
+        colorscale.push([pos, color]);
+    });
+    colorscale.sort((a, b) => a[0] - b[0]);
+
+    const yLabels = ["Markers", "Reads"];
+    const z = [[], []];
+    const text = [[], []];
+    sampleOrder.forEach(sample => {
+        const mCl = markersMap.hasOwnProperty(sample) ? markersMap[sample] : null;
+        const rCl = readsMap.hasOwnProperty(sample) ? readsMap[sample] : null;
+        const mVal = mCl === null || mCl === undefined ? missingVal : markerClusterMap[mCl];
+        const rVal = rCl === null || rCl === undefined ? missingVal : readClusterMap[rCl];
+        z[0].push(mVal);
+        z[1].push(rVal);
+        text[0].push(
+            mCl === null || mCl === undefined
+                ? `${sample}<br>Markers: not assigned`
+                : `${sample}<br>Markers cluster: ${mCl}`
+        );
+        text[1].push(
+            rCl === null || rCl === undefined
+                ? `${sample}<br>Reads: not assigned`
+                : `${sample}<br>Reads cluster: ${rCl}`
+        );
+    });
+
+    const heatmap = {
+        type: "heatmap",
+        x: sampleOrder,
+        y: yLabels,
+        z,
+        text,
+        hovertemplate: "%{text}<extra></extra>",
+        colorscale,
+        zmin: missingVal,
+        zmax: Math.max(maxVal, 0),
+        showscale: false,
+        xgap: 1,
+        ygap: 1,
+    };
+
+    const tickAngle = sampleOrder.length > 18 ? -60 : -45;
+    const bottomMargin = sampleOrder.length > 18 ? 200 : 150;
+
+    const layoutHeight = 140 + sampleOrder.length * 8;
+    plotDiv.style.height = `${layoutHeight}px`;
+
+    const layout = {
+        height: layoutHeight,
+        margin: {l: 90, r: 20, t: 20, b: bottomMargin},
+        xaxis: {
+            tickangle: tickAngle,
+            automargin: true,
+        },
+        yaxis: {
+            automargin: true,
+            autorange: "reversed",
+        },
+        hovermode: "closest",
+        showlegend: false,
+    };
+
+    const config = {
+        displaylogo: false,
+        responsive: true,
+        modeBarButtonsToRemove: ["toggleSpikelines", "autoScale2d"],
+    };
+
+    Plotly.newPlot(plotDiv, [heatmap], layout, config);
+    window.addEventListener("resize", () => Plotly.Plots.resize(plotDiv));
+}
+
+/* Overall metagenomic coverage summary */
+/* Prokaryotic coverage (markers Nonpareil) */
+function addRedundancyMarkersSection(parent, data, redBiplotPerSample) {
+    if (!data) return;
+    const div = document.createElement("div");
+    div.className = "section " + flagClass(data.flag_redundancy_markers);
+
+    const msg = data.message_redundancy_markers || "";
+
+    const nLR = data.n_samples_with_lr || 0;
+    const nBelow = data.n_samples_lr_exceeds_depth || 0;
+    const nAtOrAbove = nLR ? (nLR - nBelow) : 0;
+    const fracAtOrAbove = nLR ? (100 * nAtOrAbove / nLR) : null;
+    const coverageVals = (Array.isArray(data.coverage_ratios) && data.coverage_ratios.length)
+        ? data.coverage_ratios.filter(v => typeof v === "number" && isFinite(v))
+        : (data.coverage_median !== undefined ? [data.coverage_median] : []);
+    const covMedian = data.coverage_median != null ? data.coverage_median : median(coverageVals);
+    const covCV = data.coverage_cv != null ? data.coverage_cv : coeffVar(coverageVals);
+
+    const status = sectionStatus("Prokaryotic coverage", data.flag_redundancy_markers);
+
+    div.innerHTML = `
+        <h2 class="section-title">Prokaryotic coverage of samples</h2>
+        <p class="section-intro">
+            This section evaluates coverage of marker genes relative to the 95% Nonpareil target.
+        </p>
+        <details>
+            <summary>
+                <span class="status-emoji">${status.emoji}</span>
+                <span class="status-text">${status.text}</span>
+                <span class="summary-hint">(click to expand)</span>
+            </summary>
+            <div class="content">
+                <p class="summary-message">${msg}</p>
+                <div class="redundancy-stats">
+                    <div class="redundancy-stat-item">
+                        <div class="redundancy-stat-label">Coverage median</div>
+                        <div class="redundancy-stat-value">${covMedian === null ? "NA" : fmtFloat(covMedian * 100, 1)}%</div>
+                        <div class="redundancy-stat-note">Estimated Nonpareil coverage (C_total)</div>
+                    </div>
+                    <div class="redundancy-stat-item">
+                        <div class="redundancy-stat-label">Coverage CV</div>
+                        <div class="redundancy-stat-value">${covCV === null ? "NA" : fmtFloat(covCV, 3)}</div>
+                        <div class="redundancy-stat-note">Coefficient of variation of coverage estimates</div>
+                    </div>
+                    <div class="redundancy-stat-item">
+                        <div class="redundancy-stat-label">Samples above LR target</div>
+                        <div class="redundancy-stat-value">
+                            ${fmtInt(nAtOrAbove)} / ${fmtInt(nLR)}
+                        </div>
+                        <div class="redundancy-stat-note">
+                            ${fracAtOrAbove === null ? "NA" : fmtFloat(fracAtOrAbove, 1) + "%"} of samples with LR target
+                        </div>
+                    </div>
+                </div>
+                <p class="small-note">
+                    LR target used: ${data.lr_target_used || "NA"}% of marker-based diversity (Nonpareil 95% LR_reads).
+                </p>
+                <div class="lr-target-markers-plot-container">
+                    <div id="lr-target-markers-plot" class="plotly-chart"></div>
+                </div>
+                <p class="small-note">
+                    Interactive barplot of marker coverage vs. the 95% target. The dashed midline corresponds
+                    to the 95% coverage target (0 on the Y axis). Positive bars show excess coverage (1×, 2×, ...),
+                    while negative bars show how many times more coverage would be needed (-1×, -2×, -3× etc.).
+                    Bars more than 3× short of the target are shown in red.
+                </p>
+            </div>
+        </details>
+    `;
+    parent.appendChild(div);
+
+    const combined = (redBiplotPerSample || []).map(r => {
+        const coverage = r.coverage_markers != null ? Number(r.coverage_markers) : null;
+        let ratio = null;
+        if (coverage != null && coverage > 0) {
+            ratio = coverage / 0.95;
+        }
+        return {
+            sample: r.sample,
+            coverage,
+            ratio
+        };
+    }).filter(d => d.ratio != null);
+
+    const plotDiv = div.querySelector("#lr-target-markers-plot");
+
+    if (!combined.length) {
+        plotDiv.outerHTML = `<div class="small-note">No per-sample marker coverage / LR target information available for marker redundancy plot.</div>`;
+        return;
+    }
+
+    if (typeof Plotly === "undefined") {
+        plotDiv.outerHTML = `<div class="small-note">Plotly failed to load; cannot render prokaryotic coverage plot.</div>`;
+        return;
+    }
+
+    const transformRatio = (r) => (r >= 1 ? r - 1 : -(1 / r - 1));
+
+    const samples = combined.map((d, idx) => d.sample || `sample ${idx + 1}`);
+    const values = combined.map(d => transformRatio(d.ratio));
+
+    const colors = values.map(v => {
+        if (v >= 0) return "#4caf50";
+        if (v >= -3) return "#ffa000";
+        return "#c62828";
+    });
+
+    const hover = combined.map((d, idx) => {
+        const v = values[idx];
+        const extraOrNeeded = v >= 0 ? (d.ratio - 1) : (1 / d.ratio - 1);
+        return [
+            `<b>${d.sample || `sample ${idx + 1}`}</b>`,
+            `Coverage (markers): ${(d.coverage * 100).toFixed(2)}%`,
+            `Relative to 95% target: ${(d.ratio * 100).toFixed(1)}%`,
+            v >= 0
+                ? `Excess coverage: ${extraOrNeeded.toFixed(2)}× above target`
+                : `Additional needed: ${extraOrNeeded.toFixed(2)}× more to reach target`
+        ].filter(Boolean).join("<br>");
+    });
+
+    const maxAbsRaw = Math.max(...values.map(v => Math.abs(v)), 0);
+    const maxAbs = Math.max(1, maxAbsRaw * 1.05);
+    const maxTick = Math.max(1, Math.ceil(maxAbs));
+    const stepTick = Math.max(1, Math.round(maxTick / 5));
+    const tickvals = [];
+    const ticktext = [];
+    for (let v = -maxTick; v <= maxTick; v += stepTick) {
+        if (!tickvals.includes(v)) {
+            tickvals.push(v);
+            ticktext.push(v === 0 ? "target" : `${v > 0 ? v : -v}×${v < 0 ? " short" : ""}`);
+        }
+    }
+
+    const shapes = [
+        {
+            type: "line",
+            xref: "paper",
+            x0: 0,
+            x1: 1,
+            y0: 0,
+            y1: 0,
+            line: {color: "#000", width: 1.4, dash: "dot"}
+        }
+    ];
+    const annotations = [
+        {
+            xref: "paper",
+            x: 0.995,
+            y: 0,
+            xanchor: "right",
+            yanchor: "bottom",
+            text: "95% coverage target",
+            showarrow: false,
+            font: {color: "#000", size: 11}
+        }
+    ];
+
+    if (maxAbs >= 3) {
+        shapes.push({
+            type: "line",
+            xref: "paper",
+            x0: 0,
+            x1: 1,
+            y0: -3,
+            y1: -3,
+            line: {color: "#c62828", width: 1.4, dash: "dot"}
+        });
+        annotations.push({
+            xref: "paper",
+            x: 0.995,
+            y: -3,
+            xanchor: "right",
+            yanchor: "bottom",
+            text: "-3×",
+            showarrow: false,
+            font: {color: "#c62828", size: 11}
+        });
+    }
+
+    const n = samples.length;
+    const tickAngle = n > 80 ? -75 : n > 40 ? -60 : -45;
+    const tickSize = n > 120 ? 7 : n > 60 ? 8 : 10;
+    const bottomMargin = n > 80 ? 200 : n > 40 ? 150 : 110;
+
+    const trace = {
+        type: "bar",
+        x: samples,
+        y: values,
+        marker: {color: colors},
+        hovertemplate: "%{customdata}<extra></extra>",
+        customdata: hover,
+    };
+
+    const layout = {
+        height: 360,
+        margin: {l: 80, r: 28, t: 16, b: bottomMargin},
+        bargap: 0.18,
+        hovermode: "closest",
+        showlegend: false,
+        xaxis: {
+            title: "Samples",
+            type: "category",
+            tickangle: tickAngle,
+            tickfont: {size: tickSize},
+            automargin: true,
+        },
+        yaxis: {
+            title: "Marker coverage in relation to target completeness",
+            range: [-maxAbs, maxAbs],
+            tickvals,
+            ticktext,
+            separatethousands: true,
+            zeroline: false,
+        },
+        shapes,
+        annotations,
+    };
+
+    const config = {
+        displaylogo: false,
+        responsive: true,
+        modeBarButtonsToRemove: ["toggleSpikelines", "autoScale2d"],
+    };
+
+    Plotly.newPlot(plotDiv, [trace], layout, config);
+    window.addEventListener("resize", () => Plotly.Plots.resize(plotDiv));
+}
+
+/* Sample clusters */
+function addClustersSection(parent, clusters) {
+    if (!clusters) return;
+    const div = document.createElement("div");
+    div.className = "section " + flagClass(clusters.flag_clusters);
+
+    const msg = clusters.message_clusters || "";
+    const markers = clusters.markers || {};
+    const reads = clusters.reads || {};
+
+    const nClustersMarkers = markers.n_clusters != null ? markers.n_clusters : "NA";
+    const nClustersReads = reads.n_clusters != null ? reads.n_clusters : "NA";
+    const withinMarkers = markers.mean_within_distance != null ? markers.mean_within_distance : null;
+    const betweenMarkers = markers.mean_between_distance != null ? markers.mean_between_distance : null;
+    const withinReads = reads.mean_within_distance != null ? reads.mean_within_distance : null;
+    const betweenReads = reads.mean_between_distance != null ? reads.mean_between_distance : null;
+
+    const status = sectionStatus("Sample clusters", clusters.flag_clusters);
+
+    div.innerHTML = `
+        <h2 class="section-title">Sample clusters</h2>
+        <p class="section-intro">
+            This section highlights similarity-based clusters inferred from Mash distances on reads and marker genes.
+        </p>
+        <details>
+            <summary>
+                <span class="status-emoji">${status.emoji}</span>
+                <span class="status-text">${status.text}</span>
+                <span class="summary-hint">(click to expand)</span>
+            </summary>
+            <div class="content">
+                <p class="summary-message">${msg}</p>
+                <div class="cluster-stats">
+                    <div class="cluster-stat-item">
+                        <div class="cluster-stat-label">Marker-based clusters</div>
+                        <div class="cluster-stat-value">${fmtInt(nClustersMarkers)}</div>
+                        <div class="cluster-stat-note">Clusters inferred from marker-based Mash distances</div>
+                    </div>
+                    <div class="cluster-stat-item">
+                        <div class="cluster-stat-label">Read-based clusters</div>
+                        <div class="cluster-stat-value">${fmtInt(nClustersReads)}</div>
+                        <div class="cluster-stat-note">Clusters inferred from read-based Mash distances</div>
+                    </div>
+                    <div class="cluster-stat-item">
+                        <div class="cluster-stat-label">Within / between (markers)</div>
+                        <div class="cluster-stat-value">${fmtFloat(withinMarkers, 3)} / ${fmtFloat(betweenMarkers, 3)}</div>
+                        <div class="cluster-stat-note">Mean Mash distance within / between marker clusters</div>
+                    </div>
+                    <div class="cluster-stat-item">
+                        <div class="cluster-stat-label">Within / between (reads)</div>
+                        <div class="cluster-stat-value">${fmtFloat(withinReads, 3)} / ${fmtFloat(betweenReads, 3)}</div>
+                        <div class="cluster-stat-note">Mean Mash distance within / between read clusters</div>
+                    </div>
+                </div>
+                <p class="small-note">
+                    Heatmap below shows cluster assignments per sample. Rows correspond to marker-based
+                    and read-based clustering; columns are samples. Colour palettes are distinct per row,
+                    so cluster IDs are not directly comparable between the two. Samples are ordered to keep
+                    cluster mates adjacent.
+                </p>
+                <div class="clusters-heatmap-scroll" style="width:100%; overflow-x:auto; overflow-y:visible;">
+                    <div id="clusters-heatmap-plot" class="plotly-chart" style="min-width:860px;"></div>
+                </div>
+                <p class="small-note">
+                    Hover over tiles for exact cluster assignments. Samples without an assignment in a given
+                    row are shown as light grey.
+                </p>
+            </div>
+        </details>
+    `;
+    parent.appendChild(div);
+
+    const plotDiv = div.querySelector("#clusters-heatmap-plot");
+
+    const markersPS = (markers.clusters || []).flatMap(cl => {
+        const cid = cl.cluster_id;
+        const members = cl.members || [];
+        return members.map(m => ({ sample: m, cluster: cid }));
+    });
+
+    const readsPS = (reads.clusters || []).flatMap(cl => {
+        const cid = cl.cluster_id;
+        const members = cl.members || [];
+        return members.map(m => ({ sample: m, cluster: cid }));
+    });
+
+    if (!markersPS.length && !readsPS.length) {
+        plotDiv.outerHTML = `<div class="small-note">Per-sample cluster assignments not available; heatmap cannot be drawn.</div>`;
+        return;
+    }
+
+    const markersMap = {};
+    markersPS.forEach(d => {
+        if (d.sample != null) markersMap[d.sample] = d.cluster;
+    });
+
+    const readsMap = {};
+    readsPS.forEach(d => {
+        if (d.sample != null) readsMap[d.sample] = d.cluster;
+    });
+
+    const sampleSet = new Set();
+    Object.keys(markersMap).forEach(s => sampleSet.add(s));
+    Object.keys(readsMap).forEach(s => sampleSet.add(s));
+    const samples = Array.from(sampleSet);
+    samples.sort();
+
+    const nSamples = samples.length;
+    if (!nSamples) {
+        plotDiv.outerHTML = `<div class="small-note">Per-sample cluster assignments not available; heatmap cannot be drawn.</div>`;
+        return;
+    }
+
+    const markerPalette = [
+        "#08306b", "#08519c", "#2171b5", "#4292c6",
+        "#41b6c4", "#1d91c0", "#2c7fb8", "#7fcdbb",
+        "#0c2c84", "#4eb3d3", "#2b8cbe", "#a1dab4"
+    ];
+    const readPalette = [
+        "#7f0000", "#b30000", "#e31a1c", "#ff7f00",
+        "#f03b20", "#bd0026", "#fd8d3c", "#fc4e2a",
+        "#b10026", "#dd1c77", "#df65b0", "#ff1493"
+    ];
+
+    function buildClusterColorMap(map, palette) {
+        const clusters = Array.from(new Set(
+            Object.values(map).filter(v => v !== null && v !== undefined)
+        ));
+        clusters.sort((a, b) => {
+            const na = Number(a), nb = Number(b);
+            if (!isNaN(na) && !isNaN(nb)) return na - nb;
+            return String(a).localeCompare(String(b));
+        });
+        const colorMap = {};
+        clusters.forEach((cl, idx) => {
+            colorMap[cl] = palette[idx % palette.length];
+        });
+        return colorMap;
+    }
+
+    const markerColors = buildClusterColorMap(markersMap, markerPalette);
+    const readColors = buildClusterColorMap(readsMap, readPalette);
+
+    const markerClustersPresent = Object.keys(markerColors).length > 0;
+    const readClustersPresent = Object.keys(readColors).length > 0;
+
+    // Order to keep cluster mates adjacent; prefer marker clusters, else read clusters.
+    let sampleOrder = [...samples];
+    const groupBy = markerClustersPresent ? markersMap : (readClustersPresent ? readsMap : null);
+    if (groupBy) {
+        const clList = Array.from(new Set(
+            sampleOrder
+                .map(s => groupBy[s])
+                .filter(v => v !== null && v !== undefined)
+        )).sort((a, b) => {
+            const na = Number(a), nb = Number(b);
+            if (!isNaN(na) && !isNaN(nb)) return na - nb;
+            return String(a).localeCompare(String(b));
+        });
+        const grouped = [];
+        clList.forEach(cl => {
+            sampleOrder.forEach(s => {
+                if (groupBy[s] === cl) grouped.push(s);
+            });
+        });
+        const noCluster = sampleOrder.filter(s => groupBy[s] === null || groupBy[s] === undefined);
+        sampleOrder = [...grouped, ...noCluster];
+    }
+
+    if (typeof Plotly === "undefined") {
+        plotDiv.outerHTML = `<div class="small-note">Plotly failed to load; cannot render sample clusters heatmap.</div>`;
+        return;
+    }
+
+    const markerClusterList = Object.keys(markerColors);
+    const readClusterList = Object.keys(readColors);
+
+    const markerClusterMap = {};
+    markerClusterList.forEach((cl, idx) => { markerClusterMap[cl] = idx; });
+    const readStart = markerClusterList.length;
+    const readClusterMap = {};
+    readClusterList.forEach((cl, idx) => { readClusterMap[cl] = readStart + idx; });
+
+    const missingVal = -1;
+    const maxVal = Math.max(
+        markerClusterList.length ? markerClusterList.length - 1 : 0,
+        readClusterList.length ? readStart + readClusterList.length - 1 : 0,
+        0
+    );
+
+    const coldPalette = [
+        "#08306b", "#08519c", "#2171b5", "#2c7fb8", "#41b6c4",
+        "#66c2a4", "#7bccc4", "#a1dab4", "#c7e9c0", "#edf8fb"
+    ];
+    const warmPalette = [
+        "#7f0000", "#b30000", "#e31a1c", "#fc4e2a", "#fd8d3c",
+        "#feb24c", "#ffdd57", "#ffb300", "#ff7f00", "#d95f0e"
+    ];
+
+    const colorscale = [];
+    const range = maxVal - missingVal || 1;
+    colorscale.push([0, "#ffffff"]);
+    markerClusterList.forEach((cl, idx) => {
+        const val = markerClusterMap[cl];
+        const pos = (val - missingVal) / range;
+        const color = coldPalette[idx % coldPalette.length];
+        colorscale.push([pos, color]);
+    });
+    readClusterList.forEach((cl, idx) => {
+        const val = readClusterMap[cl];
+        const pos = (val - missingVal) / range;
+        const color = warmPalette[idx % warmPalette.length];
+        colorscale.push([pos, color]);
+    });
+    colorscale.sort((a, b) => a[0] - b[0]);
+
+    const yLabels = ["Markers", "Reads"];
+    const z = [[], []];
+    const text = [[], []];
+    sampleOrder.forEach(sample => {
+        const mCl = markersMap.hasOwnProperty(sample) ? markersMap[sample] : null;
+        const rCl = readsMap.hasOwnProperty(sample) ? readsMap[sample] : null;
+        const mVal = mCl === null || mCl === undefined ? missingVal : markerClusterMap[mCl];
+        const rVal = rCl === null || rCl === undefined ? missingVal : readClusterMap[rCl];
+        z[0].push(mVal);
+        z[1].push(rVal);
+        text[0].push(
+            mCl === null || mCl === undefined
+                ? `${sample}<br>Markers: not assigned`
+                : `${sample}<br>Markers cluster: ${mCl}`
+        );
+        text[1].push(
+            rCl === null || rCl === undefined
+                ? `${sample}<br>Reads: not assigned`
+                : `${sample}<br>Reads cluster: ${rCl}`
+        );
+    });
+
+    const heatmap = {
+        type: "heatmap",
+        x: sampleOrder,
+        y: yLabels,
+        z,
+        text,
+        hovertemplate: "%{text}<extra></extra>",
+        colorscale,
+        zmin: missingVal,
+        zmax: Math.max(maxVal, 0),
+        showscale: false,
+        xgap: 1,
+        ygap: 1,
+    };
+
+    const tickAngle = sampleOrder.length > 18 ? -60 : -45;
+    const bottomMargin = sampleOrder.length > 18 ? 200 : 150;
+
+    const layoutHeight = 140 + sampleOrder.length * 8;
+    plotDiv.style.height = `${layoutHeight}px`;
+
+    const layout = {
+        height: layoutHeight,
+        margin: {l: 90, r: 20, t: 20, b: bottomMargin},
+        xaxis: {
+            tickangle: tickAngle,
+            automargin: true,
+        },
+        yaxis: {
+            automargin: true,
+            autorange: "reversed",
+        },
+        hovermode: "closest",
+        showlegend: false,
+    };
+
+    const config = {
+        displaylogo: false,
+        responsive: true,
+        modeBarButtonsToRemove: ["toggleSpikelines", "autoScale2d"],
+    };
+
+    Plotly.newPlot(plotDiv, [heatmap], layout, config);
+    window.addEventListener("resize", () => Plotly.Plots.resize(plotDiv));
+}
+
+/* Combined overall coverage summary */
+/* Prokaryotic coverage (markers Nonpareil) */
+function addRedundancyMarkersSection(parent, data, redBiplotPerSample) {
+    if (!data) return;
+    const div = document.createElement("div");
+    div.className = "section " + flagClass(data.flag_redundancy_markers);
+
+    const msg = data.message_redundancy_markers || "";
+
+    const nLR = data.n_samples_with_lr || 0;
+    const nBelow = data.n_samples_lr_exceeds_depth || 0;
+    const nAtOrAbove = nLR ? (nLR - nBelow) : 0;
+    const fracAtOrAbove = nLR ? (100 * nAtOrAbove / nLR) : null;
+    const coverageVals = (Array.isArray(data.coverage_ratios) && data.coverage_ratios.length)
+        ? data.coverage_ratios.filter(v => typeof v === "number" && isFinite(v))
+        : (data.coverage_median !== undefined ? [data.coverage_median] : []);
+    const covMedian = data.coverage_median != null ? data.coverage_median : median(coverageVals);
+    const covCV = data.coverage_cv != null ? data.coverage_cv : coeffVar(coverageVals);
+
+    const status = sectionStatus("Prokaryotic coverage", data.flag_redundancy_markers);
+
+    div.innerHTML = `
+        <h2 class="section-title">Prokaryotic coverage of samples</h2>
+        <p class="section-intro">
+            This section evaluates coverage of marker genes relative to the 95% Nonpareil target.
+        </p>
+        <details>
+            <summary>
+                <span class="status-emoji">${status.emoji}</span>
+                <span class="status-text">${status.text}</span>
+                <span class="summary-hint">(click to expand)</span>
+            </summary>
+            <div class="content">
+                <p class="summary-message">${msg}</p>
+                <div class="redundancy-stats">
+                    <div class="redundancy-stat-item">
+                        <div class="redundancy-stat-label">Coverage median</div>
+                        <div class="redundancy-stat-value">${covMedian === null ? "NA" : fmtFloat(covMedian * 100, 1)}%</div>
+                        <div class="redundancy-stat-note">Estimated Nonpareil coverage (C_total)</div>
+                    </div>
+                    <div class="redundancy-stat-item">
+                        <div class="redundancy-stat-label">Coverage CV</div>
+                        <div class="redundancy-stat-value">${covCV === null ? "NA" : fmtFloat(covCV, 3)}</div>
+                        <div class="redundancy-stat-note">Coefficient of variation of coverage estimates</div>
+                    </div>
+                    <div class="redundancy-stat-item">
+                        <div class="redundancy-stat-label">Samples above LR target</div>
+                        <div class="redundancy-stat-value">
+                            ${fmtInt(nAtOrAbove)} / ${fmtInt(nLR)}
+                        </div>
+                        <div class="redundancy-stat-note">
+                            ${fracAtOrAbove === null ? "NA" : fmtFloat(fracAtOrAbove, 1) + "%"} of samples with LR target
+                        </div>
+                    </div>
+                </div>
+                <p class="small-note">
+                    LR target used: ${data.lr_target_used || "NA"}% of marker-based diversity (Nonpareil 95% LR_reads).
+                </p>
+                <div class="lr-target-markers-plot-container">
+                    <div id="lr-target-markers-plot" class="plotly-chart"></div>
+                </div>
+                <p class="small-note">
+                    Interactive barplot of marker coverage vs. the 95% target. The dashed midline corresponds
+                    to the 95% coverage target (0 on the Y axis). Positive bars show excess coverage (1×, 2×, ...),
+                    while negative bars show how many times more coverage would be needed (-1×, -2×, -3× etc.).
+                    Bars more than 3× short of the target are shown in red.
+                </p>
+            </div>
+        </details>
+    `;
+    parent.appendChild(div);
+
+    const combined = (redBiplotPerSample || []).map(r => {
+        const coverage = r.coverage_markers != null ? Number(r.coverage_markers) : null;
+        let ratio = null;
+        if (coverage != null && coverage > 0) {
+            ratio = coverage / 0.95;
+        }
+        return {
+            sample: r.sample,
+            coverage,
+            ratio
+        };
+    }).filter(d => d.ratio != null);
+
+    const plotDiv = div.querySelector("#lr-target-markers-plot");
+
+    if (!combined.length) {
+        plotDiv.outerHTML = `<div class="small-note">No per-sample marker coverage / LR target information available for marker redundancy plot.</div>`;
+        return;
+    }
+
+    if (typeof Plotly === "undefined") {
+        plotDiv.outerHTML = `<div class="small-note">Plotly failed to load; cannot render prokaryotic coverage plot.</div>`;
+        return;
+    }
+
+    const transformRatio = (r) => (r >= 1 ? r - 1 : -(1 / r - 1));
+
+    const samples = combined.map((d, idx) => d.sample || `sample ${idx + 1}`);
+    const values = combined.map(d => transformRatio(d.ratio));
+
+    const colors = values.map(v => {
+        if (v >= 0) return "#4caf50";
+        if (v >= -3) return "#ffa000";
+        return "#c62828";
+    });
+
+    const hover = combined.map((d, idx) => {
+        const v = values[idx];
+        const extraOrNeeded = v >= 0 ? (d.ratio - 1) : (1 / d.ratio - 1);
+        return [
+            `<b>${d.sample || `sample ${idx + 1}`}</b>`,
+            `Coverage (markers): ${(d.coverage * 100).toFixed(2)}%`,
+            `Relative to 95% target: ${(d.ratio * 100).toFixed(1)}%`,
+            v >= 0
+                ? `Excess coverage: ${extraOrNeeded.toFixed(2)}× above target`
+                : `Additional needed: ${extraOrNeeded.toFixed(2)}× more to reach target`
+        ].filter(Boolean).join("<br>");
+    });
+
+    const maxAbsRaw = Math.max(...values.map(v => Math.abs(v)), 0);
+    const maxAbs = Math.max(1, maxAbsRaw * 1.05);
+    const maxTick = Math.max(1, Math.ceil(maxAbs));
+    const stepTick = Math.max(1, Math.round(maxTick / 5));
+    const tickvals = [];
+    const ticktext = [];
+    for (let v = -maxTick; v <= maxTick; v += stepTick) {
+        if (!tickvals.includes(v)) {
+            tickvals.push(v);
+            ticktext.push(v === 0 ? "target" : `${v > 0 ? v : -v}×${v < 0 ? " short" : ""}`);
+        }
+    }
+
+    const shapes = [
+        {
+            type: "line",
+            xref: "paper",
+            x0: 0,
+            x1: 1,
+            y0: 0,
+            y1: 0,
+            line: {color: "#000", width: 1.4, dash: "dot"}
+        }
+    ];
+    const annotations = [
+        {
+            xref: "paper",
+            x: 0.995,
+            y: 0,
+            xanchor: "right",
+            yanchor: "bottom",
+            text: "95% coverage target",
+            showarrow: false,
+            font: {color: "#000", size: 11}
+        }
+    ];
+
+    if (maxAbs >= 3) {
+        shapes.push({
+            type: "line",
+            xref: "paper",
+            x0: 0,
+            x1: 1,
+            y0: -3,
+            y1: -3,
+            line: {color: "#c62828", width: 1.4, dash: "dot"}
+        });
+        annotations.push({
+            xref: "paper",
+            x: 0.995,
+            y: -3,
+            xanchor: "right",
+            yanchor: "bottom",
+            text: "-3×",
+            showarrow: false,
+            font: {color: "#c62828", size: 11}
+        });
+    }
+
+    const n = samples.length;
+    const tickAngle = n > 80 ? -75 : n > 40 ? -60 : -45;
+    const tickSize = n > 120 ? 7 : n > 60 ? 8 : 10;
+    const bottomMargin = n > 80 ? 200 : n > 40 ? 150 : 110;
+
+    const trace = {
+        type: "bar",
+        x: samples,
+        y: values,
+        marker: {color: colors},
+        hovertemplate: "%{customdata}<extra></extra>",
+        customdata: hover,
+    };
+
+    const layout = {
+        height: 360,
+        margin: {l: 80, r: 28, t: 16, b: bottomMargin},
+        bargap: 0.18,
+        hovermode: "closest",
+        showlegend: false,
+        xaxis: {
+            title: "Samples",
+            type: "category",
+            tickangle: tickAngle,
+            tickfont: {size: tickSize},
+            automargin: true,
+        },
+        yaxis: {
+            title: "Marker coverage in relation to target completeness",
+            range: [-maxAbs, maxAbs],
+            tickvals,
+            ticktext,
+            separatethousands: true,
+            zeroline: false,
+        },
+        shapes,
+        annotations,
+    };
+
+    const config = {
+        displaylogo: false,
+        responsive: true,
+        modeBarButtonsToRemove: ["toggleSpikelines", "autoScale2d"],
+    };
+
+    Plotly.newPlot(plotDiv, [trace], layout, config);
+    window.addEventListener("resize", () => Plotly.Plots.resize(plotDiv));
+}
+
+/* Sample clusters */
+function addClustersSection(parent, clusters) {
+    if (!clusters) return;
+    const div = document.createElement("div");
+    div.className = "section " + flagClass(clusters.flag_clusters);
+
+    const msg = clusters.message_clusters || "";
+    const markers = clusters.markers || {};
+    const reads = clusters.reads || {};
+
+    const nClustersMarkers = markers.n_clusters != null ? markers.n_clusters : "NA";
+    const nClustersReads = reads.n_clusters != null ? reads.n_clusters : "NA";
+    const withinMarkers = markers.mean_within_distance != null ? markers.mean_within_distance : null;
+    const betweenMarkers = markers.mean_between_distance != null ? markers.mean_between_distance : null;
+    const withinReads = reads.mean_within_distance != null ? reads.mean_within_distance : null;
+    const betweenReads = reads.mean_between_distance != null ? reads.mean_between_distance : null;
+
+    const status = sectionStatus("Sample clusters", clusters.flag_clusters);
+
+    div.innerHTML = `
+        <h2 class="section-title">Sample clusters</h2>
+        <p class="section-intro">
+            This section highlights similarity-based clusters inferred from Mash distances on reads and marker genes.
+        </p>
+        <details>
+            <summary>
+                <span class="status-emoji">${status.emoji}</span>
+                <span class="status-text">${status.text}</span>
+                <span class="summary-hint">(click to expand)</span>
+            </summary>
+            <div class="content">
+                <p class="summary-message">${msg}</p>
+                <div class="cluster-stats">
+                    <div class="cluster-stat-item">
+                        <div class="cluster-stat-label">Marker-based clusters</div>
+                        <div class="cluster-stat-value">${fmtInt(nClustersMarkers)}</div>
+                        <div class="cluster-stat-note">Clusters inferred from marker-based Mash distances</div>
+                    </div>
+                    <div class="cluster-stat-item">
+                        <div class="cluster-stat-label">Read-based clusters</div>
+                        <div class="cluster-stat-value">${fmtInt(nClustersReads)}</div>
+                        <div class="cluster-stat-note">Clusters inferred from read-based Mash distances</div>
+                    </div>
+                    <div class="cluster-stat-item">
+                        <div class="cluster-stat-label">Within / between (markers)</div>
+                        <div class="cluster-stat-value">${fmtFloat(withinMarkers, 3)} / ${fmtFloat(betweenMarkers, 3)}</div>
+                        <div class="cluster-stat-note">Mean Mash distance within / between marker clusters</div>
+                    </div>
+                    <div class="cluster-stat-item">
+                        <div class="cluster-stat-label">Within / between (reads)</div>
+                        <div class="cluster-stat-value">${fmtFloat(withinReads, 3)} / ${fmtFloat(betweenReads, 3)}</div>
+                        <div class="cluster-stat-note">Mean Mash distance within / between read clusters</div>
+                    </div>
+                </div>
+                <p class="small-note">
+                    Heatmap below shows cluster assignments per sample. Rows correspond to marker-based
+                    and read-based clustering; columns are samples. Colour palettes are distinct per row,
+                    so cluster IDs are not directly comparable between the two. Samples are ordered to keep
+                    cluster mates adjacent.
+                </p>
+                <div class="clusters-heatmap-scroll" style="width:100%; overflow-x:auto; overflow-y:visible;">
+                    <div id="clusters-heatmap-plot" class="plotly-chart" style="min-width:860px;"></div>
+                </div>
+                <p class="small-note">
+                    Hover over tiles for exact cluster assignments. Samples without an assignment in a given
+                    row are shown as light grey.
+                </p>
+            </div>
+        </details>
+    `;
+    parent.appendChild(div);
+
+    const plotDiv = div.querySelector("#clusters-heatmap-plot");
+
+    const markersPS = (markers.clusters || []).flatMap(cl => {
+        const cid = cl.cluster_id;
+        const members = cl.members || [];
+        return members.map(m => ({ sample: m, cluster: cid }));
+    });
+
+    const readsPS = (reads.clusters || []).flatMap(cl => {
+        const cid = cl.cluster_id;
+        const members = cl.members || [];
+        return members.map(m => ({ sample: m, cluster: cid }));
+    });
+
+    if (!markersPS.length && !readsPS.length) {
+        plotDiv.outerHTML = `<div class="small-note">Per-sample cluster assignments not available; heatmap cannot be drawn.</div>`;
+        return;
+    }
+
+    const markersMap = {};
+    markersPS.forEach(d => {
+        if (d.sample != null) markersMap[d.sample] = d.cluster;
+    });
+
+    const readsMap = {};
+    readsPS.forEach(d => {
+        if (d.sample != null) readsMap[d.sample] = d.cluster;
+    });
+
+    const sampleSet = new Set();
+    Object.keys(markersMap).forEach(s => sampleSet.add(s));
+    Object.keys(readsMap).forEach(s => sampleSet.add(s));
+    const samples = Array.from(sampleSet);
+    samples.sort();
+
+    const nSamples = samples.length;
+    if (!nSamples) {
+        plotDiv.outerHTML = `<div class="small-note">Per-sample cluster assignments not available; heatmap cannot be drawn.</div>`;
+        return;
+    }
+
+    const markerPalette = [
+        "#08306b", "#08519c", "#2171b5", "#4292c6",
+        "#41b6c4", "#1d91c0", "#2c7fb8", "#7fcdbb",
+        "#0c2c84", "#4eb3d3", "#2b8cbe", "#a1dab4"
+    ];
+    const readPalette = [
+        "#7f0000", "#b30000", "#e31a1c", "#ff7f00",
+        "#f03b20", "#bd0026", "#fd8d3c", "#fc4e2a",
+        "#b10026", "#dd1c77", "#df65b0", "#ff1493"
+    ];
+
+    function buildClusterColorMap(map, palette) {
+        const clusters = Array.from(new Set(
+            Object.values(map).filter(v => v !== null && v !== undefined)
+        ));
+        clusters.sort((a, b) => {
+            const na = Number(a), nb = Number(b);
+            if (!isNaN(na) && !isNaN(nb)) return na - nb;
+            return String(a).localeCompare(String(b));
+        });
+        const colorMap = {};
+        clusters.forEach((cl, idx) => {
+            colorMap[cl] = palette[idx % palette.length];
+        });
+        return colorMap;
+    }
+
+    const markerColors = buildClusterColorMap(markersMap, markerPalette);
+    const readColors = buildClusterColorMap(readsMap, readPalette);
+
+    const markerClustersPresent = Object.keys(markerColors).length > 0;
+    const readClustersPresent = Object.keys(readColors).length > 0;
+
+    // Order to keep cluster mates adjacent; prefer marker clusters, else read clusters.
+    let sampleOrder = [...samples];
+    const groupBy = markerClustersPresent ? markersMap : (readClustersPresent ? readsMap : null);
+    if (groupBy) {
+        const clList = Array.from(new Set(
+            sampleOrder
+                .map(s => groupBy[s])
+                .filter(v => v !== null && v !== undefined)
+        )).sort((a, b) => {
+            const na = Number(a), nb = Number(b);
+            if (!isNaN(na) && !isNaN(nb)) return na - nb;
+            return String(a).localeCompare(String(b));
+        });
+        const grouped = [];
+        clList.forEach(cl => {
+            sampleOrder.forEach(s => {
+                if (groupBy[s] === cl) grouped.push(s);
+            });
+        });
+        const noCluster = sampleOrder.filter(s => groupBy[s] === null || groupBy[s] === undefined);
+        sampleOrder = [...grouped, ...noCluster];
+    }
+
+    if (typeof Plotly === "undefined") {
+        plotDiv.outerHTML = `<div class="small-note">Plotly failed to load; cannot render sample clusters heatmap.</div>`;
+        return;
+    }
+
+    const markerClusterList = Object.keys(markerColors);
+    const readClusterList = Object.keys(readColors);
+
+    const markerClusterMap = {};
+    markerClusterList.forEach((cl, idx) => { markerClusterMap[cl] = idx; });
+    const readStart = markerClusterList.length;
+    const readClusterMap = {};
+    readClusterList.forEach((cl, idx) => { readClusterMap[cl] = readStart + idx; });
+
+    const missingVal = -1;
+    const maxVal = Math.max(
+        markerClusterList.length ? markerClusterList.length - 1 : 0,
+        readClusterList.length ? readStart + readClusterList.length - 1 : 0,
+        0
+    );
+
+    const coldPalette = [
+        "#08306b", "#08519c", "#2171b5", "#2c7fb8", "#41b6c4",
+        "#66c2a4", "#7bccc4", "#a1dab4", "#c7e9c0", "#edf8fb"
+    ];
+    const warmPalette = [
+        "#7f0000", "#b30000", "#e31a1c", "#fc4e2a", "#fd8d3c",
+        "#feb24c", "#ffdd57", "#ffb300", "#ff7f00", "#d95f0e"
+    ];
+
+    const colorscale = [];
+    const range = maxVal - missingVal || 1;
+    colorscale.push([0, "#ffffff"]);
+    markerClusterList.forEach((cl, idx) => {
+        const val = markerClusterMap[cl];
+        const pos = (val - missingVal) / range;
+        const color = coldPalette[idx % coldPalette.length];
+        colorscale.push([pos, color]);
+    });
+    readClusterList.forEach((cl, idx) => {
+        const val = readClusterMap[cl];
+        const pos = (val - missingVal) / range;
+        const color = warmPalette[idx % warmPalette.length];
+        colorscale.push([pos, color]);
+    });
+    colorscale.sort((a, b) => a[0] - b[0]);
+
+    const yLabels = ["Markers", "Reads"];
+    const z = [[], []];
+    const text = [[], []];
+    sampleOrder.forEach(sample => {
+        const mCl = markersMap.hasOwnProperty(sample) ? markersMap[sample] : null;
+        const rCl = readsMap.hasOwnProperty(sample) ? readsMap[sample] : null;
+        const mVal = mCl === null || mCl === undefined ? missingVal : markerClusterMap[mCl];
+        const rVal = rCl === null || rCl === undefined ? missingVal : readClusterMap[rCl];
+        z[0].push(mVal);
+        z[1].push(rVal);
+        text[0].push(
+            mCl === null || mCl === undefined
+                ? `${sample}<br>Markers: not assigned`
+                : `${sample}<br>Markers cluster: ${mCl}`
+        );
+        text[1].push(
+            rCl === null || rCl === undefined
+                ? `${sample}<br>Reads: not assigned`
+                : `${sample}<br>Reads cluster: ${rCl}`
+        );
+    });
+
+    const heatmap = {
+        type: "heatmap",
+        x: sampleOrder,
+        y: yLabels,
+        z,
+        text,
+        hovertemplate: "%{text}<extra></extra>",
+        colorscale,
+        zmin: missingVal,
+        zmax: Math.max(maxVal, 0),
+        showscale: false,
+        xgap: 1,
+        ygap: 1,
+    };
+
+    const tickAngle = sampleOrder.length > 18 ? -60 : -45;
+    const bottomMargin = sampleOrder.length > 18 ? 200 : 150;
+
+    const layoutHeight = 140 + sampleOrder.length * 8;
+    plotDiv.style.height = `${layoutHeight}px`;
+
+    const layout = {
+        height: layoutHeight,
+        margin: {l: 90, r: 20, t: 20, b: bottomMargin},
+        xaxis: {
+            tickangle: tickAngle,
+            automargin: true,
+        },
+        yaxis: {
+            automargin: true,
+            autorange: "reversed",
+        },
+        hovermode: "closest",
+        showlegend: false,
+    };
+
+    const config = {
+        displaylogo: false,
+        responsive: true,
+        modeBarButtonsToRemove: ["toggleSpikelines", "autoScale2d"],
+    };
+
+    Plotly.newPlot(plotDiv, [heatmap], layout, config);
     window.addEventListener("resize", () => Plotly.Plots.resize(plotDiv));
 }
 
@@ -2257,22 +3831,22 @@ function addOverallProkCoverageSection(parent, data) {
                         <div class="redundancy-stat-note">Pooled marker coverage across all samples</div>
                     </div>
                     <div class="redundancy-stat-item">
-                        <div class="redundancy-stat-label">Total reads</div>
+                        <div class="redundancy-stat-label">Generated reads</div>
                         <div class="redundancy-stat-value">${fmtMillions(data.total_reads)}</div>
-                        <div class="redundancy-stat-note">Sum of reads included in pooled marker Nonpareil</div>
+                        <div class="redundancy-stat-note">Sum of reads accross all samples</div>
                     </div>
                     <div class="redundancy-stat-item">
-                        <div class="redundancy-stat-label">LR target (95%)</div>
+                        <div class="redundancy-stat-label">Required reads</div>
                         <div class="redundancy-stat-value">${fmtMillions(data.lr_95_reads)}</div>
-                        <div class="redundancy-stat-note">Reads estimated for 95% coverage</div>
+                        <div class="redundancy-stat-note">Reads estimated for target coverage</div>
                     </div>
                 </div>
                 <div class="lr-target-plot-container">
                     <div id="overall-prok-plot" class="plotly-chart" style="height:240px;"></div>
                 </div>
                 <p class="small-note">
-                    Horizontal bar shows pooled marker reads; dashed line marks the 95% LR_reads target. Bars are green (≥ target),
-                    yellow (50–99% of target) or red (&lt; 50% of target).
+                    Horizontal bar shows pooled marker reads; dashed line marks the coverage target. Bars are green (≥ target),
+                    yellow (50-99% of target) or red (&lt; 50% of target).
                 </p>
             </div>
         </details>
@@ -2593,9 +4167,8 @@ function main() {
     addLowQualitySection(summaryDiv, S.sequencing_quality, depthPerSample);
     addProkFractionSection(summaryDiv, S.prokaryotic_fraction, depthPerSample);
     addRedundancyReadsSection(summaryDiv, S.redundancy_reads, depthPerSample);
-    addOverallReadCoverageSection(summaryDiv, S.overall_metagenomic_coverage);
+    addOverallCoverageSection(summaryDiv, S.overall_coverage_summary);
     addRedundancyMarkersSection(summaryDiv, S.redundancy_markers, redBiplotPerSample);
-    addOverallProkCoverageSection(summaryDiv, S.overall_prokaryotic_coverage);
     addMashDistanceSection(summaryDiv, S.clusters);
     addClustersSection(summaryDiv, S.clusters);
     addRecommendationsSection(summaryDiv, S.recommendations);
