@@ -4131,7 +4131,9 @@ function addMashDistanceSection(parent, clusters) {
         y: orderedSamples,
         z: zMarkers,
         text: textMarkers,
-        hovertemplate: "%{y} vs %{x}<br>Markers dissimilarity: %{z:.4f}<extra></extra>",
+        customdata: textMarkers,
+        hovertemplate: "%{customdata}<extra></extra>",
+        hoverinfo: "skip",
         colorscale: makeColorscale([
             "#f7fbff", "#c6dbef", "#9ecae1", "#6baed6", "#3182bd", "#08519c", "#08306b"
         ]),
@@ -4150,7 +4152,9 @@ function addMashDistanceSection(parent, clusters) {
         y: orderedSamples,
         z: zReads,
         text: textReads,
-        hovertemplate: "%{y} vs %{x}<br>Reads dissimilarity: %{z:.4f}<extra></extra>",
+        customdata: textReads,
+        hovertemplate: "%{customdata}<extra></extra>",
+        hoverinfo: "skip",
         colorscale: makeColorscale([
             "#fff5eb", "#fdd0a2", "#fdae6b", "#fd8d3c", "#f16913", "#d94801", "#8c2d04"
         ]),
