@@ -4131,15 +4131,14 @@ function addMashDistanceSection(parent, clusters) {
         y: orderedSamples,
         z: zMarkers,
         text: textMarkers,
-        hovertemplate: "%{text}<extra></extra>",
-        hoverinfo: "text",
+        hovertemplate: "%{y} vs %{x}<br>Markers dissimilarity: %{z:.4f}<extra></extra>",
         colorscale: makeColorscale([
             "#f7fbff", "#c6dbef", "#9ecae1", "#6baed6", "#3182bd", "#08519c", "#08306b"
         ]),
         zmin: 0,
         zmax: maxD,
         colorbar: {
-            title: "Dissimilarity (markers)",
+            title: "Dissimilarity",
             titleside: "right",
             x: 1.12,
         },
@@ -4151,17 +4150,20 @@ function addMashDistanceSection(parent, clusters) {
         y: orderedSamples,
         z: zReads,
         text: textReads,
-        hovertemplate: "%{text}<extra></extra>",
-        hoverinfo: "text",
+        hovertemplate: "%{y} vs %{x}<br>Reads dissimilarity: %{z:.4f}<extra></extra>",
         colorscale: makeColorscale([
             "#fff5eb", "#fdd0a2", "#fdae6b", "#fd8d3c", "#f16913", "#d94801", "#8c2d04"
         ]),
         zmin: 0,
         zmax: maxD,
         colorbar: {
-            title: "Dissimilarity (reads)",
+            title: "",
             titleside: "right",
             x: 1.02,
+            tickvals: [],
+            ticktext: [],
+            ticks: "",
+            showticklabels: false,
         },
         showscale: true,
     };
