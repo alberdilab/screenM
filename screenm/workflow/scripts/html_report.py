@@ -4090,9 +4090,9 @@ function addMashDistanceSection(parent, clusters) {
 
     const n = orderedSamples.length;
     const zMarkers = Array.from({length: n}, () => Array(n).fill(null));
-    const textMarkers = Array.from({length: n}, () => Array(n).fill(""));
+    const textMarkers = Array.from({length: n}, () => Array(n).fill(null));
     const zReads = Array.from({length: n}, () => Array(n).fill(null));
-    const textReads = Array.from({length: n}, () => Array(n).fill(""));
+    const textReads = Array.from({length: n}, () => Array(n).fill(null));
     let maxD = 0;
 
     orderedSamples.forEach((s1, i) => {
@@ -4131,9 +4131,8 @@ function addMashDistanceSection(parent, clusters) {
         y: orderedSamples,
         z: zMarkers,
         text: textMarkers,
-        customdata: textMarkers,
-        hovertemplate: "%{customdata}<extra></extra>",
-        hoverinfo: "skip",
+        hovertemplate: "%{text}<extra></extra>",
+        hoverinfo: "text",
         colorscale: makeColorscale([
             "#f7fbff", "#c6dbef", "#9ecae1", "#6baed6", "#3182bd", "#08519c", "#08306b"
         ]),
@@ -4152,9 +4151,8 @@ function addMashDistanceSection(parent, clusters) {
         y: orderedSamples,
         z: zReads,
         text: textReads,
-        customdata: textReads,
-        hovertemplate: "%{customdata}<extra></extra>",
-        hoverinfo: "skip",
+        hovertemplate: "%{text}<extra></extra>",
+        hoverinfo: "text",
         colorscale: makeColorscale([
             "#fff5eb", "#fdd0a2", "#fdae6b", "#fd8d3c", "#f16913", "#d94801", "#8c2d04"
         ]),
