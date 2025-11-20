@@ -337,6 +337,19 @@ HTML_TEMPLATE = r"""<!DOCTYPE html>
 const DISTILL_DATA = __DISTILL_JSON__;
 const FIGURES_DATA = __FIGURES_JSON__;
 
+const COMPLETENESS_TARGET = (() => {
+    const val = DISTILL_DATA?.meta?.metadata?.parameters?.completeness;
+    const num = Number(val);
+    if (Number.isFinite(num) && num > 0) {
+        return num;
+    }
+    return 95;
+})();
+const COMPLETENESS_FRACTION = COMPLETENESS_TARGET / 100;
+const COMPLETENESS_LABEL = Number.isInteger(COMPLETENESS_TARGET)
+    ? COMPLETENESS_TARGET.toFixed(0)
+    : COMPLETENESS_TARGET.toFixed(1);
+
 function flagClass(flag) {
     if (flag === 1) return "flag-1";
     if (flag === 2) return "flag-2";
@@ -1419,13 +1432,13 @@ function addRedundancyReadsSection(parent, data, depthPerSample) {
                     </div>
                 </div>
                 <p class="small-note">
-                    LR target used: ${data.lr_target_used || "NA"}% of metagenomic diversity (Nonpareil 95% LR_reads).
+                    LR target used: ${data.lr_target_used || "NA"}% of metagenomic diversity (Nonpareil ${COMPLETENESS_LABEL}% LR_reads).
                 </p>
                 <div class="lr-target-plot-container">
                     <div id="lr-target-plot" class="plotly-chart"></div>
                 </div>
                 <p class="small-note">
-                    Interactive barplot of sequencing depth vs. the 95% LR_reads target.
+                    Interactive barplot of sequencing depth vs. the ${COMPLETENESS_LABEL}% LR_reads target.
                     The dashed midline marks the LR target (0 on the Y axis). Positive bars
                     show how many times the target was exceeded, negative bars show how many
                     times more coverage would be needed. Bars more than 3× short of the target
@@ -1480,7 +1493,7 @@ function addRedundancyReadsSection(parent, data, depthPerSample) {
         return [
             `<b>${d.sample || `sample ${idx + 1}`}</b>`,
             `Sequenced: ${fmtMillions(d.observed)} reads`,
-            `Target (95% LR): ${fmtMillions(d.target)} reads`,
+            `Target (${COMPLETENESS_LABEL}% LR): ${fmtMillions(d.target)} reads`,
             `Relative depth: ${(d.ratio * 100).toFixed(1)}%`,
             v >= 0
                 ? `Excess sequencing: ${extraOrNeeded.toFixed(2)}× above target`
@@ -1619,7 +1632,7 @@ function addRedundancyMarkersSection(parent, data, redBiplotPerSample) {
     div.innerHTML = `
         <h2 class="section-title">Prokaryotic coverage of samples</h2>
         <p class="section-intro">
-            This section evaluates coverage of marker genes relative to the 95% Nonpareil target.
+            This section evaluates coverage of marker genes relative to the ${COMPLETENESS_LABEL}% Nonpareil target.
         </p>
         <details>
             <summary>
@@ -1651,14 +1664,14 @@ function addRedundancyMarkersSection(parent, data, redBiplotPerSample) {
                     </div>
                 </div>
                 <p class="small-note">
-                    LR target used: ${data.lr_target_used || "NA"}% of marker-based diversity (Nonpareil 95% LR_reads).
+                    LR target used: ${data.lr_target_used || "NA"}% of marker-based diversity (Nonpareil ${COMPLETENESS_LABEL}% LR_reads).
                 </p>
                 <div class="lr-target-markers-plot-container">
                     <div id="lr-target-markers-plot" class="plotly-chart"></div>
                 </div>
                 <p class="small-note">
-                    Interactive barplot of marker coverage vs. the 95% target. The dashed midline corresponds
-                    to the 95% coverage target (0 on the Y axis). Positive bars show excess coverage (1×, 2×, ...),
+                    Interactive barplot of marker coverage vs. the ${COMPLETENESS_LABEL}% target. The dashed midline corresponds
+                    to the ${COMPLETENESS_LABEL}% coverage target (0 on the Y axis). Positive bars show excess coverage (1×, 2×, ...),
                     while negative bars show how many times more coverage would be needed (-1×, -2×, -3× etc.).
                     Bars more than 3× short of the target are shown in red.
                 </p>
@@ -1671,7 +1684,7 @@ function addRedundancyMarkersSection(parent, data, redBiplotPerSample) {
         const coverage = r.coverage_markers != null ? Number(r.coverage_markers) : null;
         let ratio = null;
         if (coverage != null && coverage > 0) {
-            ratio = coverage / 0.95;
+            ratio = coverage / COMPLETENESS_FRACTION;
         }
         return {
             sample: r.sample,
@@ -1709,7 +1722,7 @@ function addRedundancyMarkersSection(parent, data, redBiplotPerSample) {
         return [
             `<b>${d.sample || `sample ${idx + 1}`}</b>`,
             `Coverage (markers): ${(d.coverage * 100).toFixed(2)}%`,
-            `Relative to 95% target: ${(d.ratio * 100).toFixed(1)}%`,
+            `Relative to ${COMPLETENESS_LABEL}% target: ${(d.ratio * 100).toFixed(1)}%`,
             v >= 0
                 ? `Excess coverage: ${extraOrNeeded.toFixed(2)}× above target`
                 : `Additional needed: ${extraOrNeeded.toFixed(2)}× more to reach target`
@@ -1747,7 +1760,7 @@ function addRedundancyMarkersSection(parent, data, redBiplotPerSample) {
             y: 0,
             xanchor: "right",
             yanchor: "bottom",
-            text: "95% coverage target",
+            text: "${COMPLETENESS_LABEL}% coverage target",
             showarrow: false,
             font: {color: "#000", size: 11}
         }
@@ -2131,7 +2144,7 @@ function addOverallCoverageSection(parent, data) {
     div.className = "section " + flagClass(combinedFlag);
 
     div.innerHTML = `
-        <h2 class="section-title">Overall coverage (reads & markers)</h2>
+        <h2 class="section-title">Overall coverage of the dataset</h2>
         <p class="section-intro">
             Pooled Nonpareil results combining metagenomic reads and marker genes for the entire project.
         </p>
@@ -2145,29 +2158,29 @@ function addOverallCoverageSection(parent, data) {
                 <p class="summary-message">${message}</p>
                 <div class="redundancy-stats">
                     <div class="redundancy-stat-item">
-                        <div class="redundancy-stat-label">Metagenomic coverage (C_total)</div>
+                        <div class="redundancy-stat-label">Metagenomic coverage</div>
                         <div class="redundancy-stat-value">${metaBlock.coverage_percent != null ? fmtFloat(metaBlock.coverage_percent, 1) + "%" : "NA"}</div>
                         <div class="redundancy-stat-note">Pooled reads across all samples</div>
                     </div>
                     <div class="redundancy-stat-item">
-                        <div class="redundancy-stat-label">Metagenomic LR target (95%)</div>
+                        <div class="redundancy-stat-label">Read-based target</div>
                         <div class="redundancy-stat-value">${fmtMillions(metaBlock.lr_95_reads)}</div>
-                        <div class="redundancy-stat-note">Reads estimated for 95% metagenomic coverage</div>
+                        <div class="redundancy-stat-note">Reads estimated for ${COMPLETENESS_LABEL}% metagenomic coverage</div>
                     </div>
                     <div class="redundancy-stat-item">
-                        <div class="redundancy-stat-label">Marker coverage (C_total)</div>
+                        <div class="redundancy-stat-label">Marker coverage</div>
                         <div class="redundancy-stat-value">${prokBlock.coverage_percent != null ? fmtFloat(prokBlock.coverage_percent, 1) + "%" : "NA"}</div>
                         <div class="redundancy-stat-note">Pooled marker coverage across all samples</div>
                     </div>
                     <div class="redundancy-stat-item">
-                        <div class="redundancy-stat-label">Marker LR target (95%)</div>
+                        <div class="redundancy-stat-label">Marker-based target</div>
                         <div class="redundancy-stat-value">${fmtMillions(prokBlock.lr_95_reads)}</div>
-                        <div class="redundancy-stat-note">Reads estimated for 95% marker coverage</div>
+                        <div class="redundancy-stat-note">Reads estimated for ${COMPLETENESS_LABEL}% marker coverage</div>
                     </div>
                     <div class="redundancy-stat-item">
                         <div class="redundancy-stat-label">Total pooled reads</div>
                         <div class="redundancy-stat-value">${fmtMillions(metaBlock.total_reads ?? prokBlock.total_reads)}</div>
-                        <div class="redundancy-stat-note">Sum of reads considered by pooled Nonpareil</div>
+                        <div class="redundancy-stat-note">Sum of reads in the dataset</div>
                     </div>
                 </div>
                 <div class="lr-target-plot-container">
@@ -2175,7 +2188,7 @@ function addOverallCoverageSection(parent, data) {
                 </div>
                 <p class="small-note">
                     The horizontal bar shows pooled reads; vertical dashed lines mark the metagenomic (blue) and marker (purple)
-                    95% LR_reads targets.
+                    ${COMPLETENESS_LABEL}% LR_reads targets.
                 </p>
             </div>
         </details>
@@ -2288,7 +2301,7 @@ function addRedundancyMarkersSection(parent, data, redBiplotPerSample) {
     div.innerHTML = `
         <h2 class="section-title">Prokaryotic coverage of samples</h2>
         <p class="section-intro">
-            This section evaluates coverage of marker genes relative to the 95% Nonpareil target.
+            This section evaluates coverage of marker genes relative to the ${COMPLETENESS_LABEL}% Nonpareil target.
         </p>
         <details>
             <summary>
@@ -2320,14 +2333,14 @@ function addRedundancyMarkersSection(parent, data, redBiplotPerSample) {
                     </div>
                 </div>
                 <p class="small-note">
-                    LR target used: ${data.lr_target_used || "NA"}% of marker-based diversity (Nonpareil 95% LR_reads).
+                    LR target used: ${data.lr_target_used || "NA"}% of marker-based diversity (Nonpareil ${COMPLETENESS_LABEL}% LR_reads).
                 </p>
                 <div class="lr-target-markers-plot-container">
                     <div id="lr-target-markers-plot" class="plotly-chart"></div>
                 </div>
                 <p class="small-note">
-                    Interactive barplot of marker coverage vs. the 95% target. The dashed midline corresponds
-                    to the 95% coverage target (0 on the Y axis). Positive bars show excess coverage (1×, 2×, ...),
+                    Interactive barplot of marker coverage vs. the ${COMPLETENESS_LABEL}% target. The dashed midline corresponds
+                    to the ${COMPLETENESS_LABEL}% coverage target (0 on the Y axis). Positive bars show excess coverage (1×, 2×, ...),
                     while negative bars show how many times more coverage would be needed (-1×, -2×, -3× etc.).
                     Bars more than 3× short of the target are shown in red.
                 </p>
@@ -2340,7 +2353,7 @@ function addRedundancyMarkersSection(parent, data, redBiplotPerSample) {
         const coverage = r.coverage_markers != null ? Number(r.coverage_markers) : null;
         let ratio = null;
         if (coverage != null && coverage > 0) {
-            ratio = coverage / 0.95;
+            ratio = coverage / COMPLETENESS_FRACTION;
         }
         return {
             sample: r.sample,
@@ -2378,7 +2391,7 @@ function addRedundancyMarkersSection(parent, data, redBiplotPerSample) {
         return [
             `<b>${d.sample || `sample ${idx + 1}`}</b>`,
             `Coverage (markers): ${(d.coverage * 100).toFixed(2)}%`,
-            `Relative to 95% target: ${(d.ratio * 100).toFixed(1)}%`,
+            `Relative to ${COMPLETENESS_LABEL}% target: ${(d.ratio * 100).toFixed(1)}%`,
             v >= 0
                 ? `Excess coverage: ${extraOrNeeded.toFixed(2)}× above target`
                 : `Additional needed: ${extraOrNeeded.toFixed(2)}× more to reach target`
@@ -2416,7 +2429,7 @@ function addRedundancyMarkersSection(parent, data, redBiplotPerSample) {
             y: 0,
             xanchor: "right",
             yanchor: "bottom",
-            text: "95% coverage target",
+            text: "${COMPLETENESS_LABEL}% coverage target",
             showarrow: false,
             font: {color: "#000", size: 11}
         }
@@ -2801,7 +2814,7 @@ function addRedundancyMarkersSection(parent, data, redBiplotPerSample) {
     div.innerHTML = `
         <h2 class="section-title">Prokaryotic coverage of samples</h2>
         <p class="section-intro">
-            This section evaluates coverage of marker genes relative to the 95% Nonpareil target.
+            This section evaluates coverage of marker genes relative to the ${COMPLETENESS_LABEL}% Nonpareil target.
         </p>
         <details>
             <summary>
@@ -2833,14 +2846,14 @@ function addRedundancyMarkersSection(parent, data, redBiplotPerSample) {
                     </div>
                 </div>
                 <p class="small-note">
-                    LR target used: ${data.lr_target_used || "NA"}% of marker-based diversity (Nonpareil 95% LR_reads).
+                    LR target used: ${data.lr_target_used || "NA"}% of marker-based diversity (Nonpareil ${COMPLETENESS_LABEL}% LR_reads).
                 </p>
                 <div class="lr-target-markers-plot-container">
                     <div id="lr-target-markers-plot" class="plotly-chart"></div>
                 </div>
                 <p class="small-note">
-                    Interactive barplot of marker coverage vs. the 95% target. The dashed midline corresponds
-                    to the 95% coverage target (0 on the Y axis). Positive bars show excess coverage (1×, 2×, ...),
+                    Interactive barplot of marker coverage vs. the ${COMPLETENESS_LABEL}% target. The dashed midline corresponds
+                    to the ${COMPLETENESS_LABEL}% coverage target (0 on the Y axis). Positive bars show excess coverage (1×, 2×, ...),
                     while negative bars show how many times more coverage would be needed (-1×, -2×, -3× etc.).
                     Bars more than 3× short of the target are shown in red.
                 </p>
@@ -2853,7 +2866,7 @@ function addRedundancyMarkersSection(parent, data, redBiplotPerSample) {
         const coverage = r.coverage_markers != null ? Number(r.coverage_markers) : null;
         let ratio = null;
         if (coverage != null && coverage > 0) {
-            ratio = coverage / 0.95;
+            ratio = coverage / COMPLETENESS_FRACTION;
         }
         return {
             sample: r.sample,
@@ -2891,7 +2904,7 @@ function addRedundancyMarkersSection(parent, data, redBiplotPerSample) {
         return [
             `<b>${d.sample || `sample ${idx + 1}`}</b>`,
             `Coverage (markers): ${(d.coverage * 100).toFixed(2)}%`,
-            `Relative to 95% target: ${(d.ratio * 100).toFixed(1)}%`,
+            `Relative to ${COMPLETENESS_LABEL}% target: ${(d.ratio * 100).toFixed(1)}%`,
             v >= 0
                 ? `Excess coverage: ${extraOrNeeded.toFixed(2)}× above target`
                 : `Additional needed: ${extraOrNeeded.toFixed(2)}× more to reach target`
@@ -2929,7 +2942,7 @@ function addRedundancyMarkersSection(parent, data, redBiplotPerSample) {
             y: 0,
             xanchor: "right",
             yanchor: "bottom",
-            text: "95% coverage target",
+            text: "${COMPLETENESS_LABEL}% coverage target",
             showarrow: false,
             font: {color: "#000", size: 11}
         }
@@ -3314,7 +3327,7 @@ function addRedundancyMarkersSection(parent, data, redBiplotPerSample) {
     div.innerHTML = `
         <h2 class="section-title">Prokaryotic coverage of samples</h2>
         <p class="section-intro">
-            This section evaluates coverage of marker genes relative to the 95% Nonpareil target.
+            This section evaluates coverage of marker genes relative to the ${COMPLETENESS_LABEL}% Nonpareil target.
         </p>
         <details>
             <summary>
@@ -3346,14 +3359,14 @@ function addRedundancyMarkersSection(parent, data, redBiplotPerSample) {
                     </div>
                 </div>
                 <p class="small-note">
-                    LR target used: ${data.lr_target_used || "NA"}% of marker-based diversity (Nonpareil 95% LR_reads).
+                    LR target used: ${data.lr_target_used || "NA"}% of marker-based diversity (Nonpareil ${COMPLETENESS_LABEL}% LR_reads).
                 </p>
                 <div class="lr-target-markers-plot-container">
                     <div id="lr-target-markers-plot" class="plotly-chart"></div>
                 </div>
                 <p class="small-note">
-                    Interactive barplot of marker coverage vs. the 95% target. The dashed midline corresponds
-                    to the 95% coverage target (0 on the Y axis). Positive bars show excess coverage (1×, 2×, ...),
+                    Interactive barplot of marker coverage vs. the ${COMPLETENESS_LABEL}% target. The dashed midline corresponds
+                    to the ${COMPLETENESS_LABEL}% coverage target (0 on the Y axis). Positive bars show excess coverage (1×, 2×, ...),
                     while negative bars show how many times more coverage would be needed (-1×, -2×, -3× etc.).
                     Bars more than 3× short of the target are shown in red.
                 </p>
@@ -3366,7 +3379,7 @@ function addRedundancyMarkersSection(parent, data, redBiplotPerSample) {
         const coverage = r.coverage_markers != null ? Number(r.coverage_markers) : null;
         let ratio = null;
         if (coverage != null && coverage > 0) {
-            ratio = coverage / 0.95;
+            ratio = coverage / COMPLETENESS_FRACTION;
         }
         return {
             sample: r.sample,
@@ -3404,7 +3417,7 @@ function addRedundancyMarkersSection(parent, data, redBiplotPerSample) {
         return [
             `<b>${d.sample || `sample ${idx + 1}`}</b>`,
             `Coverage (markers): ${(d.coverage * 100).toFixed(2)}%`,
-            `Relative to 95% target: ${(d.ratio * 100).toFixed(1)}%`,
+            `Relative to ${COMPLETENESS_LABEL}% target: ${(d.ratio * 100).toFixed(1)}%`,
             v >= 0
                 ? `Excess coverage: ${extraOrNeeded.toFixed(2)}× above target`
                 : `Additional needed: ${extraOrNeeded.toFixed(2)}× more to reach target`
@@ -3442,7 +3455,7 @@ function addRedundancyMarkersSection(parent, data, redBiplotPerSample) {
             y: 0,
             xanchor: "right",
             yanchor: "bottom",
-            text: "95% coverage target",
+            text: "${COMPLETENESS_LABEL}% coverage target",
             showarrow: false,
             font: {color: "#000", size: 11}
         }
@@ -3879,7 +3892,7 @@ function addOverallProkCoverageSection(parent, data) {
         hovertemplate: [
             `<b>Pooled marker reads</b>`,
             `Reads: ${fmtMillions(total)}`,
-            `Target (95% LR): ${fmtMillions(target)}`,
+            `Target (${COMPLETENESS_LABEL}% LR): ${fmtMillions(target)}`,
             `Relative to target: ${(ratio * 100).toFixed(1)}%`
         ].join("<br>") + "<extra></extra>",
     };
@@ -3913,7 +3926,7 @@ function addOverallProkCoverageSection(parent, data) {
                 yref: "paper",
                 y: 1.02,
                 xanchor: "left",
-                text: "95% target",
+                text: "${COMPLETENESS_LABEL}% target",
                 showarrow: false,
                 font: {size: 11}
             }
@@ -4167,8 +4180,8 @@ function main() {
     addLowQualitySection(summaryDiv, S.sequencing_quality, depthPerSample);
     addProkFractionSection(summaryDiv, S.prokaryotic_fraction, depthPerSample);
     addRedundancyReadsSection(summaryDiv, S.redundancy_reads, depthPerSample);
-    addOverallCoverageSection(summaryDiv, S.overall_coverage_summary);
     addRedundancyMarkersSection(summaryDiv, S.redundancy_markers, redBiplotPerSample);
+    addOverallCoverageSection(summaryDiv, S.overall_coverage_summary);
     addMashDistanceSection(summaryDiv, S.clusters);
     addClustersSection(summaryDiv, S.clusters);
     addRecommendationsSection(summaryDiv, S.recommendations);
