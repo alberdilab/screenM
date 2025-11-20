@@ -2207,11 +2207,17 @@ function addOverallCoverageSection(parent, data) {
         return;
     }
 
-    const barColor = combinedFlag === 1 ? "#4caf50" : combinedFlag === 2 ? "#f9a825" : "#c62828";
+    const metaTarget = Number(metaBlock.lr_95_reads);
+    const markerTarget = Number(prokBlock.lr_95_reads);
+    const meetsMeta = !isFinite(metaTarget) || metaTarget <= 0 ? true : totalReads >= metaTarget;
+    const meetsMarker = !isFinite(markerTarget) || markerTarget <= 0 ? true : totalReads >= markerTarget;
+    const barColor = (meetsMeta && meetsMarker)
+        ? "#4caf50"
+        : (meetsMeta || meetsMarker ? "#f9a825" : "#c62828");
     const shapes = [];
     const annotations = [];
 
-    const addTargetLine = (targetValue, label, color) => {
+    const addTargetLine = (targetValue, label, color, position) => {
         if (!isFinite(targetValue) || targetValue <= 0) return;
         shapes.push({
             type: "line",
@@ -2226,16 +2232,17 @@ function addOverallCoverageSection(parent, data) {
         annotations.push({
             x: targetValue,
             yref: "paper",
-            y: 1.04,
+            y: position === "bottom" ? -0.08 : 1.04,
             xanchor: "left",
             text: label,
             showarrow: false,
             font: {size: 11, color},
+            yanchor: position === "bottom" ? "top" : "bottom",
         });
     };
 
-    addTargetLine(Number(metaBlock.lr_95_reads), "Metagenomic target", "#1e88e5");
-    addTargetLine(Number(prokBlock.lr_95_reads), "Marker target", "#8e24aa");
+    addTargetLine(metaTarget, "Metagenomic target", "#1e88e5", "top");
+    addTargetLine(markerTarget, "Marker target", "#8e24aa", "bottom");
 
     const fig = {
         type: "bar",
@@ -2259,8 +2266,8 @@ function addOverallCoverageSection(parent, data) {
     const rangeMax = Math.max(totalReads, maxTarget) * 1.1;
 
     const layout = {
-        height: 220,
-        margin: {l: 140, r: 30, t: 10, b: 40},
+        height: 200,
+        margin: {l: 140, r: 30, t: 10, b: 20},
         xaxis: {
             title: "Reads",
             range: [0, rangeMax],
