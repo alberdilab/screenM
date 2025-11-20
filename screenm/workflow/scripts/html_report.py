@@ -4011,7 +4011,7 @@ function addMashDistanceSection(parent, clusters) {
                     </div>
                 </div>
                 <div class="clusters-heatmap-scroll" style="margin-top:12px; width:100%; overflow-x:auto; overflow-y:visible;">
-                    <div id="mash-heatmap-plot" class="plotly-chart" style="height:360px; min-width:720px;"></div>
+                    <div id="mash-heatmap-plot" class="plotly-chart" style="height:420px; min-width:720px;"></div>
                 </div>
                 <p class="small-note">
                     Upper triangle shows marker-based distances; lower triangle shows read-based distances. Samples are ordered
@@ -4125,9 +4125,6 @@ function addMashDistanceSection(parent, clusters) {
     const makeColorscale = (colors) =>
         colors.map((c, idx) => [idx / Math.max(1, colors.length - 1), c]);
 
-    const makeColorscale = (colors) =>
-        colors.map((c, idx) => [idx / Math.max(1, colors.length - 1), c]);
-
     const markersHeatmap = {
         type: "heatmap",
         x: orderedSamples,
@@ -4141,9 +4138,8 @@ function addMashDistanceSection(parent, clusters) {
         zmin: 0,
         zmax: maxD,
         colorbar: {
-            title: "Dissimilarity (markers)",
-            titleside: "right",
-            x: 1.12,
+            title: "Mash distance",
+            titleside: "right"
         },
         showscale: true,
     };
@@ -4159,23 +4155,18 @@ function addMashDistanceSection(parent, clusters) {
         ]),
         zmin: 0,
         zmax: maxD,
-        colorbar: {
-            title: "Dissimilarity (reads)",
-            titleside: "right",
-            x: 1.02,
-        },
-        showscale: true,
+        showscale: false,
     };
 
     const tickAngle = n > 18 ? -60 : -45;
-    const bottomMargin = n > 18 ? 120 : 80;
+    const bottomMargin = n > 18 ? 140 : 100;
     const leftMargin = n > 12 ? 170 : 140;
 
-    const layoutHeight = Math.max(320, n * 18 + 200);
+    const layoutHeight = Math.max(320, n * 20 + 220);
 
     const layout = {
         height: layoutHeight,
-        margin: {l: leftMargin, r: 100, t: 20, b: bottomMargin},
+        margin: {l: leftMargin, r: 40, t: 20, b: bottomMargin},
         xaxis: {
             tickangle: tickAngle,
             automargin: true,
@@ -4193,7 +4184,7 @@ function addMashDistanceSection(parent, clusters) {
         modeBarButtonsToRemove: ["toggleSpikelines", "autoScale2d"],
     };
 
-    Plotly.newPlot(plotDiv, [readsHeatmap, markersHeatmap], layout, config);
+    Plotly.newPlot(plotDiv, [markersHeatmap, readsHeatmap], layout, config);
     window.addEventListener("resize", () => Plotly.Plots.resize(plotDiv));
 }
 
