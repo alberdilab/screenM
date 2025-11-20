@@ -243,6 +243,10 @@ HTML_TEMPLATE = r"""<!DOCTYPE html>
         min-width: 0;
         min-height: 320px;
     }
+    .coverage-plot {
+        height: 220px !important;
+        min-height: 220px !important;
+    }
 
     .clusters-heatmap-scroll {
         overflow-x: auto;
@@ -2184,7 +2188,7 @@ function addOverallCoverageSection(parent, data) {
                     </div>
                 </div>
                 <div class="lr-target-plot-container">
-                    <div id="overall-coverage-plot" class="plotly-chart" style="height:200px;"></div>
+                    <div id="overall-coverage-plot" class="plotly-chart coverage-plot"></div>
                 </div>
                 <p class="small-note">
                     The horizontal bar shows pooled reads; vertical dashed lines mark the metagenomic (blue) and marker (purple)
@@ -2232,8 +2236,8 @@ function addOverallCoverageSection(parent, data) {
         annotations.push({
             x: targetValue,
             yref: "paper",
-            y: position === "bottom" ? 0.15 : 0.85,
-            xanchor: "left",
+            y: position === "bottom" ? 0.2 : 0.8,
+            xanchor: position === "bottom" ? "right" : "left",
             text: label,
             showarrow: false,
             font: {size: 11, color},
@@ -2266,8 +2270,8 @@ function addOverallCoverageSection(parent, data) {
     const rangeMax = Math.max(totalReads, maxTarget) * 1.1;
 
     const layout = {
-        height: 180,
-        margin: {l: 140, r: 30, t: 10, b: 10},
+        height: 200,
+        margin: {l: 140, r: 30, t: 10, b: 20},
         xaxis: {
             title: "Reads",
             range: [0, rangeMax],
