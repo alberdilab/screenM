@@ -4090,9 +4090,9 @@ function addMashDistanceSection(parent, clusters) {
 
     const n = orderedSamples.length;
     const zMarkers = Array.from({length: n}, () => Array(n).fill(null));
-    const textMarkers = Array.from({length: n}, () => Array(n).fill(null));
+    const textMarkers = Array.from({length: n}, () => Array(n).fill(""));
     const zReads = Array.from({length: n}, () => Array(n).fill(null));
-    const textReads = Array.from({length: n}, () => Array(n).fill(null));
+    const textReads = Array.from({length: n}, () => Array(n).fill(""));
     let maxD = 0;
 
     orderedSamples.forEach((s1, i) => {
