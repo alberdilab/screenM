@@ -46,6 +46,12 @@ THRESH_PROK_MODERATE = 50.0
 THRESH_WARNINGS_HIGH_FRACTION = 0.5
 THRESH_LR_EXCEEDS_FRACTION = 0.5
 
+# Coverage ratio thresholds (relative to target) for medians and sample fractions
+THRESH_COV_MEDIAN_GOOD = 1.0   # >=100% of target
+THRESH_COV_MEDIAN_MODERATE = 0.8
+THRESH_COV_SAMPLES_GOOD = 1.0  # 100% of samples meet target
+THRESH_COV_SAMPLES_MODERATE = 0.8  # >=80% of samples meet target
+
 # Mash clustering – separation ratio (between / within)
 THRESH_CLUSTER_RATIO_GOOD = 1.20
 THRESH_CLUSTER_RATIO_MODERATE = 1.05
@@ -852,27 +858,45 @@ def compute_redundancy_reads(results_json: Dict[str, Any]) -> Dict[str, Any]:
             sd_cov = stats.pstdev(coverage_estimates) if len(coverage_estimates) > 1 else 0.0
             cov_cv = sd_cov / mean_cov
 
-    # Coverage-based flags (primary)
+    # Coverage-based flags (primary, separate components)
     n_cov = len(coverage_ratios)
     n_meet = sum(1 for r in coverage_ratios if r >= 1.0)
     frac_meet = (n_meet / n_cov) if n_cov else 0.0
+    median_ratio = stats.median(coverage_ratios) if coverage_ratios else None
+    mean_ratio = stats.mean(coverage_ratios) if coverage_ratios else None
+
+    if median_ratio is None:
+        flag_cov_median = 3
+    else:
+        if median_ratio >= THRESH_COV_MEDIAN_GOOD:
+            flag_cov_median = 1
+        elif median_ratio >= THRESH_COV_MEDIAN_MODERATE:
+            flag_cov_median = 2
+        else:
+            flag_cov_median = 3
+
     if n_cov == 0:
-        flag_redundancy = 3
+        flag_cov_samples = 3
+    else:
+        if frac_meet >= THRESH_COV_SAMPLES_GOOD:
+            flag_cov_samples = 1
+        elif frac_meet >= THRESH_COV_SAMPLES_MODERATE:
+            flag_cov_samples = 2
+        else:
+            flag_cov_samples = 3
+
+    if n_cov == 0:
         coverage_msg = (
             "No LR_reads targets with valid coverage ratios were found; cannot assess completeness for metagenomic reads."
         )
     else:
-        if n_meet == n_cov:
-            flag_redundancy = 1
-        elif frac_meet >= (1 - THRESH_LR_EXCEEDS_FRACTION):
-            flag_redundancy = 2
-        else:
-            flag_redundancy = 3
         coverage_msg = (
             f"{n_meet}/{n_cov} samples meet or exceed the coverage target ({lr_target_used}%). "
-            f"Median coverage ratio is {stats.median(coverage_ratios):.2f}× "
-            f"(mean {stats.mean(coverage_ratios):.2f}×)."
+            f"Median coverage ratio is {median_ratio:.2f}× "
+            f"(mean {mean_ratio:.2f}×)."
         )
+
+    flag_redundancy = max(flag_cov_median, flag_cov_samples)
 
     # LR vs depth flag (always 1/2/3 when data exist)
     if n_with_lr == 0:
@@ -908,8 +932,13 @@ def compute_redundancy_reads(results_json: Dict[str, Any]) -> Dict[str, Any]:
         "sd_C_total": sd_k,
         "cv_C_total": cv_k,
         "coverage_median": cov_median,
+        "coverage_ratio_median": median_ratio,
+        "coverage_ratio_mean": mean_ratio,
         "coverage_cv": cov_cv,
         "flag_redundancy": flag_redundancy,
+        "flag_coverage_median": flag_cov_median,
+        "flag_coverage_samples": flag_cov_samples,
+        "percent_samples_meet_target": frac_meet * 100 if n_cov else None,
         "n_samples_with_lr": n_with_lr,
         "n_samples_lr_exceeds_depth": lr_exceeds,
         "flag_LR_vs_depth": flag_lr,
@@ -1015,27 +1044,45 @@ def compute_redundancy_markers(results_json: Dict[str, Any]) -> Dict[str, Any]:
             sd_cov = stats.pstdev(coverage_estimates) if len(coverage_estimates) > 1 else 0.0
             cov_cv = sd_cov / mean_cov
 
-    # Coverage-based flags (primary)
+    # Coverage-based flags (primary, separate components)
     n_cov = len(coverage_ratios)
     n_meet = sum(1 for r in coverage_ratios if r >= 1.0)
     frac_meet = (n_meet / n_cov) if n_cov else 0.0
+    median_ratio = stats.median(coverage_ratios) if coverage_ratios else None
+    mean_ratio = stats.mean(coverage_ratios) if coverage_ratios else None
+
+    if median_ratio is None:
+        flag_cov_median = 3
+    else:
+        if median_ratio >= THRESH_COV_MEDIAN_GOOD:
+            flag_cov_median = 1
+        elif median_ratio >= THRESH_COV_MEDIAN_MODERATE:
+            flag_cov_median = 2
+        else:
+            flag_cov_median = 3
+
     if n_cov == 0:
-        flag_redundancy = 3
+        flag_cov_samples = 3
+    else:
+        if frac_meet >= THRESH_COV_SAMPLES_GOOD:
+            flag_cov_samples = 1
+        elif frac_meet >= THRESH_COV_SAMPLES_MODERATE:
+            flag_cov_samples = 2
+        else:
+            flag_cov_samples = 3
+
+    if n_cov == 0:
         coverage_msg = (
             "No LR_reads targets with valid coverage ratios were found; cannot assess completeness for marker genes."
         )
     else:
-        if n_meet == n_cov:
-            flag_redundancy = 1
-        elif frac_meet >= (1 - THRESH_LR_EXCEEDS_FRACTION):
-            flag_redundancy = 2
-        else:
-            flag_redundancy = 3
         coverage_msg = (
             f"{n_meet}/{n_cov} samples meet or exceed the LR target ({lr_target_used}%). "
-            f"Median coverage ratio is {stats.median(coverage_ratios):.2f}× "
-            f"(mean {stats.mean(coverage_ratios):.2f}×)."
+            f"Median coverage ratio is {median_ratio:.2f}× "
+            f"(mean {mean_ratio:.2f}×)."
         )
+
+    flag_redundancy = max(flag_cov_median, flag_cov_samples)
 
     # LR vs depth flag (always 1/2/3 when data exist)
     if n_with_lr == 0:
@@ -1071,8 +1118,13 @@ def compute_redundancy_markers(results_json: Dict[str, Any]) -> Dict[str, Any]:
         "sd_C_total": sd_k,
         "cv_C_total": cv_k,
         "coverage_median": cov_median,
+        "coverage_ratio_median": median_ratio,
+        "coverage_ratio_mean": mean_ratio,
         "coverage_cv": cov_cv,
         "flag_redundancy_markers": flag_redundancy,
+        "flag_coverage_median_markers": flag_cov_median,
+        "flag_coverage_samples_markers": flag_cov_samples,
+        "percent_samples_meet_target_markers": frac_meet * 100 if n_cov else None,
         "n_samples_with_lr": n_with_lr,
         "n_samples_lr_exceeds_depth": lr_exceeds,
         "flag_LR_vs_depth_markers": flag_lr,
