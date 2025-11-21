@@ -2156,6 +2156,96 @@ function addClustersSection(parent, clusters, ordinations) {
 
     Plotly.newPlot(plotDiv, [heatmap], layout, config);
     window.addEventListener("resize", () => Plotly.Plots.resize(plotDiv));
+
+    const pcoaMarkersDiv = div.querySelector("#pcoa-markers-plot");
+    const pcoaReadsDiv = div.querySelector("#pcoa-reads-plot");
+
+    function renderPCoA(container, ordData, colorMap, label, clusterKey) {
+        if (!container) return;
+        const samplesOrd = ordData && Array.isArray(ordData.samples) ? ordData.samples : [];
+        const points = samplesOrd.map(s => ({
+            sample: s.sample,
+            x: Number(s.x),
+            y: Number(s.y),
+            cl: s[clusterKey]
+        })).filter(p => isFinite(p.x) && isFinite(p.y));
+
+        if (!points.length) {
+            container.outerHTML = `<div class="small-note">No ordination available for ${label.toLowerCase()}.</div>`;
+            return;
+        }
+        if (typeof Plotly === "undefined") {
+            container.outerHTML = `<div class="small-note">Plotly failed to load; cannot render ${label.toLowerCase()} PCoA plot.</div>`;
+            return;
+        }
+
+        const varExpl = Array.isArray(ordData.variance_explained) ? ordData.variance_explained : [];
+        const axisLabel = (name, idx) => {
+            const v = Number(varExpl[idx]);
+            return Number.isFinite(v) ? `${name} (${(v * 100).toFixed(1)}%)` : name;
+        };
+
+        const grouped = {};
+        points.forEach(p => {
+            const key = p.cl === null || p.cl === undefined ? "__unassigned__" : String(p.cl);
+            if (!grouped[key]) grouped[key] = [];
+            grouped[key].push(p);
+        });
+
+        const clusterKeys = Object.keys(grouped).sort((a, b) => {
+            if (a === "__unassigned__") return 1;
+            if (b === "__unassigned__") return -1;
+            const na = Number(a), nb = Number(b);
+            if (!isNaN(na) && !isNaN(nb)) return na - nb;
+            return a.localeCompare(b);
+        });
+
+        const traces = clusterKeys.map(key => {
+            const pts = grouped[key];
+            const color = key === "__unassigned__" ? "#9ca3af" : (colorMap[key] || "#9ca3af");
+            const hover = pts.map(p => {
+                const clusterLabel = key === "__unassigned__" ? "not assigned" : `cluster ${key}`;
+                return [
+                    `<b>${p.sample}</b>`,
+                    `Cluster: ${clusterLabel}`,
+                    `X: ${p.x.toFixed(3)}`,
+                    `Y: ${p.y.toFixed(3)}`
+                ].join("<br>");
+            });
+            return {
+                type: "scatter",
+                mode: "markers",
+                name: key === "__unassigned__" ? "Unassigned" : `Cluster ${key}`,
+                x: pts.map(p => p.x),
+                y: pts.map(p => p.y),
+                customdata: hover,
+                hovertemplate: "%{customdata}<extra></extra>",
+                marker: {color, size: 9, line: {width: 0.5, color: "#ffffff"}}
+            };
+        });
+
+        const layout = {
+            height: 320,
+            margin: {l: 70, r: 20, t: 8, b: 60},
+            xaxis: {title: axisLabel("Axis 1", 0), zeroline: false},
+            yaxis: {title: axisLabel("Axis 2", 1), zeroline: false},
+            hovermode: "closest",
+            showlegend: true,
+            legend: {orientation: "h", y: -0.18, x: 0}
+        };
+
+        const config = {
+            displaylogo: false,
+            responsive: true,
+            modeBarButtonsToRemove: ["toggleSpikelines", "autoScale2d"],
+        };
+
+        Plotly.newPlot(container, traces, layout, config);
+        window.addEventListener("resize", () => Plotly.Plots.resize(container));
+    }
+
+    renderPCoA(pcoaMarkersDiv, ordMarkers, markerColors, "Markers", "cluster_markers");
+    renderPCoA(pcoaReadsDiv, ordReads, readColors, "Reads", "cluster_reads");
 }
 
 /* Combined overall coverage summary */
