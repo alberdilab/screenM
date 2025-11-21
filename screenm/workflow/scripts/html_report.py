@@ -260,6 +260,12 @@ HTML_TEMPLATE = r"""<!DOCTYPE html>
         width: 100%;
         height: 210px;
     }
+    .cluster-ordinations {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+        gap: 10px;
+        margin: 10px 0 6px 0;
+    }
 
     .chart-tooltip {
         position: fixed;
@@ -1852,7 +1858,7 @@ function addRedundancyMarkersSection(parent, data, redBiplotPerSample) {
 }
 
 /* Sample clusters */
-function addClustersSection(parent, clusters) {
+function addClustersSection(parent, clusters, ordinations) {
     if (!clusters) return;
     const div = document.createElement("div");
     div.className = "section " + flagClass(clusters.flag_clusters);
@@ -1860,6 +1866,9 @@ function addClustersSection(parent, clusters) {
     const msg = clusters.message_clusters || "";
     const markers = clusters.markers || {};
     const reads = clusters.reads || {};
+    const ord = ordinations || {};
+    const ordMarkers = ord.markers;
+    const ordReads = ord.reads;
 
     const nClustersMarkers = markers.n_clusters != null ? markers.n_clusters : "NA";
     const nClustersReads = reads.n_clusters != null ? reads.n_clusters : "NA";
@@ -1909,11 +1918,15 @@ function addClustersSection(parent, clusters) {
                     </div>
                 </div>
                 <p class="small-note">
-                    Heatmap below shows cluster assignments per sample. Rows correspond to marker-based
-                    and read-based clustering; columns are samples. Colour palettes are distinct per row,
-                    so cluster IDs are not directly comparable between the two. Samples are ordered to keep
-                    cluster mates adjacent.
+                    PCoA plots (Figure below) place samples in 2D using Mash distances; colours match the cluster heatmap.
+                    Heatmap shows cluster assignments per sample. Rows correspond to marker-based and read-based clustering;
+                    columns are samples. Colour palettes are distinct per row, so cluster IDs are not directly comparable between
+                    the two. Samples are ordered to keep cluster mates adjacent.
                 </p>
+                <div class="cluster-ordinations">
+                    <div id="pcoa-markers-plot" class="plotly-chart" style="min-height:260px;"></div>
+                    <div id="pcoa-reads-plot" class="plotly-chart" style="min-height:260px;"></div>
+                </div>
                 <div class="clusters-heatmap-scroll" style="width:100%; overflow-x:auto; overflow-y:visible;">
                     <div id="clusters-heatmap-plot" class="plotly-chart" style="min-width:860px;"></div>
                 </div>
@@ -1967,15 +1980,13 @@ function addClustersSection(parent, clusters) {
         return;
     }
 
-    const markerPalette = [
-        "#08306b", "#08519c", "#2171b5", "#4292c6",
-        "#41b6c4", "#1d91c0", "#2c7fb8", "#7fcdbb",
-        "#0c2c84", "#4eb3d3", "#2b8cbe", "#a1dab4"
+    const coldPalette = [
+        "#08306b", "#08519c", "#2171b5", "#2c7fb8", "#41b6c4",
+        "#66c2a4", "#7bccc4", "#a1dab4", "#c7e9c0", "#edf8fb"
     ];
-    const readPalette = [
-        "#7f0000", "#b30000", "#e31a1c", "#ff7f00",
-        "#f03b20", "#bd0026", "#fd8d3c", "#fc4e2a",
-        "#b10026", "#dd1c77", "#df65b0", "#ff1493"
+    const warmPalette = [
+        "#7f0000", "#b30000", "#e31a1c", "#fc4e2a", "#fd8d3c",
+        "#feb24c", "#ffdd57", "#ffb300", "#ff7f00", "#d95f0e"
     ];
 
     function buildClusterColorMap(map, palette) {
@@ -1994,8 +2005,8 @@ function addClustersSection(parent, clusters) {
         return colorMap;
     }
 
-    const markerColors = buildClusterColorMap(markersMap, markerPalette);
-    const readColors = buildClusterColorMap(readsMap, readPalette);
+    const markerColors = buildClusterColorMap(markersMap, coldPalette);
+    const readColors = buildClusterColorMap(readsMap, warmPalette);
 
     const markerClustersPresent = Object.keys(markerColors).length > 0;
     const readClustersPresent = Object.keys(readColors).length > 0;
@@ -2043,15 +2054,6 @@ function addClustersSection(parent, clusters) {
         readClusterList.length ? readStart + readClusterList.length - 1 : 0,
         0
     );
-
-    const coldPalette = [
-        "#08306b", "#08519c", "#2171b5", "#2c7fb8", "#41b6c4",
-        "#66c2a4", "#7bccc4", "#a1dab4", "#c7e9c0", "#edf8fb"
-    ];
-    const warmPalette = [
-        "#7f0000", "#b30000", "#e31a1c", "#fc4e2a", "#fd8d3c",
-        "#feb24c", "#ffdd57", "#ffb300", "#ff7f00", "#d95f0e"
-    ];
 
     const colorscale = [];
     const range = maxVal - missingVal || 1;
@@ -2824,6 +2826,96 @@ function addClustersSection(parent, clusters) {
 
     Plotly.newPlot(plotDiv, [heatmap], layout, config);
     window.addEventListener("resize", () => Plotly.Plots.resize(plotDiv));
+
+    const pcoaMarkersDiv = div.querySelector("#pcoa-markers-plot");
+    const pcoaReadsDiv = div.querySelector("#pcoa-reads-plot");
+
+    function renderPCoA(container, ordData, colorMap, label, clusterKey) {
+        if (!container) return;
+        const samplesOrd = ordData && Array.isArray(ordData.samples) ? ordData.samples : [];
+        const points = samplesOrd.map(s => ({
+            sample: s.sample,
+            x: Number(s.x),
+            y: Number(s.y),
+            cl: s[clusterKey]
+        })).filter(p => isFinite(p.x) && isFinite(p.y));
+
+        if (!points.length) {
+            container.outerHTML = `<div class="small-note">No ordination available for ${label.toLowerCase()}.</div>`;
+            return;
+        }
+        if (typeof Plotly === "undefined") {
+            container.outerHTML = `<div class="small-note">Plotly failed to load; cannot render ${label.toLowerCase()} PCoA plot.</div>`;
+            return;
+        }
+
+        const varExpl = Array.isArray(ordData.variance_explained) ? ordData.variance_explained : [];
+        const axisLabel = (name, idx) => {
+            const v = Number(varExpl[idx]);
+            return Number.isFinite(v) ? `${name} (${(v * 100).toFixed(1)}%)` : name;
+        };
+
+        const grouped = {};
+        points.forEach(p => {
+            const key = p.cl === null || p.cl === undefined ? "__unassigned__" : String(p.cl);
+            if (!grouped[key]) grouped[key] = [];
+            grouped[key].push(p);
+        });
+
+        const clusterKeys = Object.keys(grouped).sort((a, b) => {
+            if (a === "__unassigned__") return 1;
+            if (b === "__unassigned__") return -1;
+            const na = Number(a), nb = Number(b);
+            if (!isNaN(na) && !isNaN(nb)) return na - nb;
+            return a.localeCompare(b);
+        });
+
+        const traces = clusterKeys.map(key => {
+            const pts = grouped[key];
+            const color = key === "__unassigned__" ? "#9ca3af" : (colorMap[key] || "#9ca3af");
+            const hover = pts.map(p => {
+                const clusterLabel = key === "__unassigned__" ? "not assigned" : `cluster ${key}`;
+                return [
+                    `<b>${p.sample}</b>`,
+                    `Cluster: ${clusterLabel}`,
+                    `X: ${p.x.toFixed(3)}`,
+                    `Y: ${p.y.toFixed(3)}`
+                ].join("<br>");
+            });
+            return {
+                type: "scatter",
+                mode: "markers",
+                name: key === "__unassigned__" ? "Unassigned" : `Cluster ${key}`,
+                x: pts.map(p => p.x),
+                y: pts.map(p => p.y),
+                customdata: hover,
+                hovertemplate: "%{customdata}<extra></extra>",
+                marker: {color, size: 9, line: {width: 0.5, color: "#ffffff"}}
+            };
+        });
+
+        const layout = {
+            height: 320,
+            margin: {l: 70, r: 20, t: 8, b: 60},
+            xaxis: {title: axisLabel("Axis 1", 0), zeroline: false},
+            yaxis: {title: axisLabel("Axis 2", 1), zeroline: false},
+            hovermode: "closest",
+            showlegend: true,
+            legend: {orientation: "h", y: -0.18, x: 0}
+        };
+
+        const config = {
+            displaylogo: false,
+            responsive: true,
+            modeBarButtonsToRemove: ["toggleSpikelines", "autoScale2d"],
+        };
+
+        Plotly.newPlot(container, traces, layout, config);
+        window.addEventListener("resize", () => Plotly.Plots.resize(container));
+    }
+
+    renderPCoA(pcoaMarkersDiv, ordMarkers, markerColors, "Markers", "cluster_markers");
+    renderPCoA(pcoaReadsDiv, ordReads, readColors, "Reads", "cluster_reads");
 }
 
 /* Prokaryotic coverage (markers Nonpareil) */
@@ -4256,7 +4348,7 @@ function main() {
     addRedundancyMarkersSection(summaryDiv, S.redundancy_markers, redBiplotPerSample);
     addOverallCoverageSection(summaryDiv, S.overall_coverage_summary);
     addMashDistanceSection(summaryDiv, S.clusters);
-    addClustersSection(summaryDiv, S.clusters);
+    addClustersSection(summaryDiv, S.clusters, S.ordinations);
     addRecommendationsSection(summaryDiv, S.recommendations);
     setSummaryHintBehaviour(document.body);
 }
