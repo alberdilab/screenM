@@ -898,7 +898,7 @@ def compute_redundancy_reads(results_json: Dict[str, Any]) -> Dict[str, Any]:
 
     flag_redundancy = max(flag_cov_median, flag_cov_samples)
 
-    # LR vs depth flag (always 1/2/3 when data exist)
+    # LR vs depth flag (1/2/3, plus 4 when none meet target depth)
     if n_with_lr == 0:
         flag_lr = 3
         lr_msg = (
@@ -912,6 +912,11 @@ def compute_redundancy_reads(results_json: Dict[str, Any]) -> Dict[str, Any]:
             lr_msg = (
                 f"All {n_with_lr} samples are at or above the sequencing depth needed for {lr_target_used}% completeness."
             )
+        elif lr_exceeds == n_with_lr:
+            flag_lr = 4
+            lr_msg = (
+                f"All {n_with_lr} samples fall below the depth needed for {lr_target_used}% completeness."
+            )
         elif frac_exceeds < THRESH_LR_EXCEEDS_FRACTION:
             flag_lr = 2
             lr_msg = (
@@ -923,7 +928,9 @@ def compute_redundancy_reads(results_json: Dict[str, Any]) -> Dict[str, Any]:
                 f"Most samples ({lr_exceeds}/{n_with_lr}) fall below the depth needed for {lr_target_used}% completeness."
             )
 
-    message = coverage_msg + " " + lr_msg
+    message = coverage_msg
+    if lr_msg and flag_lr != 4:
+        message += " " + lr_msg
 
     return {
         "n_samples_kappa": n_kappa,
@@ -1084,7 +1091,7 @@ def compute_redundancy_markers(results_json: Dict[str, Any]) -> Dict[str, Any]:
 
     flag_redundancy = max(flag_cov_median, flag_cov_samples)
 
-    # LR vs depth flag (always 1/2/3 when data exist)
+    # LR vs depth flag (1/2/3, plus 4 when none meet target depth)
     if n_with_lr == 0:
         flag_lr = 3
         lr_msg = (
@@ -1098,6 +1105,11 @@ def compute_redundancy_markers(results_json: Dict[str, Any]) -> Dict[str, Any]:
             lr_msg = (
                 f"All {n_with_lr} samples are at or above the marker depth needed for {lr_target_used}% completeness."
             )
+        elif lr_exceeds == n_with_lr:
+            flag_lr = 4
+            lr_msg = (
+                f"All {n_with_lr} samples fall below the marker depth needed for {lr_target_used}% completeness."
+            )
         elif frac_exceeds < THRESH_LR_EXCEEDS_FRACTION:
             flag_lr = 2
             lr_msg = (
@@ -1109,7 +1121,9 @@ def compute_redundancy_markers(results_json: Dict[str, Any]) -> Dict[str, Any]:
                 f"Most samples ({lr_exceeds}/{n_with_lr}) fall below the marker depth needed for {lr_target_used}% completeness."
             )
 
-    message = coverage_msg + " " + lr_msg
+    message = coverage_msg
+    if lr_msg and flag_lr != 4:
+        message += " " + lr_msg
 
     return {
         "n_samples_kappa": n_kappa,
