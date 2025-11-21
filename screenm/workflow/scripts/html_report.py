@@ -1923,17 +1923,11 @@ function addClustersSection(parent, clusters, ordinations) {
                         <div class="cluster-stat-note">Mean Mash distance within / between marker clusters</div>
                     </div>
                     <div class="cluster-stat-item">
-                        <div class="cluster-stat-label">Within / between (reads)</div>
-                        <div class="cluster-stat-value">${fmtFloat(withinReads, 3)} / ${fmtFloat(betweenReads, 3)}</div>
-                        <div class="cluster-stat-note">Mean Mash distance within / between read clusters</div>
-                    </div>
+                    <div class="cluster-stat-label">Within / between (reads)</div>
+                    <div class="cluster-stat-value">${fmtFloat(withinReads, 3)} / ${fmtFloat(betweenReads, 3)}</div>
+                    <div class="cluster-stat-note">Mean Mash distance within / between read clusters</div>
                 </div>
-                <p class="small-note">
-                    PCoA plots (Figure below) place samples in 2D using Mash distances; colours match the cluster heatmap.
-                    Heatmap shows cluster assignments per sample. Rows correspond to marker-based and read-based clustering;
-                    columns are samples. Colour palettes are distinct per row, so cluster IDs are not directly comparable between
-                    the two. Samples are ordered to keep cluster mates adjacent.
-                </p>
+            </div>
                 <div class="cluster-plot-area">
                     <div class="cluster-ordinations">
                         <div id="pcoa-markers-plot" class="plotly-chart" style="min-height:260px;"></div>
@@ -1943,6 +1937,11 @@ function addClustersSection(parent, clusters, ordinations) {
                 <div class="clusters-heatmap-scroll" style="width:100%; overflow-x:auto; overflow-y:visible;">
                     <div id="clusters-heatmap-plot" class="plotly-chart" style="min-width:860px;"></div>
                 </div>
+                <p class="small-note">
+                    PCoA plots above place samples in 2D using Mash distances; colours match the cluster heatmap below. Heatmap rows
+                    correspond to marker-based and read-based clustering; columns are samples. Colour palettes are distinct per row,
+                    so cluster IDs are not directly comparable. Samples are ordered to keep cluster mates adjacent.
+                </p>
                 <p class="small-note">
                     Hover over tiles for exact cluster assignments. Samples without an assignment in a given
                     row are shown as light grey.
@@ -2132,9 +2131,9 @@ function addClustersSection(parent, clusters, ordinations) {
     };
 
     const tickAngle = sampleOrder.length > 18 ? -60 : -45;
-    const bottomMargin = sampleOrder.length > 18 ? 200 : 150;
+    const bottomMargin = sampleOrder.length > 18 ? 140 : 110;
 
-    const layoutHeight = Math.max(260, 80 + sampleOrder.length * 12);
+    const layoutHeight = Math.max(200, 70 + sampleOrder.length * 10);
     plotDiv.style.height = `${layoutHeight}px`;
 
     const layout = {
