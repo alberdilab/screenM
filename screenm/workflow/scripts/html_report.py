@@ -2133,10 +2133,10 @@ function addClustersSection(parent, clusters, ordinations) {
     };
 
     const tickAngle = sampleOrder.length > 18 ? -60 : -45;
-    const bottomMargin = sampleOrder.length > 18 ? 140 : 110;
+    const bottomMargin = sampleOrder.length > 18 ? 110 : 90;
 
-    // Reduce vertical footprint of the heatmap area
-    const layoutHeight = Math.max(140, Math.floor((80 + sampleOrder.length * 10) * 0.6));
+    // Restore heatmap height while trimming excess outer box space
+    const layoutHeight = Math.max(220, 80 + sampleOrder.length * 10);
     plotDiv.style.height = `${layoutHeight}px`;
 
     const layout = {
