@@ -4,6 +4,7 @@ import json
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 import statistics as stats
+import numpy as np
 
 # ---------- Global thresholds (tune here) ----------
 
@@ -1345,6 +1346,156 @@ def compute_clusters(results_json: Dict[str, Any]) -> Dict[str, Any]:
     }
 
 
+def _build_distance_matrix(pairwise: Optional[List[Dict[str, Any]]]) -> Tuple[List[str], Optional[np.ndarray]]:
+    """
+    Convert a list of pairwise records (sample1, sample2, distance) into a square
+    distance matrix. Returns (sample_names, matrix) where matrix is None if
+    distances are missing or invalid.
+    """
+    if not pairwise:
+        return [], None
+
+    samples: List[str] = []
+    for rec in pairwise:
+        s1 = rec.get("sample1")
+        s2 = rec.get("sample2")
+        if s1 is not None:
+            samples.append(s1)
+        if s2 is not None:
+            samples.append(s2)
+    sample_names = sorted(set(samples))
+    n = len(sample_names)
+    if n < 2:
+        return sample_names, None
+
+    index = {s: i for i, s in enumerate(sample_names)}
+    mat = np.full((n, n), np.nan, dtype=float)
+    np.fill_diagonal(mat, 0.0)
+
+    for rec in pairwise:
+        s1 = rec.get("sample1")
+        s2 = rec.get("sample2")
+        dist = rec.get("distance")
+        if s1 not in index or s2 not in index:
+            continue
+        try:
+            dval = float(dist)
+        except (TypeError, ValueError):
+            continue
+        i, j = index[s1], index[s2]
+        mat[i, j] = dval
+        mat[j, i] = dval
+
+    if np.isnan(mat).any():
+        return sample_names, None
+    return sample_names, mat
+
+
+def _pcoa(distance_matrix: np.ndarray) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
+    """
+    Perform classical multidimensional scaling (PCoA) on a full distance matrix.
+    Returns eigenvalues, variance explained, and coordinates (n x 2).
+    """
+    n = distance_matrix.shape[0]
+    if n < 2:
+        return np.array([]), np.array([]), np.zeros((n, 2))
+
+    d2 = distance_matrix ** 2
+    H = np.eye(n) - np.full((n, n), 1.0 / n)
+    B = -0.5 * H @ d2 @ H
+
+    eigvals, eigvecs = np.linalg.eigh(B)
+    order = np.argsort(eigvals)[::-1]
+    eigvals = eigvals[order]
+    eigvecs = eigvecs[:, order]
+
+    positive = np.clip(eigvals, a_min=0.0, a_max=None)
+    total = positive.sum()
+    var_expl = positive / total if total > 0 else np.array([])
+
+    keep = min(2, eigvecs.shape[1])
+    coords = eigvecs[:, :keep] * np.sqrt(np.clip(eigvals[:keep], a_min=0.0, a_max=None))
+    if coords.shape[1] < 2:
+        coords = np.pad(coords, ((0, 0), (0, 2 - coords.shape[1])), "constant")
+    return eigvals, var_expl, coords
+
+
+def _cluster_map(clusters_block: Dict[str, Any]) -> Dict[str, Any]:
+    """
+    Build a mapping sample -> cluster_id from a cluster summary block.
+    """
+    mapping: Dict[str, Any] = {}
+    for entry in clusters_block.get("clusters", []):
+        cid = entry.get("cluster_id")
+        if cid is None:
+            continue
+        for sample in entry.get("members") or []:
+            mapping[sample] = cid
+    return mapping
+
+
+def compute_ordination_from_pairwise(
+    pairwise: Optional[List[Dict[str, Any]]],
+    markers_map: Dict[str, Any],
+    reads_map: Dict[str, Any],
+) -> Optional[Dict[str, Any]]:
+    """
+    Build a 2D ordination (PCoA) from pairwise distances and annotate each point
+    with marker/read cluster assignments.
+    """
+    sample_names, dist_matrix = _build_distance_matrix(pairwise)
+    if dist_matrix is None or not len(sample_names):
+        return None
+
+    eigvals, var_expl, coords = _pcoa(dist_matrix)
+    sample_coords: List[Dict[str, Any]] = []
+    for i, sample in enumerate(sample_names):
+        sample_coords.append(
+            {
+                "sample": sample,
+                "x": float(coords[i, 0]),
+                "y": float(coords[i, 1]),
+                "cluster_markers": markers_map.get(sample),
+                "cluster_reads": reads_map.get(sample),
+            }
+        )
+
+    return {
+        "method": "PCoA",
+        "n_samples": len(sample_names),
+        "variance_explained": [float(v) for v in var_expl[:2]],
+        "variance_explained_cumulative": float(var_expl[:2].sum()) if var_expl.size else None,
+        "eigenvalues": [float(ev) for ev in eigvals[:2]],
+        "samples": sample_coords,
+    }
+
+
+def compute_ordinations(clusters: Dict[str, Any]) -> Dict[str, Any]:
+    """
+    Create ordination coordinates for marker- and read-based Mash distances.
+    """
+    markers_block = clusters.get("markers", {}) or {}
+    reads_block = clusters.get("reads", {}) or {}
+    markers_map = _cluster_map(markers_block)
+    reads_map = _cluster_map(reads_block)
+
+    ord_markers = compute_ordination_from_pairwise(
+        clusters.get("pairwise_markers"),
+        markers_map,
+        reads_map,
+    )
+    ord_reads = compute_ordination_from_pairwise(
+        clusters.get("pairwise_reads"),
+        markers_map,
+        reads_map,
+    )
+
+    return {
+        "markers": ord_markers,
+        "reads": ord_reads,
+    }
+
+
 def compute_recommendations(summary: Dict[str, Any]) -> Dict[str, Any]:
     """
     Build a simple recommendation block based on existing section flags/metrics.
@@ -1520,6 +1671,7 @@ def main():
     redundancy_reads = compute_redundancy_reads(results_json)
     redundancy_markers = compute_redundancy_markers(results_json)
     clusters = compute_clusters(results_json)
+    ordinations = compute_ordinations(clusters)
     total_reads_all = compute_total_reads_all(results_json)
 
     recommendations = compute_recommendations({
@@ -1705,6 +1857,7 @@ def main():
             "redundancy_reads": redundancy_reads,
             "redundancy_markers": redundancy_markers,
             "clusters": clusters,
+            "ordinations": ordinations,
             # aggregate total reads across all samples
             "total_reads_all_samples": total_reads_all,
             "recommendations": recommendations,

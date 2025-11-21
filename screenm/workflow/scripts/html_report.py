@@ -1381,7 +1381,7 @@ function addProkFractionSection(parent, data, depthPerSample) {
     window.addEventListener("resize", () => Plotly.Plots.resize(plotDiv));
 }
 
-/* Overall metagenomic coverage (reads Nonpareil) */
+/* Metagenomic coverage of samples */
 function addRedundancyReadsSection(parent, data, depthPerSample) {
     if (!data) return;
     const div = document.createElement("div");
@@ -1405,9 +1405,9 @@ function addRedundancyReadsSection(parent, data, depthPerSample) {
         <h2 class="section-title">Metagenomic coverage of samples</h2>
         <p class="section-intro">
             This section evaluates how close the sequencing depth of individual samples is from the metagenomic 
-            completeness target of ${COMPLETENESS_LABEL}%. This is estimated based on the redundancy of sequencing reads in each samples. 
+            completeness target of ${COMPLETENESS_LABEL}%. This is estimated based on the redundancy of sequencing reads in each sample. 
             Samples that meet or exceed this target are estimated to have sufficient information to properly characterise the
-            metagenomic (not just prokaryotes but also eukaryotes and viruses) complexity of the system. Samples below this target may require 
+            metagenomic (not just prokaryotes but also eukaryotes and viruses) complexity of the sample. Samples below this target may require 
             input from other samples or additional sequencing. Note that it is very common a single sample cannot reach this target on its own,
             especially in high-complexity environments, so don't be alarmed if many of your samples fall below the target.
         </p>
@@ -1618,7 +1618,7 @@ function addRedundancyReadsSection(parent, data, depthPerSample) {
     window.addEventListener("resize", () => Plotly.Plots.resize(plotDiv));
 }
 
-/* Prokaryotic coverage (markers Nonpareil) */
+/* Prokaryotic coverage of samples */
 function addRedundancyMarkersSection(parent, data, redBiplotPerSample) {
     if (!data) return;
     const div = document.createElement("div");
@@ -2826,7 +2826,6 @@ function addClustersSection(parent, clusters) {
     window.addEventListener("resize", () => Plotly.Plots.resize(plotDiv));
 }
 
-/* Overall metagenomic coverage summary */
 /* Prokaryotic coverage (markers Nonpareil) */
 function addRedundancyMarkersSection(parent, data, redBiplotPerSample) {
     if (!data) return;
