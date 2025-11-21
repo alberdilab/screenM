@@ -1404,7 +1404,12 @@ function addRedundancyReadsSection(parent, data, depthPerSample) {
     div.innerHTML = `
         <h2 class="section-title">Metagenomic coverage of samples</h2>
         <p class="section-intro">
-            This section evaluates how close the sequencing depth is to the Nonpareil LR target for metagenomic reads.
+            This section evaluates how close the sequencing depth of individual samples is from the metagenomic 
+            completeness target of ${COMPLETENESS_LABEL}%. This is estimated based on the redundancy of sequencing reads in each samples. 
+            Samples that meet or exceed this target are estimated to have sufficient information to properly characterise the
+            metagenomic (not just prokaryotes but also eukaryotes and viruses) complexity of the system. Samples below this target may require 
+            input from other samples or additional sequencing. Note that it is very common a single sample cannot reach this target on its own,
+            especially in high-complexity environments, so don't be alarmed if many of your samples fall below the target.
         </p>
         <details>
             <summary>
@@ -1536,7 +1541,7 @@ function addRedundancyReadsSection(parent, data, depthPerSample) {
             y: 0,
             xanchor: "right",
             yanchor: "bottom",
-            text: "LR target",
+            text: `${COMPLETENESS_LABEL}% coverage target`,
             showarrow: false,
             font: {color: "#000", size: 11}
         }
@@ -1636,7 +1641,12 @@ function addRedundancyMarkersSection(parent, data, redBiplotPerSample) {
     div.innerHTML = `
         <h2 class="section-title">Prokaryotic coverage of samples</h2>
         <p class="section-intro">
-            This section evaluates coverage of marker genes relative to the ${COMPLETENESS_LABEL}% Nonpareil target.
+            This section evaluates coverage of marker gene sequences (rather than all reads in the previous section) of individual samples relative to the completeness target of ${COMPLETENESS_LABEL}%.
+            This target is estimated based on the redundancy of reads previously mapped to prokaryotic marker genes, so unlike the previous section,
+            providing an estimation specifically on coverage of prokaryotic genomes. Samples that meet or exceed this target are expected to have sufficient sequencing
+            depth for capturing most of the prokaryotic metagenomic diversity. Samples below this target may require 
+            input from other samples or additional sequencing. Note that it is very common a single sample cannot reach this target on its own,
+            especially in high-complexity environments, so don't be alarmed if many of your samples fall below the target.
         </p>
         <details>
             <summary>
@@ -1764,7 +1774,7 @@ function addRedundancyMarkersSection(parent, data, redBiplotPerSample) {
             y: 0,
             xanchor: "right",
             yanchor: "bottom",
-            text: "${COMPLETENESS_LABEL}% coverage target",
+            text: `${COMPLETENESS_LABEL}% coverage target`,
             showarrow: false,
             font: {color: "#000", size: 11}
         }
@@ -1863,7 +1873,10 @@ function addClustersSection(parent, clusters) {
     div.innerHTML = `
         <h2 class="section-title">Sample clusters</h2>
         <p class="section-intro">
-            This section highlights similarity-based clusters inferred from Mash distances on reads and marker genes.
+            This section presents details of the clusters of samples inferred based on their pairwise dissimilarities,
+            based on both marker gene sequences or sequencing reads. Samples within the same cluster are expected to be more similar
+            to each other than to samples in other clusters, which may indicate they originate from similar environments
+            or conditions. Clustering can help identify groups of related samples for coassembly or comparative analyses.
         </p>
         <details>
             <summary>
@@ -2159,7 +2172,10 @@ function addOverallCoverageSection(parent, data) {
     div.innerHTML = `
         <h2 class="section-title">Overall coverage of the dataset</h2>
         <p class="section-intro">
-            Pooled Nonpareil results combining metagenomic reads and marker genes for the entire project.
+            This section provides an estimation of the opposite end of the sequencing spectrum_ whether and how the pooled set of
+            reads from all samples is sufficient to reach the ${COMPLETENESS_LABEL}% completeness target. 
+            This is complementary to the previous sections that focused on individual samples. Here, both total reads (Metagenomic target) and
+            prokaryotic marker gene-based (Marker target) coverage are evaluated against the ${COMPLETENESS_LABEL}% completeness target.
         </p>
         <details>
             <summary>
@@ -2449,7 +2465,7 @@ function addRedundancyMarkersSection(parent, data, redBiplotPerSample) {
             y: 0,
             xanchor: "right",
             yanchor: "bottom",
-            text: "${COMPLETENESS_LABEL}% coverage target",
+            text: `${COMPLETENESS_LABEL}% coverage target`,
             showarrow: false,
             font: {color: "#000", size: 11}
         }
@@ -2962,7 +2978,7 @@ function addRedundancyMarkersSection(parent, data, redBiplotPerSample) {
             y: 0,
             xanchor: "right",
             yanchor: "bottom",
-            text: "${COMPLETENESS_LABEL}% coverage target",
+            text: `${COMPLETENESS_LABEL}% coverage target`,
             showarrow: false,
             font: {color: "#000", size: 11}
         }
@@ -3475,7 +3491,7 @@ function addRedundancyMarkersSection(parent, data, redBiplotPerSample) {
             y: 0,
             xanchor: "right",
             yanchor: "bottom",
-            text: "${COMPLETENESS_LABEL}% coverage target",
+            text: `${COMPLETENESS_LABEL}% coverage target`,
             showarrow: false,
             font: {color: "#000", size: 11}
         }
@@ -3988,7 +4004,10 @@ function addMashDistanceSection(parent, clusters) {
     div.innerHTML = `
         <h2 class="section-title">Pairwise sample dissimilarities</h2>
         <p class="section-intro">
-            Average pairwise Mash distances across all samples (markers and reads), with heatmaps for both.
+            This section displays the average pairwise dissimilarities across all analysed samples, both for reads (representing the entire metagenome) 
+            and marker genes (representing the prokaryotic fraction of the metagenome). Mean distances and coefficients of variation (CV)  
+            are useful to assess how much individual samples can benefit from the information provided by other samples in the dataset, as well as to
+            identify cutoffs that can guide sample clustering for coassembly or other analyses.
         </p>
         <details>
             <summary>
