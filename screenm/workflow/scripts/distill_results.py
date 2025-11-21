@@ -1727,6 +1727,15 @@ def main():
     data_json = load_json(data_path)
     results_json = load_json(results_path)
 
+    # Capture metadata (and allow reuse downstream, including seed/parameters)
+    merged_metadata = {
+        "data_json": str(data_path),
+        "results_json": str(results_path),
+    }
+    results_metadata = results_json.get("metadata")
+    if isinstance(results_metadata, dict):
+        merged_metadata.update(results_metadata)
+
     screening_overview = compute_screening_overview(data_json, results_json)
     low_quality = compute_low_quality(results_json)
     prok_fraction = compute_prokaryotic_fraction(results_json)
@@ -1734,10 +1743,13 @@ def main():
     redundancy_markers = compute_redundancy_markers(results_json)
     clusters = compute_clusters(results_json)
     # Try to stabilise ordinations (PCoA) using a seed, if provided
+    params_block = results_json.get("parameters") or {}
+    meta_params = results_metadata.get("parameters") if isinstance(results_metadata, dict) else {}
     seed_val = (
         results_json.get("seed")
         or results_json.get("random_seed")
-        or (results_json.get("parameters") or {}).get("seed")
+        or params_block.get("seed")
+        or meta_params.get("seed")
         or merged_metadata.get("seed")
         or merged_metadata.get("random_seed")
         or merged_metadata.get("parameters", {}).get("seed")
@@ -1758,16 +1770,6 @@ def main():
         "redundancy_markers": redundancy_markers,
         "clusters": clusters,
     })
-
-    # --- NEW: capture metadata from results.json, but keep old fields unchanged ---
-    merged_metadata = {
-    "data_json": str(data_path),
-    "results_json": str(results_path),
-    }
-
-    results_metadata = results_json.get("metadata")
-    if isinstance(results_metadata, dict):
-        merged_metadata.update(results_metadata)
 
     meta: Dict[str, Any] = {
         "n_samples_in_results": int(results_json.get("n_samples", 0)),
