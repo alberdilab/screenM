@@ -1934,14 +1934,14 @@ function addClustersSection(parent, clusters, ordinations) {
                         <div id="pcoa-reads-plot" class="plotly-chart" style="min-height:260px;"></div>
                     </div>
                 </div>
-                <div class="clusters-heatmap-scroll" style="width:100%; overflow-x:auto; overflow-y:visible;">
-                    <div id="clusters-heatmap-plot" class="plotly-chart" style="min-width:860px;"></div>
-                </div>
                 <p class="small-note">
                     PCoA plots above place samples in 2D using Mash distances; colours match the cluster heatmap below. Heatmap rows
                     correspond to marker-based and read-based clustering; columns are samples. Colour palettes are distinct per row,
                     so cluster IDs are not directly comparable. Samples are ordered to keep cluster mates adjacent.
                 </p>
+                <div class="clusters-heatmap-scroll" style="width:100%; overflow-x:auto; overflow-y:visible;">
+                    <div id="clusters-heatmap-plot" class="plotly-chart" style="min-width:860px;"></div>
+                </div>
                 <p class="small-note">
                     Hover over tiles for exact cluster assignments. Samples without an assignment in a given
                     row are shown as light grey.
@@ -2133,7 +2133,7 @@ function addClustersSection(parent, clusters, ordinations) {
     const tickAngle = sampleOrder.length > 18 ? -60 : -45;
     const bottomMargin = sampleOrder.length > 18 ? 140 : 110;
 
-    const layoutHeight = Math.max(200, 70 + sampleOrder.length * 10);
+    const layoutHeight = Math.max(220, 80 + sampleOrder.length * 10);
     plotDiv.style.height = `${layoutHeight}px`;
 
     const layout = {
@@ -2229,7 +2229,7 @@ function addClustersSection(parent, clusters, ordinations) {
 
         const layout = {
             height: 320,
-            margin: {l: 70, r: 20, t: 18, b: 80},
+            margin: {l: 70, r: 20, t: 30, b: 80},
             title: {text: label + " dissimilarity", x: 0, font: {size: 13}},
             xaxis: {title: axisLabel("Axis 1", 0), zeroline: false},
             yaxis: {title: axisLabel("Axis 2", 1), zeroline: false},

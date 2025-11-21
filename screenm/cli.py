@@ -42,7 +42,7 @@ END = "\033[1;92m"
 # Snakemake launcher
 ###
 
-def run_screenm_pipeline(name, input, output, reads, threads, kmer, seed, completeness, dpi):
+def run_screenm_pipeline(name, input, output, reads, threads, kmer, sketch, seed, completeness, dpi):
     snakemake_command = [
         "/bin/bash", "-c",
         "snakemake "
@@ -51,7 +51,7 @@ def run_screenm_pipeline(name, input, output, reads, threads, kmer, seed, comple
         f"--cores {threads} "
         #f"--quiet 2>/dev/null "
         f"--configfile {CONFIG_PATH} "
-        f"--config package_dir={PACKAGE_DIR} version={VERSION} name={name} input={input} output={output} reads={reads} kmer={kmer} seed={seed} completeness={completeness} dpi={dpi}"
+        f"--config package_dir={PACKAGE_DIR} version={VERSION} name={name} input={input} output={output} reads={reads} kmer={kmer} sketch={sketch} seed={seed} completeness={completeness} dpi={dpi}"
     ]
     subprocess.run(snakemake_command, shell=False, check=True)
 
@@ -69,6 +69,7 @@ def main():
     parser.add_argument("-o", "--output", required=False, type=pathlib.Path, default=os.getcwd(), help="Working directory. Default is the directory from which screenM is called.")
     parser.add_argument("-r", "--reads", required=False, type=int, default=1000000, help="Number of reads per sample to be used for screening (Default: 1 million).")   
     parser.add_argument("-k", "--kmer", required=False, type=int, default=21, help="K-mer length used for the calculations (Default: 21).")   
+    parser.add_argument("-e", "--sketch", required=False, type=int, default=10000, help="Sketch size used for the MASH calculations (Default: 10000).") 
     parser.add_argument("-s", "--seed", required=False, type=int, default=random.randint(0, 9999), help="Random seed for reproducibility. If not set, results will vary across runs.")   
     parser.add_argument("-c", "--completeness", required=False, type=int, default=95, help="Completeness target to estimate suitable sequencing depth (Default: 95).")   
     parser.add_argument("-t", "--threads", required=False, type=int, default=1, help="Number of threads to use (Default: 1).")   
@@ -107,6 +108,7 @@ def main():
                 args.reads,
                 args.threads, 
                 args.kmer,
+                args.sketch,
                 args.seed,
                 args.completeness,
                 args.dpi)

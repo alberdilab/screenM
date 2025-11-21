@@ -10,6 +10,7 @@ INPUT_JSON  = config["input"]
 OUTDIR      = config["output"]
 READS       = config["reads"]
 KMER        = config["kmer"]
+SKETCH      = config["sketch"]
 COMPLETENESS     = config["completeness"]
 DPI         = config["dpi"]
 SEED        = config["seed"]
@@ -416,12 +417,13 @@ rule mash_sketch_markers:
     params:
         base = f"{OUTDIR}/mash/mash_markers",
         seed = SEED,
-        kmer = KMER
+        kmer = KMER,
+        sketch = SKETCH
     shell:
         """
         echo "[`date '+%Y-%m-%d %H:%M:%S'`] Sketching marker kmer profile"
         module load mash/2.3
-        mash sketch -k {params.kmer} -S {params.seed} -o {params.base} {input} > /dev/null 2>&1
+        mash sketch -k {params.kmer} -s {params.sketch} -S {params.seed} -o {params.base} {input} > /dev/null 2>&1
         """
 
 rule mash_distance_markers:
@@ -495,12 +497,13 @@ rule mash_sketch_reads:
     params:
         base = f"{OUTDIR}/mash/mash_reads",
         seed = SEED,
-        kmer = KMER
+        kmer = KMER,
+        sketch = SKETCH
     shell:
         """
         echo "[`date '+%Y-%m-%d %H:%M:%S'`] Sketching read kmer profile"
         module load mash/2.3
-        mash sketch -k {params.kmer} -S {params.seed} -o {params.base} {input} > /dev/null 2>&1
+        mash sketch -k {params.kmer} -s {params.sketch} -S {params.seed} -o {params.base} {input} > /dev/null 2>&1
         """
 
 rule mash_distance_reads:
