@@ -2117,8 +2117,10 @@ function addClustersSection(parent, clusters, ordinations) {
         text: displayText,
         texttemplate: "%{text}",
         textfont: {
-            color: "#111111",
-            size: 12,
+            color: "#ffffff",
+            size: 14,
+            family: "Arial, sans-serif",
+            weight: "bold",
         },
         customdata: hoverText,
         hovertemplate: "%{customdata}<extra></extra>",
@@ -2133,7 +2135,8 @@ function addClustersSection(parent, clusters, ordinations) {
     const tickAngle = sampleOrder.length > 18 ? -60 : -45;
     const bottomMargin = sampleOrder.length > 18 ? 140 : 110;
 
-    const layoutHeight = Math.max(220, 80 + sampleOrder.length * 10);
+    // Reduce vertical footprint of the heatmap area
+    const layoutHeight = Math.max(140, Math.floor((80 + sampleOrder.length * 10) * 0.6));
     plotDiv.style.height = `${layoutHeight}px`;
 
     const layout = {
