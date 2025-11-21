@@ -933,7 +933,32 @@ def compute_redundancy_reads(results_json: Dict[str, Any]) -> Dict[str, Any]:
         )
         lr_msg = f"{lr_msg} {frac_msg}"
 
-    message = (lr_msg or "").strip()
+    def coverage_phrase(m_cov: Optional[float], target: float) -> str:
+        if m_cov is None:
+            return ("Median coverage could not be estimated.", 3)
+        pct = m_cov * 100
+        tgt = target * 100
+        if m_cov >= target:
+            return (f"Median coverage is {pct:.1f}%, above the {tgt:.0f}% target.", 1)
+        if m_cov >= target * THRESH_COV_MEDIAN_MODERATE:
+            return (f"Median coverage is {pct:.1f}%, close to the {tgt:.0f}% target.", 2)
+        return (f"Median coverage is {pct:.1f}%, well below the {tgt:.0f}% target.", 3)
+
+    coverage_msg_text, coverage_flag_for_msg = coverage_phrase(median_cov, comp_target)
+
+    def linker(lr_flag: int, cov_flag: int) -> str:
+        if lr_flag == 1:
+            return "Additionally" if cov_flag != 3 else "However"
+        if lr_flag == 4:
+            return "However"
+        if lr_flag == 2:
+            return "Meanwhile" if cov_flag <= 2 else "However"
+        if lr_flag == 3:
+            return "Additionally" if cov_flag <= 2 else "Moreover"
+        return "Also"
+
+    link = linker(flag_lr, coverage_flag_for_msg)
+    message = f"{lr_msg} {link} {coverage_msg_text}".strip()
 
     return {
         "n_samples_kappa": n_kappa,
@@ -1113,16 +1138,16 @@ def compute_redundancy_markers(results_json: Dict[str, Any]) -> Dict[str, Any]:
         frac_exceeds = lr_exceeds / n_with_lr
         if lr_exceeds == 0:
             flag_lr = 1
-            lr_msg = "LR target depth is achieved in all samples."
+            lr_msg = f"All samples achieved the completeness target of {lr_target_used}."
         elif lr_exceeds == n_with_lr:
             flag_lr = 4
-            lr_msg = "LR target depth is missed in every sample."
+            lr_msg = f"None of the samples reach the completeness target of {lr_target_used}."
         elif frac_exceeds < THRESH_LR_EXCEEDS_FRACTION:
             flag_lr = 2
-            lr_msg = "LR target depth partly achieved."
+            lr_msg = f"A few samples missed the completeness target of {lr_target_used}"
         else:
             flag_lr = 3
-            lr_msg = "LR target depth mostly missed."
+            lr_msg = f"Most samples missed the completeness target of {lr_target_used}"
 
         frac_msg = (
             f"{lr_exceeds}/{n_with_lr} samples ({frac_exceeds*100:.1f}%) fall below the "
@@ -1130,7 +1155,18 @@ def compute_redundancy_markers(results_json: Dict[str, Any]) -> Dict[str, Any]:
         )
         lr_msg = f"{lr_msg} {frac_msg}"
 
-    message = (lr_msg or "").strip()
+    def coverage_phrase(m_cov: Optional[float], target: float) -> str:
+        if m_cov is None:
+            return "Median coverage could not be estimated."
+        pct = m_cov * 100
+        tgt = target * 100
+        if m_cov >= target:
+            return f"Median coverage is {pct:.1f}%, above the {tgt:.0f}% target."
+        if m_cov >= target * 0.85:
+            return f"Median coverage is {pct:.1f}%, close to the {tgt:.0f}% target."
+        return f"Median coverage is {pct:.1f}%, well below the {tgt:.0f}% target."
+
+    message = f"{lr_msg} {coverage_phrase(median_cov, comp_target)}".strip()
 
     return {
         "n_samples_kappa": n_kappa,

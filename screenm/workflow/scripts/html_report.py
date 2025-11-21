@@ -1440,26 +1440,23 @@ function addRedundancyReadsSection(parent, data, depthPerSample) {
                     <div class="redundancy-stat-item">
                         <div class="redundancy-stat-label">Coverage median</div>
                         <div class="redundancy-stat-value">${covMedian === null ? "NA" : fmtFloat(covMedian * 100, 1)}%</div>
-                        <div class="redundancy-stat-note">Estimated Nonpareil coverage (C_total)</div>
+                        <div class="redundancy-stat-note">Estimated for the total sequencing depth</div>
                     </div>
                     <div class="redundancy-stat-item">
-                        <div class="redundancy-stat-label">Coverage CV</div>
+                        <div class="redundancy-stat-label">Coefficient of variation of coverage</div>
                         <div class="redundancy-stat-value">${covCV === null ? "NA" : fmtFloat(covCV, 3)}</div>
                         <div class="redundancy-stat-note">Coefficient of variation of coverage estimates</div>
                     </div>
                     <div class="redundancy-stat-item">
-                        <div class="redundancy-stat-label">Samples above LR target</div>
+                        <div class="redundancy-stat-label">Samples above the ${COMPLETENESS_LABEL}% completeness target</div>
                         <div class="redundancy-stat-value">
                             ${fmtInt(nAtOrAbove)} / ${fmtInt(nLR)}
                         </div>
                         <div class="redundancy-stat-note">
-                            ${fracAtOrAbove === null ? "NA" : fmtFloat(fracAtOrAbove, 1) + "%"} of samples with LR target
+                            ${fracAtOrAbove === null ? "NA" : fmtFloat(fracAtOrAbove, 1) + "%"} of samples reached the target
                         </div>
                     </div>
                 </div>
-                <p class="small-note">
-                    LR target used: ${data.lr_target_used || "NA"}% of metagenomic diversity (Nonpareil ${COMPLETENESS_LABEL}% LR_reads).
-                </p>
                 <div class="lr-target-plot-container">
                     <div id="lr-target-plot" class="plotly-chart"></div>
                 </div>
@@ -1638,9 +1635,6 @@ function addRedundancyMarkersSection(parent, data, redBiplotPerSample) {
                         </div>
                     </div>
                 </div>
-                <p class="small-note">
-                    LR target used: ${data.lr_target_used || "NA"}% of marker-based diversity (Nonpareil ${COMPLETENESS_LABEL}% LR_reads).
-                </p>
                 <div class="lr-target-markers-plot-container">
                     <div id="lr-target-markers-plot" class="plotly-chart"></div>
                 </div>
