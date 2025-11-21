@@ -1470,9 +1470,11 @@ def compute_ordination_from_pairwise(
     }
 
 
-def compute_ordinations(clusters: Dict[str, Any]) -> Dict[str, Any]:
+def compute_ordinations(clusters: Dict[str, Any], seed: Optional[int] = None) -> Dict[str, Any]:
     """
     Create ordination coordinates for marker- and read-based Mash distances.
+    If both are available, uses a seed-driven Procrustes alignment to orient
+    the read ordination closer to the marker ordination (helps comparability).
     """
     markers_block = clusters.get("markers", {}) or {}
     reads_block = clusters.get("reads", {}) or {}
@@ -1489,6 +1491,66 @@ def compute_ordinations(clusters: Dict[str, Any]) -> Dict[str, Any]:
         markers_map,
         reads_map,
     )
+
+    def _align_reads_to_markers(ord_reads_local, ord_markers_local, seed_local):
+        if not ord_reads_local or not ord_markers_local:
+            return ord_reads_local
+        samples_reads = ord_reads_local.get("samples") or []
+        samples_mark = ord_markers_local.get("samples") or []
+        if not samples_reads or not samples_mark:
+            return ord_reads_local
+        marker_map = {s["sample"]: s for s in samples_mark if "sample" in s}
+        common_idx = [i for i, s in enumerate(samples_reads) if s.get("sample") in marker_map]
+        if len(common_idx) < 2:
+            return ord_reads_local
+
+        rng = np.random.default_rng(seed_local if seed_local is not None else 0)
+
+        coords_reads = np.array([[float(s.get("x", 0) or 0), float(s.get("y", 0) or 0)] for s in samples_reads])
+        coords_marks = np.array([
+            [
+                float(marker_map[samples_reads[i]["sample"]].get("x", 0) or 0),
+                float(marker_map[samples_reads[i]["sample"]].get("y", 0) or 0),
+            ]
+            for i in common_idx
+        ])
+        coords_common = coords_reads[common_idx]
+
+        # Center
+        src_mean = coords_common.mean(axis=0)
+        tgt_mean = coords_marks.mean(axis=0)
+        src_centered = coords_common - src_mean
+        tgt_centered = coords_marks - tgt_mean
+
+        # Covariance and rotation
+        cov = src_centered.T @ tgt_centered
+        try:
+            U, _, Vt = np.linalg.svd(cov)
+            R = U @ Vt
+            if np.linalg.det(R) < 0:
+                flip = np.eye(R.shape[0])
+                flip[-1, -1] = -1
+                R = U @ flip @ Vt
+                # optional seeded jitter for tie-breaking reflection
+                if rng.random() < 0.5:
+                    R = -R
+        except np.linalg.LinAlgError:
+            return ord_reads_local
+
+        src_var = np.sum(src_centered ** 2)
+        if src_var == 0:
+            return ord_reads_local
+        scale = np.trace(R.T @ cov) / src_var
+
+        # Apply transform to all read points
+        transformed = ((coords_reads - src_mean) @ R) * scale + tgt_mean
+        for i, s in enumerate(samples_reads):
+            s["x"] = float(transformed[i, 0])
+            s["y"] = float(transformed[i, 1])
+        ord_reads_local["aligned_to_markers"] = True
+        return ord_reads_local
+
+    ord_reads = _align_reads_to_markers(ord_reads, ord_markers, seed)
 
     return {
         "markers": ord_markers,
@@ -1671,7 +1733,21 @@ def main():
     redundancy_reads = compute_redundancy_reads(results_json)
     redundancy_markers = compute_redundancy_markers(results_json)
     clusters = compute_clusters(results_json)
-    ordinations = compute_ordinations(clusters)
+    # Try to stabilise ordinations (PCoA) using a seed, if provided
+    seed_val = (
+        results_json.get("seed")
+        or results_json.get("random_seed")
+        or (results_json.get("parameters") or {}).get("seed")
+        or merged_metadata.get("seed")
+        or merged_metadata.get("random_seed")
+        or merged_metadata.get("parameters", {}).get("seed")
+    )
+    try:
+        seed_val = int(seed_val)
+    except Exception:
+        seed_val = None
+
+    ordinations = compute_ordinations(clusters, seed=seed_val)
     total_reads_all = compute_total_reads_all(results_json)
 
     recommendations = compute_recommendations({
