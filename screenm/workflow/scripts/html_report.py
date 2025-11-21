@@ -1500,12 +1500,13 @@ function addRedundancyReadsSection(parent, data, depthPerSample) {
         return;
     }
 
+    const targetFrac = COMPLETENESS_FRACTION;
     const samples = combined.map((d, idx) => d.sample || `sample ${idx + 1}`);
-    const values = combined.map(d => d.ratio);
+    const values = combined.map(d => d.ratio * targetFrac); // estimated coverage fraction
 
     const colors = values.map(v => {
-        if (v >= 1) return "#4caf50";
-        if (v >= 0.85) return "#f9a825";
+        if (v >= targetFrac) return "#4caf50";
+        if (v >= targetFrac * 0.85) return "#f9a825";
         return "#c62828";
     });
 
@@ -1514,19 +1515,19 @@ function addRedundancyReadsSection(parent, data, depthPerSample) {
             `<b>${d.sample || `sample ${idx + 1}`}</b>`,
             `Sequenced: ${fmtMillions(d.observed)} reads`,
             `Target (${COMPLETENESS_LABEL}% LR): ${fmtMillions(d.target)} reads`,
-            `Relative depth: ${(d.ratio * 100).toFixed(1)}%`
+            `Estimated coverage: ${(values[idx] * 100).toFixed(1)}%`
         ].filter(Boolean).join("<br>");
     });
 
-    const maxVal = Math.max(1, Math.max(...values) * 1.1);
+    const maxVal = Math.max(targetFrac, Math.max(...values) * 1.1);
     const shapes = [
         {
             type: "line",
             xref: "paper",
             x0: 0,
             x1: 1,
-            y0: 1,
-            y1: 1,
+            y0: targetFrac,
+            y1: targetFrac,
             line: {color: "#000", width: 1.4, dash: "dot"}
         }
     ];
@@ -1534,7 +1535,7 @@ function addRedundancyReadsSection(parent, data, depthPerSample) {
         {
             xref: "paper",
             x: 0.995,
-            y: 1,
+            y: targetFrac,
             xanchor: "right",
             yanchor: "bottom",
             text: `${COMPLETENESS_LABEL}% target`,
@@ -1571,7 +1572,7 @@ function addRedundancyReadsSection(parent, data, depthPerSample) {
             automargin: true,
         },
         yaxis: {
-            title: "Relative depth (× target)",
+            title: "Estimated coverage (fraction)",
             range: [0, maxVal],
             separatethousands: true,
             zeroline: false,
@@ -1690,32 +1691,36 @@ function addRedundancyMarkersSection(parent, data, redBiplotPerSample) {
         return;
     }
 
+    const targetFrac = COMPLETENESS_FRACTION;
     const samples = combined.map((d, idx) => d.sample || `sample ${idx + 1}`);
-    const values = combined.map(d => d.ratio);
+    const values = combined.map(d => {
+        const cov = Number(d.coverage);
+        return Number.isFinite(cov) ? cov : 0;
+    });
 
     const colors = values.map(v => {
-        if (v >= 1) return "#4caf50";
-        if (v >= 0.85) return "#f9a825";
+        if (v >= targetFrac) return "#4caf50";
+        if (v >= targetFrac * 0.85) return "#f9a825";
         return "#c62828";
     });
 
     const hover = combined.map((d, idx) => {
         return [
             `<b>${d.sample || `sample ${idx + 1}`}</b>`,
-            `Coverage (markers): ${(d.coverage * 100).toFixed(2)}%`,
-            `Relative to ${COMPLETENESS_LABEL}% target: ${(d.ratio * 100).toFixed(1)}%`
+            `Coverage (markers): ${(values[idx] * 100).toFixed(2)}%`,
+            `Target: ${COMPLETENESS_LABEL}%`
         ].filter(Boolean).join("<br>");
     });
 
-    const maxVal = Math.max(1, Math.max(...values) * 1.1);
+    const maxVal = Math.max(targetFrac, Math.max(...values) * 1.1);
     const shapes = [
         {
             type: "line",
             xref: "paper",
             x0: 0,
             x1: 1,
-            y0: 1,
-            y1: 1,
+            y0: targetFrac,
+            y1: targetFrac,
             line: {color: "#000", width: 1.4, dash: "dot"}
         }
     ];
@@ -1723,7 +1728,7 @@ function addRedundancyMarkersSection(parent, data, redBiplotPerSample) {
         {
             xref: "paper",
             x: 0.995,
-            y: 1,
+            y: targetFrac,
             xanchor: "right",
             yanchor: "bottom",
             text: `${COMPLETENESS_LABEL}% coverage target`,
@@ -1760,7 +1765,7 @@ function addRedundancyMarkersSection(parent, data, redBiplotPerSample) {
             automargin: true,
         },
         yaxis: {
-            title: "Relative coverage (× target)",
+            title: "Estimated coverage (fraction)",
             range: [0, maxVal],
             separatethousands: true,
             zeroline: false,
