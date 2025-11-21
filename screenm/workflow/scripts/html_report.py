@@ -4102,7 +4102,7 @@ function addMashDistanceSection(parent, clusters) {
     const status = sectionStatus("Pairwise sample dissimilarities", clusters.flag_clusters);
 
     div.innerHTML = `
-        <h2 class="section-title">Pairwise sample dissimilarities</h2>
+        <h2 class="section-title">Sample dissimilarities</h2>
         <p class="section-intro">
             This section displays the average pairwise dissimilarities across all analysed samples, both for reads (representing the entire metagenome) 
             and marker genes (representing the prokaryotic fraction of the metagenome). Mean distances and coefficients of variation (CV)  
