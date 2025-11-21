@@ -1410,9 +1410,9 @@ function addRedundancyReadsSection(parent, data, depthPerSample) {
     const nBelow = data.n_samples_lr_exceeds_depth || 0;
     const nAtOrAbove = nLR ? (nLR - nBelow) : 0;
     const fracAtOrAbove = nLR ? (100 * nAtOrAbove / nLR) : null;
-    const coverageVals = (Array.isArray(data.coverage_ratios) && data.coverage_ratios.length)
-        ? data.coverage_ratios.filter(v => typeof v === "number" && isFinite(v))
-        : (data.coverage_median !== undefined ? [data.coverage_median] : []);
+    const coverageVals = Array.isArray(data.per_sample_coverage)
+        ? data.per_sample_coverage.map(d => d.coverage).filter(v => typeof v === "number" && isFinite(v))
+        : [];
     const covMedian = data.coverage_median != null ? data.coverage_median : median(coverageVals);
     const covCV = data.coverage_cv != null ? data.coverage_cv : coeffVar(coverageVals);
 
@@ -1473,20 +1473,10 @@ function addRedundancyReadsSection(parent, data, depthPerSample) {
     `;
     parent.appendChild(div);
 
-    const combined = (depthPerSample || []).map(d => {
-        const observed = d.total_reads != null ? Number(d.total_reads) : null;
-        const target = d.target_reads_95_LR_reads != null ? Number(d.target_reads_95_LR_reads) : null;
-        let ratio = null;
-        if (observed != null && target && target > 0) {
-            ratio = observed / target;
-        }
-        return {
-            sample: d.sample,
-            observed,
-            target,
-            ratio
-        };
-    }).filter(d => d.ratio != null);
+    const combined = (data.per_sample_coverage || []).map(d => ({
+        sample: d.sample,
+        coverage: Number(d.coverage),
+    })).filter(d => Number.isFinite(d.coverage));
 
     const plotDiv = div.querySelector("#lr-target-plot");
 
@@ -1502,7 +1492,7 @@ function addRedundancyReadsSection(parent, data, depthPerSample) {
 
     const targetFrac = COMPLETENESS_FRACTION;
     const samples = combined.map((d, idx) => d.sample || `sample ${idx + 1}`);
-    const values = combined.map(d => d.ratio * targetFrac); // estimated coverage fraction
+    const values = combined.map(d => d.coverage);
 
     const colors = values.map(v => {
         if (v >= targetFrac) return "#4caf50";
@@ -1513,13 +1503,11 @@ function addRedundancyReadsSection(parent, data, depthPerSample) {
     const hover = combined.map((d, idx) => {
         return [
             `<b>${d.sample || `sample ${idx + 1}`}</b>`,
-            `Sequenced: ${fmtMillions(d.observed)} reads`,
-            `Target (${COMPLETENESS_LABEL}% LR): ${fmtMillions(d.target)} reads`,
             `Estimated coverage: ${(values[idx] * 100).toFixed(1)}%`
         ].filter(Boolean).join("<br>");
     });
 
-    const maxVal = Math.max(targetFrac, Math.max(...values) * 1.1);
+    const maxVal = 1.0;
     const shapes = [
         {
             type: "line",
@@ -1666,18 +1654,10 @@ function addRedundancyMarkersSection(parent, data, redBiplotPerSample) {
     `;
     parent.appendChild(div);
 
-    const combined = (redBiplotPerSample || []).map(r => {
-        const coverage = r.coverage_markers != null ? Number(r.coverage_markers) : null;
-        let ratio = null;
-        if (coverage != null && coverage > 0) {
-            ratio = coverage / COMPLETENESS_FRACTION;
-        }
-        return {
-            sample: r.sample,
-            coverage,
-            ratio
-        };
-    }).filter(d => d.ratio != null);
+    const combined = (data.per_sample_coverage_markers || []).map(r => ({
+        sample: r.sample,
+        coverage: Number(r.coverage),
+    })).filter(d => Number.isFinite(d.coverage));
 
     const plotDiv = div.querySelector("#lr-target-markers-plot");
 
@@ -1712,7 +1692,7 @@ function addRedundancyMarkersSection(parent, data, redBiplotPerSample) {
         ].filter(Boolean).join("<br>");
     });
 
-    const maxVal = Math.max(targetFrac, Math.max(...values) * 1.1);
+    const maxVal = 1.0;
     const shapes = [
         {
             type: "line",
