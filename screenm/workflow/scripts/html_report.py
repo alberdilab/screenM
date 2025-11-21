@@ -260,6 +260,13 @@ HTML_TEMPLATE = r"""<!DOCTYPE html>
         width: 100%;
         height: 210px;
     }
+    .cluster-plot-area {
+        margin-top: 10px;
+        border: 1px solid #ddd;
+        border-radius: 4px;
+        background: #fff;
+        padding: 10px;
+    }
     .cluster-ordinations {
         display: grid;
         grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
@@ -1923,9 +1930,11 @@ function addClustersSection(parent, clusters, ordinations) {
                     columns are samples. Colour palettes are distinct per row, so cluster IDs are not directly comparable between
                     the two. Samples are ordered to keep cluster mates adjacent.
                 </p>
-                <div class="cluster-ordinations">
-                    <div id="pcoa-markers-plot" class="plotly-chart" style="min-height:260px;"></div>
-                    <div id="pcoa-reads-plot" class="plotly-chart" style="min-height:260px;"></div>
+                <div class="cluster-plot-area">
+                    <div class="cluster-ordinations">
+                        <div id="pcoa-markers-plot" class="plotly-chart" style="min-height:260px;"></div>
+                        <div id="pcoa-reads-plot" class="plotly-chart" style="min-height:260px;"></div>
+                    </div>
                 </div>
                 <div class="clusters-heatmap-scroll" style="width:100%; overflow-x:auto; overflow-y:visible;">
                     <div id="clusters-heatmap-plot" class="plotly-chart" style="min-width:860px;"></div>
