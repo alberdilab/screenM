@@ -598,6 +598,10 @@ function addProjectHighlights(container, distill, summary) {
             value: fmtDateTime(metadata.created_at || metadata.run_date || metadata.date)
         },
         {
+            label: "Seed",
+            value: metadata.seed ?? metadata.random_seed ?? metadata.parameters?.seed ?? "NA"
+        },
+        {
             label: "ScreenM version",
             value: metadata.software_version || metadata.screenm_version || metadata.version || "unknown"
         },
@@ -2128,9 +2132,9 @@ function addClustersSection(parent, clusters, ordinations) {
     };
 
     const tickAngle = sampleOrder.length > 18 ? -60 : -45;
-    const bottomMargin = sampleOrder.length > 18 ? 160 : 120;
+    const bottomMargin = sampleOrder.length > 18 ? 200 : 150;
 
-    const layoutHeight = Math.max(140, 60 + sampleOrder.length * 8);
+    const layoutHeight = Math.max(260, 80 + sampleOrder.length * 12);
     plotDiv.style.height = `${layoutHeight}px`;
 
     const layout = {
@@ -2226,12 +2230,13 @@ function addClustersSection(parent, clusters, ordinations) {
 
         const layout = {
             height: 320,
-            margin: {l: 70, r: 20, t: 8, b: 60},
+            margin: {l: 70, r: 20, t: 18, b: 80},
+            title: {text: label + " dissimilarity", x: 0, font: {size: 13}},
             xaxis: {title: axisLabel("Axis 1", 0), zeroline: false},
             yaxis: {title: axisLabel("Axis 2", 1), zeroline: false},
             hovermode: "closest",
             showlegend: true,
-            legend: {orientation: "h", y: -0.18, x: 0}
+            legend: {orientation: "h", y: -0.28, x: 0}
         };
 
         const config = {
