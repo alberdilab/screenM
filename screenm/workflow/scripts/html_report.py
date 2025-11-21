@@ -1464,11 +1464,9 @@ function addRedundancyReadsSection(parent, data, depthPerSample) {
                     <div id="lr-target-plot" class="plotly-chart"></div>
                 </div>
                 <p class="small-note">
-                    Interactive barplot of sequencing depth vs. the ${COMPLETENESS_LABEL}% LR_reads target.
-                    The dashed midline marks the LR target (0 on the Y axis). Positive bars
-                    show how many times the target was exceeded, negative bars show how many
-                    times more coverage would be needed. Bars more than 3× short of the target
-                    are shown in red.
+                    Barplot of sequencing depth vs. the ${COMPLETENESS_LABEL}% LR_reads target, starting at zero.
+                    Dashed line marks the target; bars are green at/above target, yellow if within 15% of target,
+                    and red when further below.
                 </p>
             </div>
         </details>
@@ -1502,52 +1500,33 @@ function addRedundancyReadsSection(parent, data, depthPerSample) {
         return;
     }
 
-    const transformRatio = (r) => (r >= 1 ? r - 1 : -(1 / r - 1));
-
     const samples = combined.map((d, idx) => d.sample || `sample ${idx + 1}`);
-    const values = combined.map(d => transformRatio(d.ratio));
+    const values = combined.map(d => d.ratio);
 
     const colors = values.map(v => {
-        if (v >= 0) return "#4caf50";
-        if (v >= -3) return "#ffa000";
+        if (v >= 1) return "#4caf50";
+        if (v >= 0.85) return "#f9a825";
         return "#c62828";
     });
 
     const hover = combined.map((d, idx) => {
-        const v = values[idx];
-        const extraOrNeeded = v >= 0 ? (d.ratio - 1) : (1 / d.ratio - 1);
         return [
             `<b>${d.sample || `sample ${idx + 1}`}</b>`,
             `Sequenced: ${fmtMillions(d.observed)} reads`,
             `Target (${COMPLETENESS_LABEL}% LR): ${fmtMillions(d.target)} reads`,
-            `Relative depth: ${(d.ratio * 100).toFixed(1)}%`,
-            v >= 0
-                ? `Excess sequencing: ${extraOrNeeded.toFixed(2)}× above target`
-                : `Additional needed: ${extraOrNeeded.toFixed(2)}× more to reach target`
+            `Relative depth: ${(d.ratio * 100).toFixed(1)}%`
         ].filter(Boolean).join("<br>");
     });
 
-    const maxAbsRaw = Math.max(...values.map(v => Math.abs(v)), 0);
-    const maxAbs = Math.max(1, maxAbsRaw * 1.05);
-    const maxTick = Math.max(1, Math.ceil(maxAbs));
-    const stepTick = Math.max(1, Math.round(maxTick / 5));
-    const tickvals = [];
-    const ticktext = [];
-    for (let v = -maxTick; v <= maxTick; v += stepTick) {
-        if (!tickvals.includes(v)) {
-            tickvals.push(v);
-            ticktext.push(v === 0 ? "target" : `${v > 0 ? v : -v}×${v < 0 ? " short" : ""}`);
-        }
-    }
-
+    const maxVal = Math.max(1, Math.max(...values) * 1.1);
     const shapes = [
         {
             type: "line",
             xref: "paper",
             x0: 0,
             x1: 1,
-            y0: 0,
-            y1: 0,
+            y0: 1,
+            y1: 1,
             line: {color: "#000", width: 1.4, dash: "dot"}
         }
     ];
@@ -1555,36 +1534,14 @@ function addRedundancyReadsSection(parent, data, depthPerSample) {
         {
             xref: "paper",
             x: 0.995,
-            y: 0,
+            y: 1,
             xanchor: "right",
             yanchor: "bottom",
-            text: `${COMPLETENESS_LABEL}% coverage target`,
+            text: `${COMPLETENESS_LABEL}% target`,
             showarrow: false,
             font: {color: "#000", size: 11}
         }
     ];
-
-    if (maxAbs >= 3) {
-        shapes.push({
-            type: "line",
-            xref: "paper",
-            x0: 0,
-            x1: 1,
-            y0: -3,
-            y1: -3,
-            line: {color: "#c62828", width: 1.4, dash: "dot"}
-        });
-        annotations.push({
-            xref: "paper",
-            x: 0.995,
-            y: -3,
-            xanchor: "right",
-            yanchor: "bottom",
-            text: "-3×",
-            showarrow: false,
-            font: {color: "#c62828", size: 11}
-        });
-    }
 
     const n = samples.length;
     const tickAngle = n > 80 ? -75 : n > 40 ? -60 : -45;
@@ -1614,10 +1571,8 @@ function addRedundancyReadsSection(parent, data, depthPerSample) {
             automargin: true,
         },
         yaxis: {
-            title: "Sequencing in relation to target completeness",
-            range: [-maxAbs, maxAbs],
-            tickvals,
-            ticktext,
+            title: "Relative depth (× target)",
+            range: [0, maxVal],
             separatethousands: true,
             zeroline: false,
         },
@@ -1701,10 +1656,9 @@ function addRedundancyMarkersSection(parent, data, redBiplotPerSample) {
                     <div id="lr-target-markers-plot" class="plotly-chart"></div>
                 </div>
                 <p class="small-note">
-                    Interactive barplot of marker coverage vs. the ${COMPLETENESS_LABEL}% target. The dashed midline corresponds
-                    to the ${COMPLETENESS_LABEL}% coverage target (0 on the Y axis). Positive bars show excess coverage (1×, 2×, ...),
-                    while negative bars show how many times more coverage would be needed (-1×, -2×, -3× etc.).
-                    Bars more than 3× short of the target are shown in red.
+                    Barplot of marker coverage vs. the ${COMPLETENESS_LABEL}% target, starting at zero.
+                    Dashed line marks the target; bars are green at/above target, yellow if within 15% of target,
+                    and red when further below.
                 </p>
             </div>
         </details>
@@ -1736,51 +1690,32 @@ function addRedundancyMarkersSection(parent, data, redBiplotPerSample) {
         return;
     }
 
-    const transformRatio = (r) => (r >= 1 ? r - 1 : -(1 / r - 1));
-
     const samples = combined.map((d, idx) => d.sample || `sample ${idx + 1}`);
-    const values = combined.map(d => transformRatio(d.ratio));
+    const values = combined.map(d => d.ratio);
 
     const colors = values.map(v => {
-        if (v >= 0) return "#4caf50";
-        if (v >= -3) return "#ffa000";
+        if (v >= 1) return "#4caf50";
+        if (v >= 0.85) return "#f9a825";
         return "#c62828";
     });
 
     const hover = combined.map((d, idx) => {
-        const v = values[idx];
-        const extraOrNeeded = v >= 0 ? (d.ratio - 1) : (1 / d.ratio - 1);
         return [
             `<b>${d.sample || `sample ${idx + 1}`}</b>`,
             `Coverage (markers): ${(d.coverage * 100).toFixed(2)}%`,
-            `Relative to ${COMPLETENESS_LABEL}% target: ${(d.ratio * 100).toFixed(1)}%`,
-            v >= 0
-                ? `Excess coverage: ${extraOrNeeded.toFixed(2)}× above target`
-                : `Additional needed: ${extraOrNeeded.toFixed(2)}× more to reach target`
+            `Relative to ${COMPLETENESS_LABEL}% target: ${(d.ratio * 100).toFixed(1)}%`
         ].filter(Boolean).join("<br>");
     });
 
-    const maxAbsRaw = Math.max(...values.map(v => Math.abs(v)), 0);
-    const maxAbs = Math.max(1, maxAbsRaw * 1.05);
-    const maxTick = Math.max(1, Math.ceil(maxAbs));
-    const stepTick = Math.max(1, Math.round(maxTick / 5));
-    const tickvals = [];
-    const ticktext = [];
-    for (let v = -maxTick; v <= maxTick; v += stepTick) {
-        if (!tickvals.includes(v)) {
-            tickvals.push(v);
-            ticktext.push(v === 0 ? "target" : `${v > 0 ? v : -v}×${v < 0 ? " short" : ""}`);
-        }
-    }
-
+    const maxVal = Math.max(1, Math.max(...values) * 1.1);
     const shapes = [
         {
             type: "line",
             xref: "paper",
             x0: 0,
             x1: 1,
-            y0: 0,
-            y1: 0,
+            y0: 1,
+            y1: 1,
             line: {color: "#000", width: 1.4, dash: "dot"}
         }
     ];
@@ -1788,7 +1723,7 @@ function addRedundancyMarkersSection(parent, data, redBiplotPerSample) {
         {
             xref: "paper",
             x: 0.995,
-            y: 0,
+            y: 1,
             xanchor: "right",
             yanchor: "bottom",
             text: `${COMPLETENESS_LABEL}% coverage target`,
@@ -1796,28 +1731,6 @@ function addRedundancyMarkersSection(parent, data, redBiplotPerSample) {
             font: {color: "#000", size: 11}
         }
     ];
-
-    if (maxAbs >= 3) {
-        shapes.push({
-            type: "line",
-            xref: "paper",
-            x0: 0,
-            x1: 1,
-            y0: -3,
-            y1: -3,
-            line: {color: "#c62828", width: 1.4, dash: "dot"}
-        });
-        annotations.push({
-            xref: "paper",
-            x: 0.995,
-            y: -3,
-            xanchor: "right",
-            yanchor: "bottom",
-            text: "-3×",
-            showarrow: false,
-            font: {color: "#c62828", size: 11}
-        });
-    }
 
     const n = samples.length;
     const tickAngle = n > 80 ? -75 : n > 40 ? -60 : -45;
@@ -1847,10 +1760,8 @@ function addRedundancyMarkersSection(parent, data, redBiplotPerSample) {
             automargin: true,
         },
         yaxis: {
-            title: "Marker coverage in relation to target completeness",
-            range: [-maxAbs, maxAbs],
-            tickvals,
-            ticktext,
+            title: "Relative coverage (× target)",
+            range: [0, maxVal],
             separatethousands: true,
             zeroline: false,
         },
