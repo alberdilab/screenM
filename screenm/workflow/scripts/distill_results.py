@@ -893,6 +893,12 @@ def compute_redundancy_reads(results_json: Dict[str, Any]) -> Dict[str, Any]:
     frac_meet = (n_meet / n_cov) if n_cov else 0.0
     median_cov = stats.median(coverage_estimates) if coverage_estimates else None
     mean_cov = stats.mean(coverage_estimates) if coverage_estimates else None
+    multiplier_values: List[float] = []
+    for entry in per_sample_details.values():
+        mult = entry.get("sequencing_multiplier")
+        if isinstance(mult, (int, float)) and mult >= 0 and not np.isinf(mult):
+            multiplier_values.append(float(mult))
+    median_multiplier = stats.median(multiplier_values) if multiplier_values else None
 
     if median_cov is None:
         flag_cov_median = 3
@@ -941,7 +947,16 @@ def compute_redundancy_reads(results_json: Dict[str, Any]) -> Dict[str, Any]:
             lr_msg = "Completeness target is achieved in all samples."
         elif lr_exceeds == n_with_lr:
             flag_lr = 4
-            lr_msg = f"Completeness target is missed in every sample, meaning that non of the samples contains enough sequencing data to cover the complexity of the sample. {multiplier}"
+            extra_seq = (
+                f"Median sequencing multiplier to reach the target is approximately {median_multiplier:.2f}x."
+                if median_multiplier is not None else
+                "Additional sequencing effort is required across all samples to reach the target."
+            )
+            lr_msg = (
+                "Completeness target is missed in every sample, meaning that non of the samples contains enough sequencing data "
+                "to cover the complexity of the sample. "
+                + extra_seq
+            )
         elif frac_exceeds < THRESH_LR_EXCEEDS_FRACTION:
             flag_lr = 2
             lr_msg = f"Completeness target is missed by some ({lr_exceeds}/{n_with_lr}; {frac_exceeds*100:.1f}%) of the samples."
