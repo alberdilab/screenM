@@ -780,7 +780,6 @@ def compute_redundancy_reads(results_json: Dict[str, Any]) -> Dict[str, Any]:
     lr_target_used: Optional[str] = None
     per_sample_cov: List[Dict[str, Any]] = []
     extra_seq_factors: List[float] = []
-    extra_seq_factors: List[float] = []
 
     for name, sample_data in samples.items():
         npr = sample_data.get("nonpareil_reads", {}) or {}
