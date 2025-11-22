@@ -393,6 +393,15 @@ function fmtMillions(x) {
     return v.toString();
 }
 
+function fmtSequencingMultiplier(x) {
+    if (x === null || x === undefined) return null;
+    const v = Number(x);
+    if (Number.isNaN(v)) return null;
+    if (!isFinite(v)) return "inf";
+    const digits = v >= 10 ? 1 : 2;
+    return `${v.toFixed(digits)}x`;
+}
+
 function median(arr) {
     if (!arr || !arr.length) return null;
     const sorted = [...arr].sort((a, b) => a - b);
@@ -1474,6 +1483,7 @@ function addRedundancyReadsSection(parent, data, depthPerSample) {
     const combined = (data.per_sample_coverage || []).map(d => ({
         sample: d.sample,
         coverage: Number(d.coverage),
+        multiplier: d.sequencing_multiplier === undefined ? null : Number(d.sequencing_multiplier),
     })).filter(d => Number.isFinite(d.coverage));
 
     const plotDiv = div.querySelector("#lr-target-plot");
@@ -1499,9 +1509,11 @@ function addRedundancyReadsSection(parent, data, depthPerSample) {
     });
 
     const hover = combined.map((d, idx) => {
+        const multText = fmtSequencingMultiplier(d.multiplier);
         return [
             `<b>${d.sample || `sample ${idx + 1}`}</b>`,
-            `Estimated coverage: ${(values[idx] * 100).toFixed(1)}%`
+            `Estimated coverage: ${(values[idx] * 100).toFixed(1)}%`,
+            multText ? `Sequencing multiplier: ${multText}` : null
         ].filter(Boolean).join("<br>");
     });
 
@@ -1655,6 +1667,7 @@ function addRedundancyMarkersSection(parent, data, redBiplotPerSample) {
     const combined = (data.per_sample_coverage_markers || []).map(r => ({
         sample: r.sample,
         coverage: Number(r.coverage),
+        multiplier: r.sequencing_multiplier === undefined ? null : Number(r.sequencing_multiplier),
     })).filter(d => Number.isFinite(d.coverage));
 
     const plotDiv = div.querySelector("#lr-target-markers-plot");
@@ -1683,10 +1696,12 @@ function addRedundancyMarkersSection(parent, data, redBiplotPerSample) {
     });
 
     const hover = combined.map((d, idx) => {
+        const multText = fmtSequencingMultiplier(d.multiplier);
         return [
             `<b>${d.sample || `sample ${idx + 1}`}</b>`,
             `Coverage (markers): ${(values[idx] * 100).toFixed(2)}%`,
-            `Target: ${COMPLETENESS_LABEL}%`
+            `Target: ${COMPLETENESS_LABEL}%`,
+            multText ? `Sequencing multiplier: ${multText}` : null
         ].filter(Boolean).join("<br>");
     });
 
