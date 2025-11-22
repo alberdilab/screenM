@@ -1474,7 +1474,6 @@ function addRedundancyReadsSection(parent, data, depthPerSample) {
     const combined = (data.per_sample_coverage || []).map(d => ({
         sample: d.sample,
         coverage: Number(d.coverage),
-        extra: Number(d.extra_needed),
     })).filter(d => Number.isFinite(d.coverage));
 
     const plotDiv = div.querySelector("#lr-target-plot");
@@ -1500,12 +1499,9 @@ function addRedundancyReadsSection(parent, data, depthPerSample) {
     });
 
     const hover = combined.map((d, idx) => {
-        const cov = values[idx];
-        const extraNeeded = Number.isFinite(d.extra) ? Math.max(d.extra, 0) : (cov >= targetFrac ? 0 : (targetFrac - cov) / Math.max(cov, 1e-9));
         return [
             `<b>${d.sample || `sample ${idx + 1}`}</b>`,
-            `Estimated coverage: ${(cov * 100).toFixed(1)}%`,
-            `Additional sequencing needed: ${extraNeeded.toFixed(2)}×`
+            `Estimated coverage: ${(values[idx] * 100).toFixed(1)}%`
         ].filter(Boolean).join("<br>");
     });
 
@@ -1685,15 +1681,10 @@ function addRedundancyMarkersSection(parent, data, redBiplotPerSample) {
     });
 
     const hover = combined.map((d, idx) => {
-        const cov = values[idx];
-        const shortfall = cov >= targetFrac ? 0 : (targetFrac - cov);
-        const extraNeeded = shortfall > 0 ? (shortfall / Math.max(cov, 1e-9)) : 0;
         return [
             `<b>${d.sample || `sample ${idx + 1}`}</b>`,
-            `Coverage (markers): ${(cov * 100).toFixed(2)}%`,
-            shortfall > 0
-                ? `Additional sequencing needed: ${extraNeeded.toFixed(2)}×`
-                : `Additional sequencing needed: 0×`
+            `Coverage (markers): ${(values[idx] * 100).toFixed(2)}%`,
+            `Target: ${COMPLETENESS_LABEL}%`
         ].filter(Boolean).join("<br>");
     });
 
