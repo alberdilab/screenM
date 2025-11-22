@@ -1475,7 +1475,7 @@ function addRedundancyReadsSection(parent, data, depthPerSample) {
                     <div class="redundancy-stat-item">
                         <div class="redundancy-stat-label">Median sequencing multiplier</div>
                         <div class="redundancy-stat-value">${multMedian === null ? "NA" : fmtSequencingMultiplier(multMedian)}</div>
-                        <div class="redundancy-stat-note">Approximate extra sequencing needed to reach the target</div>
+                        <div class="redundancy-stat-note">Extra sequencing needed to reach the target</div>
                     </div>
                 </div>
                 <div class="lr-target-plot-container">
@@ -1671,7 +1671,7 @@ function addRedundancyMarkersSection(parent, data, redBiplotPerSample) {
                     <div class="redundancy-stat-item">
                         <div class="redundancy-stat-label">Median sequencing multiplier</div>
                         <div class="redundancy-stat-value">${multMedian === null ? "NA" : fmtSequencingMultiplier(multMedian)}</div>
-                        <div class="redundancy-stat-note">Approximate extra sequencing needed to reach the target</div>
+                        <div class="redundancy-stat-note">Extra sequencing needed to reach the target</div>
                     </div>
                 </div>
                 <div class="lr-target-markers-plot-container">
@@ -1681,7 +1681,7 @@ function addRedundancyMarkersSection(parent, data, redBiplotPerSample) {
                     The plot represents the proportion of the estimated complexity of pyokariotic marker genes in each sample that is covered by the actual data,
                     based on the redundancy of sequencing reads mapped to pyokariotic marker genes . Samples with estimated coverage at or above the ${COMPLETENESS_LABEL}%
                     target (dashed line) are shown in green, those within 15% of the target in yellow, and those further below the target in red.
-                    Hover for exact coverage estimates.
+                    Hover for exact coverage estimates and sequencing multipliers.
                 </p>
             </div>
         </details>
@@ -2212,7 +2212,7 @@ function addOverallCoverageSection(parent, data) {
     div.innerHTML = `
         <h2 class="section-title">Overall coverage of the dataset</h2>
         <p class="section-intro">
-            This section provides an estimation of the opposite end of the sequencing spectrum_ whether and how the pooled set of
+            This section provides an estimation of the opposite end of the sequencing spectrum; whether and how the pooled set of
             reads from all samples is sufficient to reach the ${COMPLETENESS_LABEL}% completeness target. 
             This is complementary to the previous sections that focused on individual samples. Here, both total reads (Metagenomic target) and
             prokaryotic marker gene-based (Marker target) coverage are evaluated against the ${COMPLETENESS_LABEL}% completeness target.
