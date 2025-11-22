@@ -779,6 +779,8 @@ def compute_redundancy_reads(results_json: Dict[str, Any]) -> Dict[str, Any]:
     coverage_estimates: List[float] = []
     lr_target_used: Optional[str] = None
     per_sample_cov: List[Dict[str, Any]] = []
+    extra_seq_factors: List[float] = []
+    extra_seq_factors: List[float] = []
 
     for name, sample_data in samples.items():
         npr = sample_data.get("nonpareil_reads", {}) or {}
@@ -793,7 +795,6 @@ def compute_redundancy_reads(results_json: Dict[str, Any]) -> Dict[str, Any]:
                 cov = None
         if isinstance(cov, (int, float)) and cov >= 0:
             coverage_estimates.append(float(cov))
-            per_sample_cov.append({"sample": name, "coverage": float(cov)})
 
         # C_total
         kappa = npr.get("C_total")
@@ -826,6 +827,16 @@ def compute_redundancy_reads(results_json: Dict[str, Any]) -> Dict[str, Any]:
                     lr_exceeds += 1
                 if lr_reads and lr_reads not in (0, float("inf")):
                     coverage_ratios.append(total_reads / lr_reads)
+                    if lr_reads > total_reads:
+                        extra = lr_reads / total_reads - 1
+                        extra_seq_factors.append(extra)
+                    else:
+                        extra = 0.0
+                    per_sample_cov.append({
+                        "sample": name,
+                        "coverage": cov if isinstance(cov, (int, float)) else None,
+                        "extra_needed": extra,
+                    })
 
     n_kappa = len(c_totals)
 
@@ -952,6 +963,7 @@ def compute_redundancy_reads(results_json: Dict[str, Any]) -> Dict[str, Any]:
         return "Also"
 
     link = linker(flag_lr, coverage_flag_for_msg)
+    avg_extra = stats.mean(extra_seq_factors) if extra_seq_factors else 0.0
     message = f"{lr_msg} {link} {coverage_msg_text}".strip()
 
     return {
@@ -974,6 +986,7 @@ def compute_redundancy_reads(results_json: Dict[str, Any]) -> Dict[str, Any]:
         "lr_target_used": lr_target_used,
         "coverage_ratios": coverage_ratios if coverage_ratios else None,
         "per_sample_coverage": per_sample_cov or None,
+        "avg_extra_seq_factor": avg_extra if extra_seq_factors else None,
         "message_redundancy": message,
     }
 
@@ -1009,7 +1022,6 @@ def compute_redundancy_markers(results_json: Dict[str, Any]) -> Dict[str, Any]:
                 cov = None
         if isinstance(cov, (int, float)) and cov >= 0:
             coverage_estimates.append(float(cov))
-            per_sample_cov.append({"sample": name, "coverage": float(cov)})
 
         # C_total for markers
         kappa = npr.get("C_total")
@@ -1042,6 +1054,18 @@ def compute_redundancy_markers(results_json: Dict[str, Any]) -> Dict[str, Any]:
                     lr_exceeds += 1
                 if lr_reads and lr_reads not in (0, float("inf")):
                     coverage_ratios.append(depth / lr_reads)
+                    if lr_reads > depth:
+                        extra = lr_reads / depth - 1
+                        extra_seq_factors.append(extra)
+                    else:
+                        extra = 0.0
+                    per_sample_cov.append({
+                        "sample": name,
+                        "coverage": cov if isinstance(cov, (int, float)) else None,
+                        "extra_needed": extra,
+                    })
+                    if lr_reads > depth:
+                        extra_seq_factors.append(lr_reads / depth - 1)
 
     n_kappa = len(c_totals)
 
@@ -1144,6 +1168,8 @@ def compute_redundancy_markers(results_json: Dict[str, Any]) -> Dict[str, Any]:
             lr_msg = f"Most samples missed the completeness target of {lr_target_used}"
 
 
+    avg_extra = stats.mean(extra_seq_factors) if extra_seq_factors else 0.0
+
     def coverage_phrase(m_cov: Optional[float], target: float) -> tuple[str, int]:
         if m_cov is None:
             return ("median coverage could not be estimated.", 3)
@@ -1169,6 +1195,7 @@ def compute_redundancy_markers(results_json: Dict[str, Any]) -> Dict[str, Any]:
         return "Also"
 
     link = linker(flag_lr, coverage_flag_for_msg)
+    avg_extra = stats.mean(extra_seq_factors) if extra_seq_factors else 0.0
     message = f"{lr_msg} {link} {coverage_msg_text}".strip()
 
     return {
@@ -1191,6 +1218,7 @@ def compute_redundancy_markers(results_json: Dict[str, Any]) -> Dict[str, Any]:
         "lr_target_used": lr_target_used,
         "coverage_ratios": coverage_ratios if coverage_ratios else None,
         "per_sample_coverage_markers": per_sample_cov or None,
+        "avg_extra_seq_factor_markers": avg_extra if extra_seq_factors else None,
         "message_redundancy_markers": message,
     }
 
