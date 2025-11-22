@@ -941,7 +941,7 @@ def compute_redundancy_reads(results_json: Dict[str, Any]) -> Dict[str, Any]:
             lr_msg = "Completeness target is achieved in all samples."
         elif lr_exceeds == n_with_lr:
             flag_lr = 4
-            lr_msg = f"Completeness target is missed in every sample. {multiplier}"
+            lr_msg = f"Completeness target is missed in every sample, meaning that non of the samples contains enough sequencing data to cover the complexity of the sample. {multiplier}"
         elif frac_exceeds < THRESH_LR_EXCEEDS_FRACTION:
             flag_lr = 2
             lr_msg = f"Completeness target is missed by some ({lr_exceeds}/{n_with_lr}; {frac_exceeds*100:.1f}%) of the samples."
