@@ -779,6 +779,7 @@ def compute_redundancy_reads(results_json: Dict[str, Any]) -> Dict[str, Any]:
     coverage_estimates: List[float] = []
     lr_target_used: Optional[str] = None
     per_sample_cov: List[Dict[str, Any]] = []
+    sequencing_multipliers: List[Dict[str, Any]] = []
 
     for name, sample_data in samples.items():
         npr = sample_data.get("nonpareil_reads", {}) or {}
@@ -826,6 +827,24 @@ def compute_redundancy_reads(results_json: Dict[str, Any]) -> Dict[str, Any]:
                     lr_exceeds += 1
                 if lr_reads and lr_reads not in (0, float("inf")):
                     coverage_ratios.append(total_reads / lr_reads)
+
+                multiplier: Optional[float]
+                if lr_reads == float("inf"):
+                    multiplier = float("inf")
+                elif lr_reads in (None, 0):
+                    multiplier = None
+                else:
+                    multiplier = lr_reads / float(total_reads)
+
+                sequencing_multipliers.append(
+                    {
+                        "sample": name,
+                        "target": target_str,
+                        "lr_reads": lr_reads,
+                        "observed_reads": float(total_reads),
+                        "sequencing_multiplier": multiplier,
+                    }
+                )
 
     n_kappa = len(c_totals)
 
@@ -974,6 +993,7 @@ def compute_redundancy_reads(results_json: Dict[str, Any]) -> Dict[str, Any]:
         "lr_target_used": lr_target_used,
         "coverage_ratios": coverage_ratios if coverage_ratios else None,
         "per_sample_coverage": per_sample_cov or None,
+        "sequencing_multipliers": sequencing_multipliers or None,
         "message_redundancy": message,
     }
 
@@ -995,6 +1015,7 @@ def compute_redundancy_markers(results_json: Dict[str, Any]) -> Dict[str, Any]:
     coverage_estimates: List[float] = []
     lr_target_used: Optional[str] = None
     per_sample_cov: List[Dict[str, Any]] = []
+    sequencing_multipliers: List[Dict[str, Any]] = []
 
     for name, sample_data in samples.items():
         npr = sample_data.get("nonpareil_markers", {}) or {}
@@ -1042,6 +1063,24 @@ def compute_redundancy_markers(results_json: Dict[str, Any]) -> Dict[str, Any]:
                     lr_exceeds += 1
                 if lr_reads and lr_reads not in (0, float("inf")):
                     coverage_ratios.append(depth / lr_reads)
+
+                multiplier: Optional[float]
+                if lr_reads == float("inf"):
+                    multiplier = float("inf")
+                elif lr_reads in (None, 0):
+                    multiplier = None
+                else:
+                    multiplier = lr_reads / float(depth)
+
+                sequencing_multipliers.append(
+                    {
+                        "sample": name,
+                        "target": target_str,
+                        "lr_reads": lr_reads,
+                        "observed_reads": float(depth),
+                        "sequencing_multiplier": multiplier,
+                    }
+                )
 
     n_kappa = len(c_totals)
 
@@ -1191,6 +1230,7 @@ def compute_redundancy_markers(results_json: Dict[str, Any]) -> Dict[str, Any]:
         "lr_target_used": lr_target_used,
         "coverage_ratios": coverage_ratios if coverage_ratios else None,
         "per_sample_coverage_markers": per_sample_cov or None,
+        "sequencing_multipliers": sequencing_multipliers or None,
         "message_redundancy_markers": message,
     }
 
