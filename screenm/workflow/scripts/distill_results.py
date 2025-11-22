@@ -1143,34 +1143,29 @@ def compute_redundancy_markers(results_json: Dict[str, Any]) -> Dict[str, Any]:
             flag_lr = 3
             lr_msg = f"Most samples missed the completeness target of {lr_target_used}"
 
-        frac_msg = (
-            f"{lr_exceeds}/{n_with_lr} samples ({frac_exceeds*100:.1f}%) fall below the "
-            f"{lr_target_used}% target."
-        )
-        lr_msg = f"{lr_msg} {frac_msg}"
 
     def coverage_phrase(m_cov: Optional[float], target: float) -> tuple[str, int]:
         if m_cov is None:
-            return ("Median coverage could not be estimated.", 3)
+            return ("median coverage could not be estimated.", 3)
         pct = m_cov * 100
         tgt = target * 100
         if m_cov >= target:
-            return (f"Median coverage is {pct:.1f}%, above the {tgt:.0f}% target.", 1)
+            return (f"median coverage is {pct:.1f}%, above the {tgt:.0f}% target.", 1)
         if m_cov >= target * THRESH_COV_MEDIAN_MODERATE:
-            return (f"Median coverage is {pct:.1f}%, close to the {tgt:.0f}% target.", 2)
-        return (f"Median coverage is {pct:.1f}%, well below the {tgt:.0f}% target.", 3)
+            return (f"median coverage is {pct:.1f}%, close to the {tgt:.0f}% target. This suggests that when the information from all samples is combined, it is likely to achieve a suitable coverage of the metagenomic complexity.", 2)
+        return (f"median coverage is {pct:.1f}%, well below the {tgt:.0f}% target. This suggests that even when the information from all samples is combined, it likely to miss the representation of the entire metagenomic complexity.", 3)
 
     coverage_msg_text, coverage_flag_for_msg = coverage_phrase(median_cov, comp_target)
 
     def linker(lr_flag: int, cov_flag: int) -> str:
         if lr_flag == 1:
-            return "Additionally" if cov_flag != 3 else "However"
+            return "Additionally," if cov_flag != 3 else "However,"
         if lr_flag == 4:
-            return "However"
+            return "However,"
         if lr_flag == 2:
-            return "Meanwhile" if cov_flag <= 2 else "However"
+            return "Meanwhile," if cov_flag <= 2 else "However,"
         if lr_flag == 3:
-            return "Additionally" if cov_flag <= 2 else "Moreover"
+            return "Additionally," if cov_flag <= 2 else "Moreover,"
         return "Also"
 
     link = linker(flag_lr, coverage_flag_for_msg)

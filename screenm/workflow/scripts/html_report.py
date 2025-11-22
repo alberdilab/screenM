@@ -1425,8 +1425,8 @@ function addRedundancyReadsSection(parent, data, depthPerSample) {
             completeness target of ${COMPLETENESS_LABEL}%. This is estimated based on the redundancy of sequencing reads in each sample. 
             Samples that meet or exceed this target are estimated to have sufficient information to properly characterise the
             metagenomic (not just prokaryotes but also eukaryotes and viruses) complexity of the sample. Samples below this target may require 
-            input from other samples or additional sequencing. Note that it is very common a single sample cannot reach this target on its own,
-            especially in high-complexity environments, so don't be alarmed if many of your samples fall below the target.
+            input from other samples or additional sequencing. Note that the relationship between metagenomic completeness and sequencing depth
+            is not linear, so a 5% gap does not mean that 5% more sequencing reads are needed.
         </p>
         <details>
             <summary>
@@ -1461,9 +1461,10 @@ function addRedundancyReadsSection(parent, data, depthPerSample) {
                     <div id="lr-target-plot" class="plotly-chart"></div>
                 </div>
                 <p class="small-note">
-                    Barplot of sequencing depth vs. the ${COMPLETENESS_LABEL}% LR_reads target, starting at zero.
-                    Dashed line marks the target; bars are green at/above target, yellow if within 15% of target,
-                    and red when further below.
+                    The plot represents the proportion of the estimated complexity of each sample that is covered by the actual data,
+                    based on the redundancy of sequencing reads. Samples with estimated coverage at or above the ${COMPLETENESS_LABEL}%
+                    target (dashed line) are shown in green, those within 15% of the target in yellow, and those further below the target in red.
+                    Hover for exact coverage estimates.
                 </p>
             </div>
         </details>
@@ -1498,9 +1499,15 @@ function addRedundancyReadsSection(parent, data, depthPerSample) {
     });
 
     const hover = combined.map((d, idx) => {
+        const cov = values[idx];
+        const shortfall = cov >= targetFrac ? 0 : (targetFrac - cov);
+        const extraNeeded = shortfall > 0 ? (shortfall / Math.max(cov, 1e-9)) : 0;
         return [
             `<b>${d.sample || `sample ${idx + 1}`}</b>`,
-            `Estimated coverage: ${(values[idx] * 100).toFixed(1)}%`
+            `Estimated coverage: ${(cov * 100).toFixed(1)}%`,
+            shortfall > 0
+                ? `Additional sequencing needed: ${extraNeeded.toFixed(2)}×`
+                : `Additional sequencing needed: 0×`
         ].filter(Boolean).join("<br>");
     });
 
@@ -1603,8 +1610,8 @@ function addRedundancyMarkersSection(parent, data, redBiplotPerSample) {
             This target is estimated based on the redundancy of reads previously mapped to prokaryotic marker genes, so unlike the previous section,
             providing an estimation specifically on coverage of prokaryotic genomes. Samples that meet or exceed this target are expected to have sufficient sequencing
             depth for capturing most of the prokaryotic metagenomic diversity. Samples below this target may require 
-            input from other samples or additional sequencing. Note that it is very common a single sample cannot reach this target on its own,
-            especially in high-complexity environments, so don't be alarmed if many of your samples fall below the target.
+            input from other samples or additional sequencing. Note that the relationship between metagenomic completeness and sequencing depth
+            is not linear, so a 5% gap does not mean that 5% more sequencing reads are needed.
         </p>
         <details>
             <summary>
@@ -1618,7 +1625,7 @@ function addRedundancyMarkersSection(parent, data, redBiplotPerSample) {
                     <div class="redundancy-stat-item">
                         <div class="redundancy-stat-label">Coverage median</div>
                         <div class="redundancy-stat-value">${covMedian === null ? "NA" : fmtFloat(covMedian * 100, 1)}%</div>
-                        <div class="redundancy-stat-note">Estimated Nonpareil coverage (C_total)</div>
+                        <div class="redundancy-stat-note">Estimated for the prokaryotic marker genes</div>
                     </div>
                     <div class="redundancy-stat-item">
                         <div class="redundancy-stat-label">Coverage CV</div>
@@ -1626,12 +1633,12 @@ function addRedundancyMarkersSection(parent, data, redBiplotPerSample) {
                         <div class="redundancy-stat-note">Coefficient of variation of coverage estimates</div>
                     </div>
                     <div class="redundancy-stat-item">
-                        <div class="redundancy-stat-label">Samples above LR target</div>
+                        <div class="redundancy-stat-label">Samples above the ${COMPLETENESS_LABEL}% completeness target</div>
                         <div class="redundancy-stat-value">
                             ${fmtInt(nAtOrAbove)} / ${fmtInt(nLR)}
                         </div>
                         <div class="redundancy-stat-note">
-                            ${fracAtOrAbove === null ? "NA" : fmtFloat(fracAtOrAbove, 1) + "%"} of samples with LR target
+                            ${fracAtOrAbove === null ? "NA" : fmtFloat(fracAtOrAbove, 1) + "%"} of samples reached the target
                         </div>
                     </div>
                 </div>
@@ -1639,9 +1646,10 @@ function addRedundancyMarkersSection(parent, data, redBiplotPerSample) {
                     <div id="lr-target-markers-plot" class="plotly-chart"></div>
                 </div>
                 <p class="small-note">
-                    Barplot of marker coverage vs. the ${COMPLETENESS_LABEL}% target, starting at zero.
-                    Dashed line marks the target; bars are green at/above target, yellow if within 15% of target,
-                    and red when further below.
+                    The plot represents the proportion of the estimated complexity of pyokariotic marker genes in each sample that is covered by the actual data,
+                    based on the redundancy of sequencing reads mapped to pyokariotic marker genes . Samples with estimated coverage at or above the ${COMPLETENESS_LABEL}%
+                    target (dashed line) are shown in green, those within 15% of the target in yellow, and those further below the target in red.
+                    Hover for exact coverage estimates.
                 </p>
             </div>
         </details>
@@ -1679,10 +1687,15 @@ function addRedundancyMarkersSection(parent, data, redBiplotPerSample) {
     });
 
     const hover = combined.map((d, idx) => {
+        const cov = values[idx];
+        const shortfall = cov >= targetFrac ? 0 : (targetFrac - cov);
+        const extraNeeded = shortfall > 0 ? (shortfall / Math.max(cov, 1e-9)) : 0;
         return [
             `<b>${d.sample || `sample ${idx + 1}`}</b>`,
-            `Coverage (markers): ${(values[idx] * 100).toFixed(2)}%`,
-            `Target: ${COMPLETENESS_LABEL}%`
+            `Coverage (markers): ${(cov * 100).toFixed(2)}%`,
+            shortfall > 0
+                ? `Additional sequencing needed: ${extraNeeded.toFixed(2)}×`
+                : `Additional sequencing needed: 0×`
         ].filter(Boolean).join("<br>");
     });
 
