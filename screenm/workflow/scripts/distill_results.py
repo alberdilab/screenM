@@ -64,6 +64,13 @@ THRESH_CLUSTER_WITHIN_STRONG = 0.15  # >0.15 → strong warning
 # Mash clustering – imbalance in cluster sizes
 THRESH_CLUSTER_SIZE_UNBALANCED_FACTOR = 2.0  # largest >= 2× mean size → unbalanced
 
+### Sample dissimilarities
+
+THRESH_DIST_MEAN_SIMILAR = 0.10
+THRESH_DIST_MEAN_MODERATE = 0.20
+THRESH_DIST_CV_LOW = 0.10
+THRESH_DIST_CV_MODERATE = 0.20
+
 
 def load_json(path: Path) -> Dict[str, Any]:
     if not path.is_file():
@@ -1547,18 +1554,18 @@ def compute_clusters(results_json: Dict[str, Any]) -> Dict[str, Any]:
     def _distance_flag(mean_val: Optional[float]) -> int:
         if mean_val is None:
             return 3
-        if mean_val < 0.1:
+        if mean_val < THRESH_DIST_MEAN_SIMILAR:
             return 1
-        if mean_val < 0.2:
+        if mean_val < THRESH_DIST_MEAN_MODERATE:
             return 2
         return 3
 
     def _variation_flag(cv_val: Optional[float]) -> int:
         if cv_val is None:
             return 3
-        if cv_val < 0.1:
+        if cv_val < THRESH_DIST_CV_LOW:
             return 1
-        if cv_val < 0.2:
+        if cv_val < THRESH_DIST_CV_MODERATE:
             return 2
         return 3
 
@@ -1573,21 +1580,20 @@ def compute_clusters(results_json: Dict[str, Any]) -> Dict[str, Any]:
         flag_var_reads,
     )
 
-    def _distance_msg(label: str, mean_val: Optional[float], cv_val: Optional[float], flag_val: int, flag_cv: int) -> str:
+    def _distance_msg_reads(mean_val: Optional[float], cv_val: Optional[float], flag_val: int, flag_cv: int) -> str:
         if mean_val is None:
-            return f"No {label} pairwise distances were available to assess how similar the samples are."
-        base: str
+            return "No read pairwise distances were available to assess how similar the samples are."
         if flag_val == 1:
             base = (
-                f"{label.capitalize()} distances are low (mean {mean_val:.3f}), indicating samples are very similar and can likely benefit from each other's information."
+                f"Read distances are low (mean {mean_val:.3f}); samples are very similar and can likely benefit from each other's information."
             )
         elif flag_val == 2:
             base = (
-                f"{label.capitalize()} distances are moderate (mean {mean_val:.3f}); samples share signal but also display noticeable differences."
+                f"Read distances are moderate (mean {mean_val:.3f}); samples share signal but also display noticeable differences."
             )
         else:
             base = (
-                f"{label.capitalize()} distances are high (mean {mean_val:.3f}), suggesting samples are quite distinct and have limited potential to inform each other."
+                f"Read distances are high (mean {mean_val:.3f}), suggesting samples are quite distinct and have limited potential to inform each other."
             )
 
         if cv_val is None:
@@ -1598,8 +1604,32 @@ def compute_clusters(results_json: Dict[str, Any]) -> Dict[str, Any]:
             return base + f" Variation is moderate (CV {cv_val:.3f}), meaning some pairs are closer than others."
         return base + f" Variation is high (CV {cv_val:.3f}), indicating strong heterogeneity in pairwise similarities."
 
-    message_distance_reads = _distance_msg("read", mean_dist_reads, cv_dist_reads, flag_dist_reads, flag_var_reads)
-    message_distance_markers = _distance_msg("marker", mean_dist_markers, cv_dist_markers, flag_dist_markers, flag_var_markers)
+    def _distance_msg_markers(mean_val: Optional[float], cv_val: Optional[float], flag_val: int, flag_cv: int) -> str:
+        if mean_val is None:
+            return "No marker pairwise distances were available to assess how similar the samples are."
+        if flag_val == 1:
+            base = (
+                f"Marker distances are low (mean {mean_val:.3f}); samples are very similar and can likely benefit from each other's information."
+            )
+        elif flag_val == 2:
+            base = (
+                f"Marker distances are moderate (mean {mean_val:.3f}); samples share signal but also display noticeable differences."
+            )
+        else:
+            base = (
+                f"Marker distances are high (mean {mean_val:.3f}), suggesting samples are quite distinct and have limited potential to inform each other."
+            )
+
+        if cv_val is None:
+            return base
+        if flag_cv == 1:
+            return base + f" Variation is low (CV {cv_val:.3f}), so similarity patterns are consistent across sample pairs."
+        if flag_cv == 2:
+            return base + f" Variation is moderate (CV {cv_val:.3f}), meaning some pairs are closer than others."
+        return base + f" Variation is high (CV {cv_val:.3f}), indicating strong heterogeneity in pairwise similarities."
+
+    message_distance_reads = _distance_msg_reads(mean_dist_reads, cv_dist_reads, flag_dist_reads, flag_var_reads)
+    message_distance_markers = _distance_msg_markers(mean_dist_markers, cv_dist_markers, flag_dist_markers, flag_var_markers)
     message_sample_dissimilarity = " ".join([message_distance_reads, message_distance_markers]).strip()
 
     return {

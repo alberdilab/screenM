@@ -2505,8 +2505,6 @@ function addMashDistanceSection(parent, clusters) {
     div.className = "section " + flagClass(dissimFlag);
     const status = sectionStatus("Pairwise sample dissimilarities", dissimFlag);
     const msg = clusters.message_sample_dissimilarity || "";
-    const msgReads = clusters.message_distance_reads;
-    const msgMarkers = clusters.message_distance_markers;
 
     div.innerHTML = `
         <h2 class="section-title">Sample dissimilarities</h2>
@@ -2524,8 +2522,6 @@ function addMashDistanceSection(parent, clusters) {
             </summary>
             <div class="content">
                 ${msg ? `<p class="summary-message">${msg}</p>` : ""}
-                ${msgReads ? `<p class="summary-message">${msgReads}</p>` : ""}
-                ${msgMarkers ? `<p class="summary-message">${msgMarkers}</p>` : ""}
                 <div class="redundancy-stats">
                     <div class="redundancy-stat-item">
                         <div class="redundancy-stat-label">Mean distance (markers)</div>
