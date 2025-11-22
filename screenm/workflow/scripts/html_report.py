@@ -1410,11 +1410,19 @@ function addRedundancyReadsSection(parent, data, depthPerSample) {
     const nBelow = data.n_samples_lr_exceeds_depth || 0;
     const nAtOrAbove = nLR ? (nLR - nBelow) : 0;
     const fracAtOrAbove = nLR ? (100 * nAtOrAbove / nLR) : null;
-    const coverageVals = Array.isArray(data.per_sample_coverage)
-        ? data.per_sample_coverage.map(d => d.coverage).filter(v => typeof v === "number" && isFinite(v))
+    const perSample = Array.isArray(data.per_sample_coverage)
+        ? data.per_sample_coverage
         : [];
+    const coverageVals = perSample
+        .map(d => d.coverage)
+        .filter(v => typeof v === "number" && isFinite(v));
+    const multipliers = perSample
+        .map(d => d.sequencing_multiplier)
+        .filter(v => typeof v === "number" && isFinite(v));
+
     const covMedian = data.coverage_median != null ? data.coverage_median : median(coverageVals);
     const covCV = data.coverage_cv != null ? data.coverage_cv : coeffVar(coverageVals);
+    const multiplierMedian = multipliers.length ? median(multipliers) : null;
 
     const status = sectionStatus("Overall metagenomic coverage", data.flag_redundancy);
 
@@ -1438,6 +1446,15 @@ function addRedundancyReadsSection(parent, data, depthPerSample) {
                 <p class="summary-message">${msg}</p>
                 <div class="redundancy-stats">
                     <div class="redundancy-stat-item">
+                        <div class="redundancy-stat-label">Samples above the ${COMPLETENESS_LABEL}% completeness target</div>
+                        <div class="redundancy-stat-value">
+                            ${fmtInt(nAtOrAbove)} / ${fmtInt(nLR)}
+                        </div>
+                        <div class="redundancy-stat-note">
+                            ${fracAtOrAbove === null ? "NA" : fmtFloat(fracAtOrAbove, 1) + "%"} of samples reached the target
+                        </div>
+                    </div>
+                    <div class="redundancy-stat-item">
                         <div class="redundancy-stat-label">Coverage median</div>
                         <div class="redundancy-stat-value">${covMedian === null ? "NA" : fmtFloat(covMedian * 100, 1)}%</div>
                         <div class="redundancy-stat-note">Estimated for the total sequencing depth</div>
@@ -1448,13 +1465,9 @@ function addRedundancyReadsSection(parent, data, depthPerSample) {
                         <div class="redundancy-stat-note">Coefficient of variation of coverage estimates</div>
                     </div>
                     <div class="redundancy-stat-item">
-                        <div class="redundancy-stat-label">Samples above the ${COMPLETENESS_LABEL}% completeness target</div>
-                        <div class="redundancy-stat-value">
-                            ${fmtInt(nAtOrAbove)} / ${fmtInt(nLR)}
-                        </div>
-                        <div class="redundancy-stat-note">
-                            ${fracAtOrAbove === null ? "NA" : fmtFloat(fracAtOrAbove, 1) + "%"} of samples reached the target
-                        </div>
+                        <div class="redundancy-stat-label">Median effort to reach target</div>
+                        <div class="redundancy-stat-value">${multiplierMedian === null ? "NA" : fmtFloat(multiplierMedian, 1) + "x"}</div>
+                        <div class="redundancy-stat-note">Sequencing multiplier needed on median sample</div>
                     </div>
                 </div>
                 <div class="lr-target-plot-container">
@@ -1471,9 +1484,10 @@ function addRedundancyReadsSection(parent, data, depthPerSample) {
     `;
     parent.appendChild(div);
 
-    const combined = (data.per_sample_coverage || []).map(d => ({
-        sample: d.sample,
+    const combined = (data.per_sample_coverage || []).map((d, idx) => ({
+        sample: d.sample || `sample ${idx + 1}`,
         coverage: Number(d.coverage),
+        sequencing_multiplier: d.sequencing_multiplier,
     })).filter(d => Number.isFinite(d.coverage));
 
     const plotDiv = div.querySelector("#lr-target-plot");
@@ -1489,8 +1503,21 @@ function addRedundancyReadsSection(parent, data, depthPerSample) {
     }
 
     const targetFrac = COMPLETENESS_FRACTION;
-    const samples = combined.map((d, idx) => d.sample || `sample ${idx + 1}`);
+    const samples = combined.map(d => d.sample);
     const values = combined.map(d => d.coverage);
+    const hover = combined.map(d => {
+        const covPct = Number.isFinite(d.coverage) ? `${fmtFloat(d.coverage * 100, 1)}%` : "NA";
+        let effort;
+        const mult = d.sequencing_multiplier;
+        if (mult === null || mult === undefined) {
+            effort = "NA";
+        } else if (!isFinite(mult)) {
+            effort = "∞x";
+        } else {
+            effort = `${fmtFloat(mult, 1)}x`;
+        }
+        return `${d.sample}<br>Estimated coverage: ${covPct}<br>Effort to reach target: ${effort}`;
+    });
 
     const colors = values.map(v => {
         if (v >= targetFrac) return "#4caf50";
@@ -1540,8 +1567,8 @@ function addRedundancyReadsSection(parent, data, depthPerSample) {
         x: samples,
         y: values,
         marker: {color: colors},
-        hovertemplate: "%{customdata}<extra></extra>",
-        customdata: hover,
+        text: hover,
+        hovertemplate: "%{text}<extra></extra>",
     };
 
     const layout = {
@@ -1589,13 +1616,18 @@ function addRedundancyMarkersSection(parent, data, redBiplotPerSample) {
     const nBelow = data.n_samples_lr_exceeds_depth || 0;
     const nAtOrAbove = nLR ? (nLR - nBelow) : 0;
     const fracAtOrAbove = nLR ? (100 * nAtOrAbove / nLR) : null;
-    const coverageVals = Array.isArray(data.per_sample_coverage_markers)
+    const perSample = Array.isArray(data.per_sample_coverage_markers)
         ? data.per_sample_coverage_markers
-              .map(d => d.coverage)
-              .filter(v => typeof v === "number" && isFinite(v))
-        : (data.coverage_median !== undefined ? [data.coverage_median] : []);
+        : [];
+    const coverageVals = perSample
+        .map(d => d.coverage)
+        .filter(v => typeof v === "number" && isFinite(v));
+    const multipliers = perSample
+        .map(d => d.sequencing_multiplier)
+        .filter(v => typeof v === "number" && isFinite(v));
     const covMedian = data.coverage_median != null ? data.coverage_median : median(coverageVals);
     const covCV = data.coverage_cv != null ? data.coverage_cv : coeffVar(coverageVals);
+    const multiplierMedian = multipliers.length ? median(multipliers) : null;
 
     const status = sectionStatus("Prokaryotic coverage", data.flag_redundancy_markers);
 
@@ -1619,6 +1651,15 @@ function addRedundancyMarkersSection(parent, data, redBiplotPerSample) {
                 <p class="summary-message">${msg}</p>
                 <div class="redundancy-stats">
                     <div class="redundancy-stat-item">
+                        <div class="redundancy-stat-label">Samples above the ${COMPLETENESS_LABEL}% completeness target</div>
+                        <div class="redundancy-stat-value">
+                            ${fmtInt(nAtOrAbove)} / ${fmtInt(nLR)}
+                        </div>
+                        <div class="redundancy-stat-note">
+                            ${fracAtOrAbove === null ? "NA" : fmtFloat(fracAtOrAbove, 1) + "%"} of samples reached the target
+                        </div>
+                    </div>
+                    <div class="redundancy-stat-item">
                         <div class="redundancy-stat-label">Coverage median</div>
                         <div class="redundancy-stat-value">${covMedian === null ? "NA" : fmtFloat(covMedian * 100, 1)}%</div>
                         <div class="redundancy-stat-note">Estimated for the prokaryotic marker genes</div>
@@ -1629,13 +1670,9 @@ function addRedundancyMarkersSection(parent, data, redBiplotPerSample) {
                         <div class="redundancy-stat-note">Coefficient of variation of coverage estimates</div>
                     </div>
                     <div class="redundancy-stat-item">
-                        <div class="redundancy-stat-label">Samples above the ${COMPLETENESS_LABEL}% completeness target</div>
-                        <div class="redundancy-stat-value">
-                            ${fmtInt(nAtOrAbove)} / ${fmtInt(nLR)}
-                        </div>
-                        <div class="redundancy-stat-note">
-                            ${fracAtOrAbove === null ? "NA" : fmtFloat(fracAtOrAbove, 1) + "%"} of samples reached the target
-                        </div>
+                        <div class="redundancy-stat-label">Median effort to reach target</div>
+                        <div class="redundancy-stat-value">${multiplierMedian === null ? "NA" : fmtFloat(multiplierMedian, 1) + "x"}</div>
+                        <div class="redundancy-stat-note">Sequencing multiplier needed on median sample</div>
                     </div>
                 </div>
                 <div class="lr-target-markers-plot-container">
@@ -1652,9 +1689,10 @@ function addRedundancyMarkersSection(parent, data, redBiplotPerSample) {
     `;
     parent.appendChild(div);
 
-    const combined = (data.per_sample_coverage_markers || []).map(r => ({
-        sample: r.sample,
+    const combined = (data.per_sample_coverage_markers || []).map((r, idx) => ({
+        sample: r.sample || `sample ${idx + 1}`,
         coverage: Number(r.coverage),
+        sequencing_multiplier: r.sequencing_multiplier,
     })).filter(d => Number.isFinite(d.coverage));
 
     const plotDiv = div.querySelector("#lr-target-markers-plot");
@@ -1670,7 +1708,7 @@ function addRedundancyMarkersSection(parent, data, redBiplotPerSample) {
     }
 
     const targetFrac = COMPLETENESS_FRACTION;
-    const samples = combined.map((d, idx) => d.sample || `sample ${idx + 1}`);
+    const samples = combined.map(d => d.sample);
     const values = combined.map(d => {
         const cov = Number(d.coverage);
         return Number.isFinite(cov) ? cov : 0;
@@ -1683,11 +1721,17 @@ function addRedundancyMarkersSection(parent, data, redBiplotPerSample) {
     });
 
     const hover = combined.map((d, idx) => {
-        return [
-            `<b>${d.sample || `sample ${idx + 1}`}</b>`,
-            `Coverage (markers): ${(values[idx] * 100).toFixed(2)}%`,
-            `Target: ${COMPLETENESS_LABEL}%`
-        ].filter(Boolean).join("<br>");
+        const covPct = Number.isFinite(values[idx]) ? `${fmtFloat(values[idx] * 100, 1)}%` : "NA";
+        const mult = d.sequencing_multiplier;
+        let effort;
+        if (mult === null || mult === undefined) {
+            effort = "NA";
+        } else if (!isFinite(mult)) {
+            effort = "∞x";
+        } else {
+            effort = `${fmtFloat(mult, 1)}x`;
+        }
+        return `${d.sample}<br>Estimated coverage: ${covPct}<br>Effort to reach target: ${effort}`;
     });
 
     const maxVal = 1.0;
@@ -1725,8 +1769,8 @@ function addRedundancyMarkersSection(parent, data, redBiplotPerSample) {
         x: samples,
         y: values,
         marker: {color: colors},
-        hovertemplate: "%{customdata}<extra></extra>",
-        customdata: hover,
+        text: hover,
+        hovertemplate: "%{text}<extra></extra>",
     };
 
     const layout = {
