@@ -1589,8 +1589,10 @@ function addRedundancyMarkersSection(parent, data, redBiplotPerSample) {
     const nBelow = data.n_samples_lr_exceeds_depth || 0;
     const nAtOrAbove = nLR ? (nLR - nBelow) : 0;
     const fracAtOrAbove = nLR ? (100 * nAtOrAbove / nLR) : null;
-    const coverageVals = (Array.isArray(data.coverage_ratios) && data.coverage_ratios.length)
-        ? data.coverage_ratios.filter(v => typeof v === "number" && isFinite(v))
+    const coverageVals = Array.isArray(data.per_sample_coverage_markers)
+        ? data.per_sample_coverage_markers
+              .map(d => d.coverage)
+              .filter(v => typeof v === "number" && isFinite(v))
         : (data.coverage_median !== undefined ? [data.coverage_median] : []);
     const covMedian = data.coverage_median != null ? data.coverage_median : median(coverageVals);
     const covCV = data.coverage_cv != null ? data.coverage_cv : coeffVar(coverageVals);
