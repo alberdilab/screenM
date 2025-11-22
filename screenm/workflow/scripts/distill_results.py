@@ -1520,11 +1520,67 @@ def compute_clusters(results_json: Dict[str, Any]) -> Dict[str, Any]:
     pairwise_markers = extract_pairwise(mash_markers_block)
     pairwise_reads = extract_pairwise(mash_reads_block)
 
+    def _mean_distance(pairs: Optional[List[Dict[str, Any]]]) -> Optional[float]:
+        if not pairs:
+            return None
+        vals: List[float] = []
+        for rec in pairs:
+            d = rec.get("distance")
+            try:
+                d_val = float(d)
+            except (TypeError, ValueError):
+                continue
+            if d_val >= 0:
+                vals.append(d_val)
+        return stats.mean(vals) if vals else None
+
+    mean_dist_markers = _mean_distance(pairwise_markers)
+    mean_dist_reads = _mean_distance(pairwise_reads)
+
+    def _distance_flag(mean_val: Optional[float]) -> int:
+        if mean_val is None:
+            return 3
+        if mean_val < 0.1:
+            return 1
+        if mean_val < 0.2:
+            return 2
+        return 3
+
+    flag_dist_markers = _distance_flag(mean_dist_markers)
+    flag_dist_reads = _distance_flag(mean_dist_reads)
+    flag_sample_dissimilarity = max(flag_dist_markers, flag_dist_reads)
+
+    def _distance_msg(label: str, mean_val: Optional[float], flag_val: int) -> str:
+        if mean_val is None:
+            return f"No {label} pairwise distances were available to assess how similar the samples are."
+        if flag_val == 1:
+            return (
+                f"{label.capitalize()} distances are low (mean {mean_val:.3f}), indicating samples are very similar and can likely benefit from each other's information."
+            )
+        if flag_val == 2:
+            return (
+                f"{label.capitalize()} distances are moderate (mean {mean_val:.3f}); samples share signal but also display noticeable differences."
+            )
+        return (
+            f"{label.capitalize()} distances are high (mean {mean_val:.3f}), suggesting samples are quite distinct and have limited potential to inform each other."
+        )
+
+    message_sample_dissimilarity = " ".join([
+        _distance_msg("marker", mean_dist_markers, flag_dist_markers),
+        _distance_msg("read", mean_dist_reads, flag_dist_reads),
+    ]).strip()
+
     return {
         "markers": markers_summary,
         "reads": reads_summary,
         "flag_clusters": overall_flag,
         "message_clusters": overall_message,
+        "mean_distance_markers": mean_dist_markers,
+        "mean_distance_reads": mean_dist_reads,
+        "flag_distance_markers": flag_dist_markers,
+        "flag_distance_reads": flag_dist_reads,
+        "flag_sample_dissimilarity": flag_sample_dissimilarity,
+        "message_sample_dissimilarity": message_sample_dissimilarity,
         # new filtered pairwise distance lists
         "pairwise_markers": pairwise_markers,
         "pairwise_reads": pairwise_reads,
@@ -1985,23 +2041,29 @@ def main():
             flag_overall = 3
             msg_overall = "Overall marker coverage could not be assessed from all_samples Nonpareil output."
         else:
+            def marker_prefix(flag_val: int) -> str:
+                if flag_val == 1:
+                    return "Overall marker coverage also "
+                return "Overall marker coverage, in contrast, "
+
             if coverage_pct >= comp_target:
                 flag_overall = 1
                 msg_overall = (
-                    f"Overall marker coverage meets the {comp_target:.0f}% completeness target "
-                    f"({coverage_pct:.1f}%)."
+                    marker_prefix(flag_overall)
+                    + f"meets the {comp_target:.0f}% completeness target "
+                    f"({coverage_pct:.1f}%), meaning that the combined reads from all samples are most likely sufficient to capture the prokaryotic diversity in the samnple. "
                 )
             elif coverage_pct >= 0.8 * comp_target:
                 flag_overall = 2
                 msg_overall = (
-                    f"Overall marker coverage is within 20% of the {comp_target:.0f}% completeness target "
-                    f"({coverage_pct:.1f}%)."
+                    marker_prefix(flag_overall)
+                    + f"is below the completeness target ({coverage_pct:.1f}%), indicating that even pooling reads may miss some prokaryotic diversity."
                 )
             else:
                 flag_overall = 3
                 msg_overall = (
-                    f"Overall marker coverage is below 80% of the {comp_target:.0f}% completeness target "
-                    f"({coverage_pct:.1f}%)."
+                    marker_prefix(flag_overall)
+                    + f"is significantly below the completeness target ({coverage_pct:.1f}%), indicating that this dataset is likely to miss substantial prokaryotic diversity."
                 )
 
         overall_prok_coverage = {

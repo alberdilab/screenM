@@ -2501,8 +2501,10 @@ function addMashDistanceSection(parent, clusters) {
     const cvReads = calcCV(readsDistances, meanReads);
 
     const div = document.createElement("div");
-    div.className = "section " + flagClass(clusters.flag_clusters);
-    const status = sectionStatus("Pairwise sample dissimilarities", clusters.flag_clusters);
+    const dissimFlag = clusters.flag_sample_dissimilarity ?? clusters.flag_clusters;
+    div.className = "section " + flagClass(dissimFlag);
+    const status = sectionStatus("Pairwise sample dissimilarities", dissimFlag);
+    const msg = clusters.message_sample_dissimilarity || "";
 
     div.innerHTML = `
         <h2 class="section-title">Sample dissimilarities</h2>
@@ -2519,6 +2521,7 @@ function addMashDistanceSection(parent, clusters) {
                 <span class="summary-hint">(click to expand)</span>
             </summary>
             <div class="content">
+                ${msg ? `<p class="summary-message">${msg}</p>` : ""}
                 <div class="redundancy-stats">
                     <div class="redundancy-stat-item">
                         <div class="redundancy-stat-label">Mean distance (markers)</div>
