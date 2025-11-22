@@ -2489,22 +2489,24 @@ function addMashDistanceSection(parent, clusters) {
     const markersDistances = markersPairs.map(p => Number(p.distance)).filter(d => isFinite(d));
     const readsDistances = readsPairs.map(p => Number(p.distance)).filter(d => isFinite(d));
 
-    const meanMarkers = markersDistances.length ? markersDistances.reduce((a, b) => a + b, 0) / markersDistances.length : null;
-    const meanReads = readsDistances.length ? readsDistances.reduce((a, b) => a + b, 0) / readsDistances.length : null;
+    const meanMarkers = clusters.mean_distance_markers ?? (markersDistances.length ? markersDistances.reduce((a, b) => a + b, 0) / markersDistances.length : null);
+    const meanReads = clusters.mean_distance_reads ?? (readsDistances.length ? readsDistances.reduce((a, b) => a + b, 0) / readsDistances.length : null);
 
     function calcCV(arr, mean) {
         if (!arr.length || !mean) return null;
         const varval = arr.reduce((a, b) => a + Math.pow(b - mean, 2), 0) / arr.length;
         return Math.sqrt(varval) / mean;
     }
-    const cvMarkers = calcCV(markersDistances, meanMarkers);
-    const cvReads = calcCV(readsDistances, meanReads);
+    const cvMarkers = clusters.cv_distance_markers ?? calcCV(markersDistances, meanMarkers);
+    const cvReads = clusters.cv_distance_reads ?? calcCV(readsDistances, meanReads);
 
     const div = document.createElement("div");
     const dissimFlag = clusters.flag_sample_dissimilarity ?? clusters.flag_clusters;
     div.className = "section " + flagClass(dissimFlag);
     const status = sectionStatus("Pairwise sample dissimilarities", dissimFlag);
     const msg = clusters.message_sample_dissimilarity || "";
+    const msgReads = clusters.message_distance_reads;
+    const msgMarkers = clusters.message_distance_markers;
 
     div.innerHTML = `
         <h2 class="section-title">Sample dissimilarities</h2>
@@ -2522,6 +2524,8 @@ function addMashDistanceSection(parent, clusters) {
             </summary>
             <div class="content">
                 ${msg ? `<p class="summary-message">${msg}</p>` : ""}
+                ${msgReads ? `<p class="summary-message">${msgReads}</p>` : ""}
+                ${msgMarkers ? `<p class="summary-message">${msgMarkers}</p>` : ""}
                 <div class="redundancy-stats">
                     <div class="redundancy-stat-item">
                         <div class="redundancy-stat-label">Mean distance (markers)</div>

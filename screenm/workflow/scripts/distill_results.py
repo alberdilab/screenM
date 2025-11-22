@@ -1520,9 +1520,9 @@ def compute_clusters(results_json: Dict[str, Any]) -> Dict[str, Any]:
     pairwise_markers = extract_pairwise(mash_markers_block)
     pairwise_reads = extract_pairwise(mash_reads_block)
 
-    def _mean_distance(pairs: Optional[List[Dict[str, Any]]]) -> Optional[float]:
+    def _mean_cv(pairs: Optional[List[Dict[str, Any]]]) -> Tuple[Optional[float], Optional[float]]:
         if not pairs:
-            return None
+            return None, None
         vals: List[float] = []
         for rec in pairs:
             d = rec.get("distance")
@@ -1532,10 +1532,17 @@ def compute_clusters(results_json: Dict[str, Any]) -> Dict[str, Any]:
                 continue
             if d_val >= 0:
                 vals.append(d_val)
-        return stats.mean(vals) if vals else None
+        if not vals:
+            return None, None
+        mean_val = stats.mean(vals)
+        if mean_val > 0 and len(vals) > 1:
+            cv_val = stats.pstdev(vals) / mean_val
+        else:
+            cv_val = None
+        return mean_val, cv_val
 
-    mean_dist_markers = _mean_distance(pairwise_markers)
-    mean_dist_reads = _mean_distance(pairwise_reads)
+    mean_dist_markers, cv_dist_markers = _mean_cv(pairwise_markers)
+    mean_dist_reads, cv_dist_reads = _mean_cv(pairwise_reads)
 
     def _distance_flag(mean_val: Optional[float]) -> int:
         if mean_val is None:
@@ -1546,29 +1553,54 @@ def compute_clusters(results_json: Dict[str, Any]) -> Dict[str, Any]:
             return 2
         return 3
 
+    def _variation_flag(cv_val: Optional[float]) -> int:
+        if cv_val is None:
+            return 3
+        if cv_val < 0.1:
+            return 1
+        if cv_val < 0.2:
+            return 2
+        return 3
+
     flag_dist_markers = _distance_flag(mean_dist_markers)
     flag_dist_reads = _distance_flag(mean_dist_reads)
-    flag_sample_dissimilarity = max(flag_dist_markers, flag_dist_reads)
+    flag_var_markers = _variation_flag(cv_dist_markers)
+    flag_var_reads = _variation_flag(cv_dist_reads)
+    flag_sample_dissimilarity = max(
+        flag_dist_markers,
+        flag_dist_reads,
+        flag_var_markers,
+        flag_var_reads,
+    )
 
-    def _distance_msg(label: str, mean_val: Optional[float], flag_val: int) -> str:
+    def _distance_msg(label: str, mean_val: Optional[float], cv_val: Optional[float], flag_val: int, flag_cv: int) -> str:
         if mean_val is None:
             return f"No {label} pairwise distances were available to assess how similar the samples are."
+        base: str
         if flag_val == 1:
-            return (
+            base = (
                 f"{label.capitalize()} distances are low (mean {mean_val:.3f}), indicating samples are very similar and can likely benefit from each other's information."
             )
-        if flag_val == 2:
-            return (
+        elif flag_val == 2:
+            base = (
                 f"{label.capitalize()} distances are moderate (mean {mean_val:.3f}); samples share signal but also display noticeable differences."
             )
-        return (
-            f"{label.capitalize()} distances are high (mean {mean_val:.3f}), suggesting samples are quite distinct and have limited potential to inform each other."
-        )
+        else:
+            base = (
+                f"{label.capitalize()} distances are high (mean {mean_val:.3f}), suggesting samples are quite distinct and have limited potential to inform each other."
+            )
 
-    message_sample_dissimilarity = " ".join([
-        _distance_msg("marker", mean_dist_markers, flag_dist_markers),
-        _distance_msg("read", mean_dist_reads, flag_dist_reads),
-    ]).strip()
+        if cv_val is None:
+            return base
+        if flag_cv == 1:
+            return base + f" Variation is low (CV {cv_val:.3f}), so similarity patterns are consistent across sample pairs."
+        if flag_cv == 2:
+            return base + f" Variation is moderate (CV {cv_val:.3f}), meaning some pairs are closer than others."
+        return base + f" Variation is high (CV {cv_val:.3f}), indicating strong heterogeneity in pairwise similarities."
+
+    message_distance_reads = _distance_msg("read", mean_dist_reads, cv_dist_reads, flag_dist_reads, flag_var_reads)
+    message_distance_markers = _distance_msg("marker", mean_dist_markers, cv_dist_markers, flag_dist_markers, flag_var_markers)
+    message_sample_dissimilarity = " ".join([message_distance_reads, message_distance_markers]).strip()
 
     return {
         "markers": markers_summary,
@@ -1577,10 +1609,16 @@ def compute_clusters(results_json: Dict[str, Any]) -> Dict[str, Any]:
         "message_clusters": overall_message,
         "mean_distance_markers": mean_dist_markers,
         "mean_distance_reads": mean_dist_reads,
+        "cv_distance_markers": cv_dist_markers,
+        "cv_distance_reads": cv_dist_reads,
         "flag_distance_markers": flag_dist_markers,
         "flag_distance_reads": flag_dist_reads,
+        "flag_distance_cv_markers": flag_var_markers,
+        "flag_distance_cv_reads": flag_var_reads,
         "flag_sample_dissimilarity": flag_sample_dissimilarity,
         "message_sample_dissimilarity": message_sample_dissimilarity,
+        "message_distance_reads": message_distance_reads,
+        "message_distance_markers": message_distance_markers,
         # new filtered pairwise distance lists
         "pairwise_markers": pairwise_markers,
         "pairwise_reads": pairwise_reads,
