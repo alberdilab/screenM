@@ -1424,6 +1424,12 @@ function addRedundancyReadsSection(parent, data, depthPerSample) {
         : [];
     const covMedian = data.coverage_median != null ? data.coverage_median : median(coverageVals);
     const covCV = data.coverage_cv != null ? data.coverage_cv : coeffVar(coverageVals);
+    const multiplierVals = Array.isArray(data.per_sample_coverage)
+        ? data.per_sample_coverage
+              .map(d => d.sequencing_multiplier)
+              .filter(v => typeof v === "number" && isFinite(v) && v >= 0)
+        : [];
+    const multMedian = multiplierVals.length ? median(multiplierVals) : null;
 
     const status = sectionStatus("Overall metagenomic coverage", data.flag_redundancy);
 
@@ -1434,8 +1440,9 @@ function addRedundancyReadsSection(parent, data, depthPerSample) {
             completeness target of ${COMPLETENESS_LABEL}%. This is estimated based on the redundancy of sequencing reads in each sample. 
             Samples that meet or exceed this target are estimated to have sufficient information to properly characterise the
             metagenomic (not just prokaryotes but also eukaryotes and viruses) complexity of the sample. Samples below this target may require 
-            input from other samples or additional sequencing. Note that the relationship between metagenomic completeness and sequencing depth
-            is not linear, so a 5% gap does not mean that 5% more sequencing reads are needed.
+            input from other samples or additional sequencing. Note that the relationship between metagenomic completeness and sequencing depth is non-linear. 
+            Therefore, a 5% shortfall between the target and the achieved sequencing coverage does not imply that only 5% more reads are required; in fact, 
+            it may require as much as 200% more (i.e., doubling the sequencing effort).
         </p>
         <details>
             <summary>
@@ -1465,6 +1472,11 @@ function addRedundancyReadsSection(parent, data, depthPerSample) {
                             ${fracAtOrAbove === null ? "NA" : fmtFloat(fracAtOrAbove, 1) + "%"} of samples reached the target
                         </div>
                     </div>
+                    <div class="redundancy-stat-item">
+                        <div class="redundancy-stat-label">Median sequencing multiplier</div>
+                        <div class="redundancy-stat-value">${multMedian === null ? "NA" : fmtSequencingMultiplier(multMedian)}</div>
+                        <div class="redundancy-stat-note">Approximate extra sequencing needed to reach the target</div>
+                    </div>
                 </div>
                 <div class="lr-target-plot-container">
                     <div id="lr-target-plot" class="plotly-chart"></div>
@@ -1473,7 +1485,7 @@ function addRedundancyReadsSection(parent, data, depthPerSample) {
                     The plot represents the proportion of the estimated complexity of each sample that is covered by the actual data,
                     based on the redundancy of sequencing reads. Samples with estimated coverage at or above the ${COMPLETENESS_LABEL}%
                     target (dashed line) are shown in green, those within 15% of the target in yellow, and those further below the target in red.
-                    Hover for exact coverage estimates.
+                    Hover for exact coverage estimates and sequencing multipliers.
                 </p>
             </div>
         </details>
@@ -1608,6 +1620,12 @@ function addRedundancyMarkersSection(parent, data, redBiplotPerSample) {
         : (data.coverage_median !== undefined ? [data.coverage_median] : []);
     const covMedian = data.coverage_median != null ? data.coverage_median : median(coverageVals);
     const covCV = data.coverage_cv != null ? data.coverage_cv : coeffVar(coverageVals);
+    const multiplierVals = Array.isArray(data.per_sample_coverage_markers)
+        ? data.per_sample_coverage_markers
+              .map(d => d.sequencing_multiplier)
+              .filter(v => typeof v === "number" && isFinite(v) && v >= 0)
+        : [];
+    const multMedian = multiplierVals.length ? median(multiplierVals) : null;
 
     const status = sectionStatus("Prokaryotic coverage", data.flag_redundancy_markers);
 
@@ -1618,8 +1636,9 @@ function addRedundancyMarkersSection(parent, data, redBiplotPerSample) {
             This target is estimated based on the redundancy of reads previously mapped to prokaryotic marker genes, so unlike the previous section,
             providing an estimation specifically on coverage of prokaryotic genomes. Samples that meet or exceed this target are expected to have sufficient sequencing
             depth for capturing most of the prokaryotic metagenomic diversity. Samples below this target may require 
-            input from other samples or additional sequencing. Note that the relationship between metagenomic completeness and sequencing depth
-            is not linear, so a 5% gap does not mean that 5% more sequencing reads are needed.
+            input from other samples or additional sequencing. Note that the relationship between metagenomic completeness and sequencing depth is non-linear. 
+            Therefore, a 5% shortfall between the target and the achieved sequencing coverage does not imply that only 5% more reads are required; in fact, 
+            it may require as much as 200% more (i.e., doubling the sequencing effort).
         </p>
         <details>
             <summary>
@@ -1648,6 +1667,11 @@ function addRedundancyMarkersSection(parent, data, redBiplotPerSample) {
                         <div class="redundancy-stat-note">
                             ${fracAtOrAbove === null ? "NA" : fmtFloat(fracAtOrAbove, 1) + "%"} of samples reached the target
                         </div>
+                    </div>
+                    <div class="redundancy-stat-item">
+                        <div class="redundancy-stat-label">Median sequencing multiplier</div>
+                        <div class="redundancy-stat-value">${multMedian === null ? "NA" : fmtSequencingMultiplier(multMedian)}</div>
+                        <div class="redundancy-stat-note">Approximate extra sequencing needed to reach the target</div>
                     </div>
                 </div>
                 <div class="lr-target-markers-plot-container">
@@ -1700,7 +1724,6 @@ function addRedundancyMarkersSection(parent, data, redBiplotPerSample) {
         return [
             `<b>${d.sample || `sample ${idx + 1}`}</b>`,
             `Coverage (markers): ${(values[idx] * 100).toFixed(2)}%`,
-            `Target: ${COMPLETENESS_LABEL}%`,
             multText ? `Sequencing multiplier: ${multText}` : null
         ].filter(Boolean).join("<br>");
     });
