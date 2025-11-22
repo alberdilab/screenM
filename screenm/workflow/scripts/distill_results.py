@@ -948,13 +948,13 @@ def compute_redundancy_reads(results_json: Dict[str, Any]) -> Dict[str, Any]:
         elif lr_exceeds == n_with_lr:
             flag_lr = 4
             extra_seq = (
-                f"Median sequencing multiplier to reach the target is approximately {median_multiplier:.2f}x."
+                f"On average, each sample would need to be sequenced {median_multiplier:.2f}x deeper to hit the target."
                 if median_multiplier is not None else
                 "Additional sequencing effort is required across all samples to reach the target."
             )
             lr_msg = (
                 "Completeness target is missed in every sample, meaning that non of the samples contains enough sequencing data "
-                "to cover the complexity of the sample. "
+                "to cover the estimated metagenomic complexity of the sample. "
                 + extra_seq
             )
         elif frac_exceeds < THRESH_LR_EXCEEDS_FRACTION:
@@ -1200,13 +1200,13 @@ def compute_redundancy_markers(results_json: Dict[str, Any]) -> Dict[str, Any]:
         elif lr_exceeds == n_with_lr:
             flag_lr = 4
             extra_seq = (
-                f"Median sequencing multiplier to reach the target is approximately {median_multiplier:.2f}x."
+                f"On average, each sample would need to be sequenced {median_multiplier:.2f}x deeper to hit the target."
                 if median_multiplier is not None else
                 "Additional sequencing effort is required across all samples to reach the target."
             )
             lr_msg = (
                 "Completeness target is missed in every sample, meaning that non of the samples contains enough sequencing data "
-                "to cover the complexity of the sample. "
+                "to cover the estimated prokaryotic complexity of the sample. "
                 + extra_seq
             )
         elif frac_exceeds < THRESH_LR_EXCEEDS_FRACTION:
@@ -2045,19 +2045,20 @@ def main():
                 flag_overall_reads = 1
                 msg_reads = (
                     f"Pooled metagenomic coverage meets the {comp_target:.0f}% completeness target "
-                    f"({coverage_pct:.1f}%)."
+                    f"({coverage_pct:.1f}%), "
+                    f"meaning that the combined reads from all samples are most likely sufficient for comprehensive metagenomic coverage."
                 )
             elif coverage_pct >= 0.8 * comp_target:
                 flag_overall_reads = 2
                 msg_reads = (
-                    f"Pooled metagenomic coverage is within 20% of the {comp_target:.0f}% completeness target "
-                    f"({coverage_pct:.1f}%)."
+                    f"Pooled metagenomic coverage is close to the {comp_target:.0f}% completeness target "
+                    f"({coverage_pct:.1f}%), indicating that even pooling reads may miss some metagenomic diversity."
                 )
             else:
                 flag_overall_reads = 3
                 msg_reads = (
-                    f"Pooled metagenomic coverage is below 80% of the {comp_target:.0f}% completeness target "
-                    f"({coverage_pct:.1f}%)."
+                    f"Pooled metagenomic coverage is far from the {comp_target:.0f}% completeness target "
+                    f"({coverage_pct:.1f}%), indicating that this dataset is likely to miss substantial metagenomic diversity."
                 )
 
         overall_read_coverage = {
