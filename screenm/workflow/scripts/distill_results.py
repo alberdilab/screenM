@@ -1145,6 +1145,12 @@ def compute_redundancy_markers(results_json: Dict[str, Any]) -> Dict[str, Any]:
     frac_meet = (n_meet / n_cov) if n_cov else 0.0
     median_cov = stats.median(coverage_estimates) if coverage_estimates else None
     mean_cov = stats.mean(coverage_estimates) if coverage_estimates else None
+    multiplier_values: List[float] = []
+    for entry in per_sample_details.values():
+        mult = entry.get("sequencing_multiplier")
+        if isinstance(mult, (int, float)) and mult >= 0 and not np.isinf(mult):
+            multiplier_values.append(float(mult))
+    median_multiplier = stats.median(multiplier_values) if multiplier_values else None
 
     if median_cov is None:
         flag_cov_median = 3
@@ -1190,16 +1196,25 @@ def compute_redundancy_markers(results_json: Dict[str, Any]) -> Dict[str, Any]:
         frac_exceeds = lr_exceeds / n_with_lr
         if lr_exceeds == 0:
             flag_lr = 1
-            lr_msg = f"All samples achieved the completeness target of {lr_target_used}."
+            lr_msg = "Completeness target is achieved in all samples."
         elif lr_exceeds == n_with_lr:
             flag_lr = 4
-            lr_msg = f"None of the samples reach the completeness target of {lr_target_used}."
+            extra_seq = (
+                f"Median sequencing multiplier to reach the target is approximately {median_multiplier:.2f}x."
+                if median_multiplier is not None else
+                "Additional sequencing effort is required across all samples to reach the target."
+            )
+            lr_msg = (
+                "Completeness target is missed in every sample, meaning that non of the samples contains enough sequencing data "
+                "to cover the complexity of the sample. "
+                + extra_seq
+            )
         elif frac_exceeds < THRESH_LR_EXCEEDS_FRACTION:
             flag_lr = 2
-            lr_msg = f"A few samples missed the completeness target of {lr_target_used}"
+            lr_msg = f"Completeness target is missed by some ({lr_exceeds}/{n_with_lr}; {frac_exceeds*100:.1f}%) of the samples."
         else:
             flag_lr = 3
-            lr_msg = f"Most samples missed the completeness target of {lr_target_used}"
+            lr_msg = f"Completeness target is missed by most ({lr_exceeds}/{n_with_lr}; {frac_exceeds*100:.1f}%) samples."
 
 
     def coverage_phrase(m_cov: Optional[float], target: float) -> tuple[str, int]:
