@@ -1496,6 +1496,8 @@ function addRedundancyReadsSection(parent, data, depthPerSample) {
         sample: d.sample,
         coverage: Number(d.coverage),
         multiplier: d.sequencing_multiplier === undefined ? null : Number(d.sequencing_multiplier),
+        lr_reads: d.lr_reads === undefined ? null : Number(d.lr_reads),
+        observed_reads: d.observed_reads === undefined ? null : Number(d.observed_reads),
     })).filter(d => Number.isFinite(d.coverage));
 
     const plotDiv = div.querySelector("#lr-target-plot");
@@ -1521,11 +1523,13 @@ function addRedundancyReadsSection(parent, data, depthPerSample) {
     });
 
     const hover = combined.map((d, idx) => {
-        const multText = fmtSequencingMultiplier(d.multiplier);
+        const exceeds = Number.isFinite(d.observed_reads) && Number.isFinite(d.lr_reads) && d.observed_reads > d.lr_reads;
+        const multTextRaw = exceeds ? "0x" : fmtSequencingMultiplier(d.multiplier);
+        const multLine = multTextRaw ? `Sequencing multiplier: ${multTextRaw}` : null;
         return [
             `<b>${d.sample || `sample ${idx + 1}`}</b>`,
             `Estimated coverage: ${(values[idx] * 100).toFixed(1)}%`,
-            multText ? `Sequencing multiplier: ${multText}` : null
+            multLine
         ].filter(Boolean).join("<br>");
     });
 
@@ -1692,6 +1696,8 @@ function addRedundancyMarkersSection(parent, data, redBiplotPerSample) {
         sample: r.sample,
         coverage: Number(r.coverage),
         multiplier: r.sequencing_multiplier === undefined ? null : Number(r.sequencing_multiplier),
+        lr_reads: r.lr_reads === undefined ? null : Number(r.lr_reads),
+        observed_reads: r.observed_reads === undefined ? null : Number(r.observed_reads),
     })).filter(d => Number.isFinite(d.coverage));
 
     const plotDiv = div.querySelector("#lr-target-markers-plot");
@@ -1720,11 +1726,13 @@ function addRedundancyMarkersSection(parent, data, redBiplotPerSample) {
     });
 
     const hover = combined.map((d, idx) => {
-        const multText = fmtSequencingMultiplier(d.multiplier);
+        const exceeds = Number.isFinite(d.observed_reads) && Number.isFinite(d.lr_reads) && d.observed_reads > d.lr_reads;
+        const multTextRaw = exceeds ? "0x" : fmtSequencingMultiplier(d.multiplier);
+        const multLine = multTextRaw ? `Sequencing multiplier: ${multTextRaw}` : null;
         return [
             `<b>${d.sample || `sample ${idx + 1}`}</b>`,
             `Coverage (markers): ${(values[idx] * 100).toFixed(2)}%`,
-            multText ? `Sequencing multiplier: ${multText}` : null
+            multLine
         ].filter(Boolean).join("<br>");
     });
 

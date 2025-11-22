@@ -89,7 +89,7 @@ def main():
     # 0. Initialising screenM
 
     print(f"[{ts()}] {HEADER1}Initialising screenM{RESET}", flush=True)
-    print(f"[{ts()}] Using {INFO}S{threads}{RESET} thread(s) for this run.", flush=True)
+    print(f"[{ts()}] Using {INFO}{threads}{RESET} thread(s) for this run.", flush=True)
 
     # 1. Count the number of reads per sample and generate the input JSON for screenM
 
