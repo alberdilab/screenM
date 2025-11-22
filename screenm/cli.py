@@ -60,6 +60,7 @@ def run_screenm_pipeline(name, input, output, reads, threads, kmer, sketch, seed
 #####
 
 def main():
+    default_threads = available_threads()
     parser = argparse.ArgumentParser(
         description="ScreenM: data screener for genome-resolved metagenomics",
         formatter_class=argparse.RawTextHelpFormatter
@@ -72,7 +73,7 @@ def main():
     parser.add_argument("-e", "--sketch", required=False, type=int, default=10000, help="Sketch size used for the MASH calculations (Default: 10000).") 
     parser.add_argument("-s", "--seed", required=False, type=int, default=random.randint(0, 9999), help="Random seed for reproducibility. If not set, results will vary across runs.")   
     parser.add_argument("-c", "--completeness", required=False, type=int, default=95, help="Completeness target to estimate suitable sequencing depth (Default: 95).")   
-    parser.add_argument("-t", "--threads", required=False, type=int, default=1, help="Number of threads to use (Default: 1).")   
+    parser.add_argument("-t", "--threads", required=False, type=int, default=default_threads, help=f"Number of threads to use (Default: {default_threads}).")   
     parser.add_argument("-d", "--dpi", required=False, type=int, default=150, help="Resolution of ploted imaged (Default: 150).")   
 
     args = parser.parse_args()
@@ -80,6 +81,10 @@ def main():
     if len(sys.argv) == 1:
         parser.print_help()
         sys.exit(1)
+
+    # Resolve threads (default = max available; clamp to at least 1)
+    threads = args.threads if args.threads and args.threads > 0 else default_threads
+    threads = max(1, threads)
 
     # 0. Initialising screenM
 
@@ -95,7 +100,7 @@ def main():
         dir_to_files(input=args.input,
                     output=DATA_JSON_PATH, 
                     min_reads=args.reads, 
-                    threads=args.threads)
+                    threads=threads)
     else:
         print(f"[{ts()}] {INFO}Samples already staged. Initialising screening...{RESET}", flush=True)
 
@@ -106,7 +111,7 @@ def main():
                 DATA_JSON,
                 Path(args.output).resolve(), 
                 args.reads,
-                args.threads, 
+                threads, 
                 args.kmer,
                 args.sketch,
                 args.seed,

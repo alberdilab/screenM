@@ -7,9 +7,18 @@ from datetime import datetime
 import gzip
 from concurrent.futures import ProcessPoolExecutor
 from importlib.metadata import version, PackageNotFoundError
+import os
 
 def ts():
     return datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+
+def available_threads() -> int:
+    """
+    Return the maximum usable threads on this machine.
+    Falls back to 1 if detection fails.
+    """
+    count = os.cpu_count()
+    return max(1, count or 1)
 
 def valid_name(value):
     if not re.match(r'^[A-Za-z0-9_-]+$', value):

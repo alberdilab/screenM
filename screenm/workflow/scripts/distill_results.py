@@ -1585,15 +1585,20 @@ def compute_clusters(results_json: Dict[str, Any]) -> Dict[str, Any]:
             return "No read pairwise distances were available to assess how similar the samples are."
         if flag_val == 1:
             base = (
-                f"Read distances are low (mean {mean_val:.3f}); samples are very similar and can likely benefit from each other's information."
+                f"Read distances are low (mean {mean_val:.3f}), indicating that samples are very similar and can likely benefit from each other's information."
+                f"Running a whole-dataset coassembly might therefore be advantageous."
             )
         elif flag_val == 2:
             base = (
-                f"Read distances are moderate (mean {mean_val:.3f}); samples share signal but also display noticeable differences."
+                f"Read distances are moderate (mean {mean_val:.3f}), indicating that samples share signal but also display noticeable differences. "
+                f"Running a whole-dataset coassembly might encompass excessive diversity, potentially complicating assembly and analysis. " 
+                f"Check clusters in the next section for possible coassembly groups."
             )
         else:
             base = (
-                f"Read distances are high (mean {mean_val:.3f}), suggesting samples are quite distinct and have limited potential to inform each other."
+                f"Read distances are high (mean {mean_val:.3f}), indicating samples are quite distinct and have limited potential to inform each other. "
+                f"Running a whole-dataset coassembly is not recommended, although smaller coassembly groups may still be possible. "
+                f"Check clusters in the next section for possible coassembly groups."
             )
 
         if cv_val is None:
