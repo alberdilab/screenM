@@ -830,21 +830,16 @@ def compute_redundancy_reads(results_json: Dict[str, Any]) -> Dict[str, Any]:
                 if (lr_reads != float("inf")) and (lr_reads > total_reads):
                     lr_exceeds += 1
                 entry = _sample_entry(name)
-                entry["lr_reads"] = lr_reads
+                lr_val = None if lr_reads == float("inf") else lr_reads
+                entry["lr_reads"] = lr_val
                 entry["observed_reads"] = float(total_reads)
 
-                coverage_ratio: Optional[float]
-                if lr_reads in (None, 0, float("inf")):
+                if lr_val in (None, 0):
                     coverage_ratio = None
-                else:
-                    coverage_ratio = float(total_reads) / float(lr_reads)
-
-                if lr_reads == float("inf"):
-                    multiplier = float("inf")
-                elif lr_reads in (None, 0):
                     multiplier = None
                 else:
-                    multiplier = float(lr_reads) / float(total_reads)
+                    coverage_ratio = float(total_reads) / float(lr_val)
+                    multiplier = float(lr_val) / float(total_reads)
 
                 entry["coverage_ratio"] = coverage_ratio
                 entry["sequencing_multiplier"] = multiplier
@@ -1067,21 +1062,16 @@ def compute_redundancy_markers(results_json: Dict[str, Any]) -> Dict[str, Any]:
                 if (lr_reads != float("inf")) and (lr_reads > depth):
                     lr_exceeds += 1
                 entry = _sample_entry(name)
-                entry["lr_reads"] = lr_reads
+                lr_val = None if lr_reads == float("inf") else lr_reads
+                entry["lr_reads"] = lr_val
                 entry["observed_reads"] = float(depth)
 
-                coverage_ratio: Optional[float]
-                if lr_reads in (None, 0, float("inf")):
+                if lr_val in (None, 0):
                     coverage_ratio = None
-                else:
-                    coverage_ratio = float(depth) / float(lr_reads)
-
-                if lr_reads == float("inf"):
-                    multiplier = float("inf")
-                elif lr_reads in (None, 0):
                     multiplier = None
                 else:
-                    multiplier = float(lr_reads) / float(depth)
+                    coverage_ratio = float(depth) / float(lr_val)
+                    multiplier = float(lr_val) / float(depth)
 
                 entry["coverage_ratio"] = coverage_ratio
                 entry["sequencing_multiplier"] = multiplier
