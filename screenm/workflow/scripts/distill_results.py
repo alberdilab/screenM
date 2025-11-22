@@ -1064,8 +1064,6 @@ def compute_redundancy_markers(results_json: Dict[str, Any]) -> Dict[str, Any]:
                         "coverage": cov if isinstance(cov, (int, float)) else None,
                         "extra_needed": extra,
                     })
-                    if lr_reads > depth:
-                        extra_seq_factors.append(lr_reads / depth - 1)
 
     n_kappa = len(c_totals)
 
